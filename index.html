@@ -2383,6 +2383,12 @@
         let userPreferences = JSON.parse(localStorage.getItem('neonUserPrefs') || '{}');
         let branding = JSON.parse(localStorage.getItem('neonBranding') || '{}');
 
+        // Particle system
+        let particles = [];
+        let particleAnimationId = null;
+        let particleCanvas = null;
+        let particleCtx = null;
+
         const STATUS_ICONS = { draft: 'fa-file-lines', pending: 'fa-clock', approved: 'fa-circle-check', 'in-hand': 'fa-hand-holding', issued: 'fa-paper-plane', deposited: 'fa-building-columns', returned: 'fa-rotate-left', cleared: 'fa-circle-check' };
         const STATUS_LABELS = { draft: 'Draft', pending: 'Pending', approved: 'Approved', 'in-hand': 'In Hand', issued: 'Issued', deposited: 'Deposited', returned: 'Returned', cleared: 'Cleared' };
         const STATUS_BADGE = { draft: 'badge-draft', pending: 'badge-pending', approved: 'badge-approved', 'in-hand': 'badge-in-hand', issued: 'badge-issued', deposited: 'badge-deposited', returned: 'badge-returned', cleared: 'badge-cleared' };
@@ -2397,6 +2403,299 @@
         let currentPage = 1;
         let rowsPerPage = 25;
         let filteredData = [];
+
+        // ================================================================
+        //  FIX: MISSING FUNCTIONS DEFINED HERE
+        // ================================================================
+
+        // -------- PARTICLES --------
+        function initParticles() {
+            particleCanvas = document.getElementById('particlesCanvas');
+            if (!particleCanvas) return;
+            particleCtx = particleCanvas.getContext('2d');
+            resizeParticlesCanvas();
+            window.addEventListener('resize', resizeParticlesCanvas);
+            particles = [];
+            const count = Math.min(80, Math.floor((window.innerWidth * window.innerHeight) / 12000));
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: Math.random() * particleCanvas.width,
+                    y: Math.random() * particleCanvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    radius: Math.random() * 2 + 1,
+                    opacity: Math.random() * 0.5 + 0.2
+                });
+            }
+            if (particleAnimationId) cancelAnimationFrame(particleAnimationId);
+            animateParticles();
+        }
+        window.initParticles = initParticles;
+
+        function resizeParticlesCanvas() {
+            if (!particleCanvas) return;
+            const rect = particleCanvas.parentElement?.getBoundingClientRect?.() || { width: window.innerWidth, height: window
+                    .innerHeight };
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        }
+        window.resizeParticlesCanvas = resizeParticlesCanvas;
+
+        function animateParticles() {
+            if (!particleCtx || !particleCanvas) return;
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            if (!particlesEnabled) {
+                particleAnimationId = requestAnimationFrame(animateParticles);
+                return;
+            }
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0 || p.x > particleCanvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > particleCanvas.height) p.vy *= -1;
+                particleCtx.beginPath();
+                particleCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                const gradient = particleCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * 3);
+                gradient.addColorStop(0, `rgba(124,92,252,${p.opacity * 0.6})`);
+                gradient.addColorStop(1, `rgba(0,212,255,${p.opacity * 0.1})`);
+                particleCtx.fillStyle = gradient;
+                particleCtx.fill();
+            });
+            // Draw connections
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 150) {
+                        particleCtx.beginPath();
+                        particleCtx.moveTo(particles[i].x, particles[i].y);
+                        particleCtx.lineTo(particles[j].x, particles[j].y);
+                        particleCtx.strokeStyle = `rgba(124,92,252,${0.06 * (1 - dist / 150)})`;
+                        particleCtx.lineWidth = 0.5;
+                        particleCtx.stroke();
+                    }
+                }
+            }
+            particleAnimationId = requestAnimationFrame(animateParticles);
+        }
+        window.animateParticles = animateParticles;
+
+        function toggleParticles(save = true) {
+            particlesEnabled = !particlesEnabled;
+            document.getElementById('particlesToggle').checked = particlesEnabled;
+            if (particleCanvas) {
+                particleCanvas.style.opacity = particlesEnabled ? '0.6' : '0';
+            }
+            if (save) {
+                const cb = document.getElementById('particlesApplyAll');
+                if (cb && cb.checked) {
+                    propagateSetting('particles', particlesEnabled, true);
+                } else {
+                    updateUserSettings({ particles: particlesEnabled });
+                }
+            }
+        }
+        window.toggleParticles = toggleParticles;
+
+        // -------- THEME PRESETS --------
+        function setThemePreset(preset, save = true) {
+            const presets = {
+                default: { primary: '#7c5cfc', secondary: '#00d4ff' },
+                ocean: { primary: '#0a84ff', secondary: '#00c7b6' },
+                ember: { primary: '#ff6b35', secondary: '#f7c948' },
+                forest: { primary: '#2ecc71', secondary: '#3498db' },
+                midnight: { primary: '#4a4a5a', secondary: '#7a7a8a' }
+            };
+            const p = presets[preset];
+            if (!p) return;
+            document.documentElement.style.setProperty('--accent-1', p.primary);
+            document.documentElement.style.setProperty('--accent-2', p.secondary);
+            document.documentElement.style.setProperty('--gradient-main',
+                `linear-gradient(135deg, ${p.primary}, ${p.secondary}, #ff6b9d)`);
+            document.querySelectorAll('.theme-dot').forEach(el => {
+                el.classList.toggle('active', el.dataset.theme === preset);
+            });
+            if (save) {
+                const cb = document.getElementById('themeApplyAll');
+                if (cb && cb.checked) {
+                    propagateSetting('themePreset', preset, true);
+                } else {
+                    updateUserSettings({ themePreset: preset });
+                }
+            }
+        }
+        window.setThemePreset = setThemePreset;
+
+        // -------- CUSTOM COLORS --------
+        function applyCustomColor(save = true) {
+            const primary = document.getElementById('customPrimary').value;
+            const accent = document.getElementById('customAccent').value;
+            document.documentElement.style.setProperty('--accent-1', primary);
+            document.documentElement.style.setProperty('--accent-2', accent);
+            document.documentElement.style.setProperty('--gradient-main',
+                `linear-gradient(135deg, ${primary}, ${accent}, #ff6b9d)`);
+            if (save) {
+                const pCb = document.getElementById('primaryApplyAll');
+                const aCb = document.getElementById('accentApplyAll');
+                if (pCb && pCb.checked) {
+                    propagateSetting('primaryColor', primary, true);
+                } else {
+                    updateUserSettings({ primaryColor: primary });
+                }
+                if (aCb && aCb.checked) {
+                    propagateSetting('accentColor', accent, true);
+                } else {
+                    updateUserSettings({ accentColor: accent });
+                }
+            }
+        }
+        window.applyCustomColor = applyCustomColor;
+
+        // -------- ICON SIZE --------
+        function applyIconSize(save = true) {
+            const val = parseFloat(document.getElementById('iconSizeSlider').value);
+            document.documentElement.style.setProperty('--icon-size', val + 'rem');
+            document.getElementById('iconSizeLabel').textContent = val.toFixed(1);
+            if (save) {
+                const cb = document.getElementById('iconApplyAll');
+                if (cb && cb.checked) {
+                    propagateSetting('iconSize', val, true);
+                } else {
+                    updateUserSettings({ iconSize: val });
+                }
+            }
+        }
+        window.applyIconSize = applyIconSize;
+
+        // -------- BORDER RADIUS --------
+        function applyRadius(save = true) {
+            const val = parseInt(document.getElementById('radiusSlider').value);
+            document.documentElement.style.setProperty('--radius', val + 'px');
+            document.documentElement.style.setProperty('--radius-sm', Math.max(4, val - 6) + 'px');
+            document.getElementById('radiusLabel').textContent = val;
+            if (save) {
+                const cb = document.getElementById('radiusApplyAll');
+                if (cb && cb.checked) {
+                    propagateSetting('radius', val, true);
+                } else {
+                    updateUserSettings({ radius: val });
+                }
+            }
+        }
+        window.applyRadius = applyRadius;
+
+        // -------- GLOW INTENSITY --------
+        function applyGlow(save = true) {
+            const val = parseInt(document.getElementById('glowSlider').value);
+            document.documentElement.style.setProperty('--glow-intensity', (val / 100) + '');
+            document.getElementById('glowLabel').textContent = val;
+            if (save) {
+                const cb = document.getElementById('glowApplyAll');
+                if (cb && cb.checked) {
+                    propagateSetting('glow', val, true);
+                } else {
+                    updateUserSettings({ glow: val });
+                }
+            }
+        }
+        window.applyGlow = applyGlow;
+
+        // -------- ANIMATION SPEED --------
+        function applyAnimSpeed(save = true) {
+            const val = parseFloat(document.getElementById('animSpeedSlider').value);
+            document.documentElement.style.setProperty('--anim-speed', val + 's');
+            document.getElementById('animSpeedLabel').textContent = val.toFixed(2);
+            if (save) {
+                const cb = document.getElementById('animApplyAll');
+                if (cb && cb.checked) {
+                    propagateSetting('animSpeed', val, true);
+                } else {
+                    updateUserSettings({ animSpeed: val });
+                }
+            }
+        }
+        window.applyAnimSpeed = applyAnimSpeed;
+
+        // -------- BACKGROUND PATTERN --------
+        function applyBgPattern(save = true) {
+            const pattern = document.getElementById('bgPattern').value;
+            const body = document.body;
+            const patterns = {
+                none: 'none',
+                dots: 'radial-gradient(circle at 20% 50%, rgba(124,92,252,0.03) 2px, transparent 2px), radial-gradient(circle at 80% 50%, rgba(0,212,255,0.03) 2px, transparent 2px)',
+                grid: 'linear-gradient(rgba(124,92,252,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(124,92,252,0.03) 1px, transparent 1px)',
+                gradient: 'var(--gradient-glow)',
+                waves: 'repeating-linear-gradient(45deg, rgba(124,92,252,0.02) 0px, rgba(124,92,252,0.02) 20px, transparent 20px, transparent 40px)'
+            };
+            body.style.backgroundImage = patterns[pattern] || 'var(--gradient-glow)';
+            body.style.backgroundSize = pattern === 'grid' ? '40px 40px' : (pattern === 'dots' ? '60px 60px' : '100% 100%');
+            if (save) {
+                const cb = document.getElementById('patternApplyAll');
+                if (cb && cb.checked) {
+                    propagateSetting('bgPattern', pattern, true);
+                } else {
+                    updateUserSettings({ bgPattern: pattern });
+                }
+            }
+        }
+        window.applyBgPattern = applyBgPattern;
+
+        // -------- OUTLINE ICONS --------
+        function toggleOutlineIcons(save = true) {
+            useOutlineIcons = !useOutlineIcons;
+            document.getElementById('outlineToggle').checked = useOutlineIcons;
+            document.body.classList.toggle('outline-icons', useOutlineIcons);
+            if (save) {
+                const cb = document.getElementById('outlineApplyAll');
+                if (cb && cb.checked) {
+                    propagateSetting('outlineIcons', useOutlineIcons, true);
+                } else {
+                    updateUserSettings({ outlineIcons: useOutlineIcons });
+                }
+            }
+            renderAll();
+        }
+        window.toggleOutlineIcons = toggleOutlineIcons;
+
+        function getIconPrefix() {
+            return useOutlineIcons ? 'far' : 'fas';
+        }
+        window.getIconPrefix = getIconPrefix;
+
+        // -------- DARK MODE --------
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            localStorage.setItem('neonDarkMode', isDark);
+        }
+        window.toggleDarkMode = toggleDarkMode;
+
+        // -------- LOAD THEME SETTINGS --------
+        function loadThemeSettings() {
+            const darkMode = localStorage.getItem('neonDarkMode');
+            if (darkMode === 'true') document.body.classList.add('dark-mode');
+            const iconSize = localStorage.getItem('neonIconSize');
+            if (iconSize) { document.getElementById('iconSizeSlider').value = iconSize;
+                applyIconSize(false); }
+            const radius = localStorage.getItem('neonRadius');
+            if (radius) { document.getElementById('radiusSlider').value = radius;
+                applyRadius(false); }
+            const glow = localStorage.getItem('neonGlow');
+            if (glow) { document.getElementById('glowSlider').value = glow;
+                applyGlow(false); }
+            const animSpeed = localStorage.getItem('neonAnimSpeed');
+            if (animSpeed) { document.getElementById('animSpeedSlider').value = animSpeed;
+                applyAnimSpeed(false); }
+            const bgPattern = localStorage.getItem('neonBgPattern');
+            if (bgPattern) { document.getElementById('bgPattern').value = bgPattern;
+                applyBgPattern(false); }
+            const outline = localStorage.getItem('neonOutlineIcons');
+            if (outline === 'true') { useOutlineIcons = true;
+                document.getElementById('outlineToggle').checked = true;
+                document.body.classList.add('outline-icons'); }
+        }
+        window.loadThemeSettings = loadThemeSettings;
 
         // -------- AUTH UI --------
         let isLoginMode = true;
@@ -2448,8 +2747,12 @@
         authPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') authActionBtn.click(); });
 
         document.getElementById('googleSignInBtn').addEventListener('click', async () => {
-            try { await auth.signInWithPopup(googleProvider); } catch (err) { authError.textContent = err.message;
-                authError.style.color = '#ff6b9d'; }
+            try {
+                await auth.signInWithPopup(googleProvider);
+            } catch (err) {
+                authError.textContent = err.message;
+                authError.style.color = '#ff6b9d';
+            }
         });
 
         // -------- LOGOUT --------
@@ -2532,50 +2835,59 @@
 
         function applyUserSettings(settings) {
             if (!settings) return;
-            if (settings.defaultTheme) {
-                if (settings.defaultTheme === 'dark') document.body.classList.add('dark-mode');
-                else document.body.classList.remove('dark-mode');
-            }
-            if (settings.currency) document.documentElement.style.setProperty('--currency-symbol', `"${settings.currency}"`);
-            if (settings.dateFormat) window._dateFormat = settings.dateFormat;
-            if (settings.companyName) document.getElementById('activeCompanyLabel').textContent = settings.companyName;
-            if (settings.themePreset) setThemePreset(settings.themePreset, false);
-            if (settings.primaryColor) { document.getElementById('customPrimary').value = settings.primaryColor;
-                applyCustomColor(false); }
-            if (settings.accentColor) { document.getElementById('customAccent').value = settings.accentColor;
-                applyCustomColor(false); }
-            if (settings.iconSize) { document.getElementById('iconSizeSlider').value = settings.iconSize;
-                applyIconSize(false); }
-            if (settings.radius) { document.getElementById('radiusSlider').value = settings.radius;
-                applyRadius(false); }
-            if (settings.glow) { document.getElementById('glowSlider').value = settings.glow;
-                applyGlow(false); }
-            if (settings.animSpeed) { document.getElementById('animSpeedSlider').value = settings.animSpeed;
-                applyAnimSpeed(false); }
-            if (settings.bgPattern) { document.getElementById('bgPattern').value = settings.bgPattern;
-                applyBgPattern(false); }
-            if (settings.particles !== undefined) { document.getElementById('particlesToggle').checked = settings.particles;
-                toggleParticles(false); }
-            if (settings.outlineIcons !== undefined) { document.getElementById('outlineToggle').checked = settings
-                    .outlineIcons;
-                toggleOutlineIcons(false); }
-            if (settings.branding) {
-                if (settings.branding.logo) document.getElementById('brandLogo').value = settings.branding.logo;
-                if (settings.branding.primary) document.getElementById('brandPrimary').value = settings.branding.primary;
-                if (settings.branding.secondary) document.getElementById('brandSecondary').value = settings.branding
-                    .secondary;
-                applyBrandColors(settings.branding);
-            }
-            if (settings.prefs) {
-                if (settings.prefs.defaultTab) document.getElementById('prefDefaultTab').value = settings.prefs.defaultTab;
-                if (settings.prefs.sort) document.getElementById('prefSort').value = settings.prefs.sort;
-                if (settings.prefs.rowsPerPage) document.getElementById('prefRowsPerPage').value = settings.prefs
-                    .rowsPerPage;
-            }
-            if (isAdmin) {
-                if (settings.customFields) customFields = settings.customFields;
-                if (settings.customStatuses) { customStatuses = settings.customStatuses;
-                    updateStatusSelects(); }
+            try {
+                if (settings.defaultTheme) {
+                    if (settings.defaultTheme === 'dark') document.body.classList.add('dark-mode');
+                    else document.body.classList.remove('dark-mode');
+                }
+                if (settings.currency) document.documentElement.style.setProperty('--currency-symbol', `"${settings.currency}"`);
+                if (settings.dateFormat) window._dateFormat = settings.dateFormat;
+                if (settings.companyName) document.getElementById('activeCompanyLabel').textContent = settings.companyName;
+                if (settings.themePreset) setThemePreset(settings.themePreset, false);
+                if (settings.primaryColor) { document.getElementById('customPrimary').value = settings.primaryColor;
+                    applyCustomColor(false); }
+                if (settings.accentColor) { document.getElementById('customAccent').value = settings.accentColor;
+                    applyCustomColor(false); }
+                if (settings.iconSize) { document.getElementById('iconSizeSlider').value = settings.iconSize;
+                    applyIconSize(false); }
+                if (settings.radius) { document.getElementById('radiusSlider').value = settings.radius;
+                    applyRadius(false); }
+                if (settings.glow) { document.getElementById('glowSlider').value = settings.glow;
+                    applyGlow(false); }
+                if (settings.animSpeed) { document.getElementById('animSpeedSlider').value = settings.animSpeed;
+                    applyAnimSpeed(false); }
+                if (settings.bgPattern) { document.getElementById('bgPattern').value = settings.bgPattern;
+                    applyBgPattern(false); }
+                if (settings.particles !== undefined) { document.getElementById('particlesToggle').checked = settings
+                        .particles;
+                    if (!settings.particles && particlesEnabled) toggleParticles(false);
+                    else if (settings.particles && !particlesEnabled) toggleParticles(false); }
+                if (settings.outlineIcons !== undefined) { document.getElementById('outlineToggle').checked = settings
+                        .outlineIcons;
+                    if (settings.outlineIcons && !useOutlineIcons) toggleOutlineIcons(false);
+                    else if (!settings.outlineIcons && useOutlineIcons) toggleOutlineIcons(false); }
+                if (settings.branding) {
+                    if (settings.branding.logo) document.getElementById('brandLogo').value = settings.branding.logo;
+                    if (settings.branding.primary) document.getElementById('brandPrimary').value = settings.branding
+                        .primary;
+                    if (settings.branding.secondary) document.getElementById('brandSecondary').value = settings.branding
+                        .secondary;
+                    applyBrandColors(settings.branding);
+                }
+                if (settings.prefs) {
+                    if (settings.prefs.defaultTab) document.getElementById('prefDefaultTab').value = settings.prefs
+                        .defaultTab;
+                    if (settings.prefs.sort) document.getElementById('prefSort').value = settings.prefs.sort;
+                    if (settings.prefs.rowsPerPage) document.getElementById('prefRowsPerPage').value = settings.prefs
+                        .rowsPerPage;
+                }
+                if (isAdmin) {
+                    if (settings.customFields) customFields = settings.customFields;
+                    if (settings.customStatuses) { customStatuses = settings.customStatuses;
+                        updateStatusSelects(); }
+                }
+            } catch (e) {
+                console.warn('applyUserSettings error:', e);
             }
         }
         window.applyUserSettings = applyUserSettings;
@@ -4599,7 +4911,9 @@
             const darkMode = localStorage.getItem('neonDarkMode');
             if (darkMode === 'true') { document.body.classList.add('dark-mode'); }
 
-            initParticles();
+            // Initialize particles
+            setTimeout(initParticles, 100);
+
             loadThemeSettings();
             renderEscalationRules();
             renderCustomFields();
@@ -4712,105 +5026,122 @@
 
         // -------- AUTH LISTENER --------
         auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                currentUser = user;
-                try {
-                    const userDoc = await db.collection('users').doc(user.uid).get();
-                    if (!userDoc.exists) {
-                        const defaults = {
-                            companyName: 'Main Company',
-                            currency: '₹',
-                            dateFormat: 'DD/MM/YYYY',
-                            defaultTheme: 'light',
-                            themePreset: 'default',
-                            primaryColor: '#7c5cfc',
-                            accentColor: '#00d4ff',
-                            iconSize: 1.4,
-                            radius: 16,
-                            glow: 25,
-                            animSpeed: 0.35,
-                            bgPattern: 'gradient',
-                            particles: true,
-                            outlineIcons: false
-                        };
-                        const adminSnap = await db.collection('users').where('role', '==', 'admin').limit(1).get();
-                        if (!adminSnap.empty) Object.assign(defaults, adminSnap.docs[0].data().settings);
-                        await db.collection('users').doc(user.uid).set({
-                            email: user.email,
-                            role: 'user',
-                            settings: defaults,
-                            emailVerified: user.emailVerified || true
-                        });
-                        currentUserData = { email: user.email, role: 'user', settings: defaults, emailVerified: user.emailVerified || true };
-                    } else {
-                        currentUserData = userDoc.data();
-                        if (currentUserData.emailVerified !== user.emailVerified) {
-                            await db.collection('users').doc(user.uid).update({ emailVerified: user.emailVerified || true });
-                            currentUserData.emailVerified = user.emailVerified || true;
+            try {
+                if (user) {
+                    currentUser = user;
+                    try {
+                        const userDoc = await db.collection('users').doc(user.uid).get();
+                        if (!userDoc.exists) {
+                            const defaults = {
+                                companyName: 'Main Company',
+                                currency: '₹',
+                                dateFormat: 'DD/MM/YYYY',
+                                defaultTheme: 'light',
+                                themePreset: 'default',
+                                primaryColor: '#7c5cfc',
+                                accentColor: '#00d4ff',
+                                iconSize: 1.4,
+                                radius: 16,
+                                glow: 25,
+                                animSpeed: 0.35,
+                                bgPattern: 'gradient',
+                                particles: true,
+                                outlineIcons: false
+                            };
+                            const adminSnap = await db.collection('users').where('role', '==', 'admin').limit(1).get();
+                            if (!adminSnap.empty) Object.assign(defaults, adminSnap.docs[0].data().settings);
+                            await db.collection('users').doc(user.uid).set({
+                                email: user.email,
+                                role: 'user',
+                                settings: defaults,
+                                emailVerified: user.emailVerified || true
+                            });
+                            currentUserData = { email: user.email, role: 'user', settings: defaults, emailVerified: user
+                                    .emailVerified || true };
+                        } else {
+                            currentUserData = userDoc.data();
+                            if (currentUserData.emailVerified !== user.emailVerified) {
+                                await db.collection('users').doc(user.uid).update({ emailVerified: user.emailVerified ||
+                                        true });
+                                currentUserData.emailVerified = user.emailVerified || true;
+                            }
+                            if (!currentUserData.settings) { currentUserData.settings = {};
+                                await db.collection('users').doc(user.uid).update({ settings: {} }); }
                         }
-                        if (!currentUserData.settings) { currentUserData.settings = {};
-                            await db.collection('users').doc(user.uid).update({ settings: {} }); }
-                    }
-                    isAdmin = (currentUserData.role === 'admin');
-                    if (currentUserData.settings) applyUserSettings(currentUserData.settings);
+                        isAdmin = (currentUserData.role === 'admin');
+                        if (currentUserData.settings) applyUserSettings(currentUserData.settings);
 
-                    document.querySelector('.main').style.display = 'block';
-                    authOverlay.classList.add('hidden');
+                        document.querySelector('.main').style.display = 'block';
+                        authOverlay.classList.add('hidden');
 
-                    await loadData();
-                    setupRealtimeListener();
-                    applyEscalationRules();
+                        await loadData();
+                        setupRealtimeListener();
+                        applyEscalationRules();
 
-                    if (isAdmin) {
-                        document.getElementById('userManagementPanel').style.display = 'block';
-                        document.getElementById('systemSettingsPanel').style.display = 'block';
-                        document.getElementById('escalationPanel').style.display = 'block';
-                        document.getElementById('customFieldsPanel').style.display = 'block';
-                        document.getElementById('statusesPanel').style.display = 'block';
-                        document.getElementById('brandingPanel').style.display = 'block';
-                        loadUsers();
-                        showApplyAllToggles(true);
-                        if (currentUserData.settings) {
-                            document.getElementById('sysCompanyName').value = currentUserData.settings.companyName || '';
-                            document.getElementById('sysCurrency').value = currentUserData.settings.currency || '₹';
-                            document.getElementById('sysDateFormat').value = currentUserData.settings.dateFormat || 'DD/MM/YYYY';
-                            document.getElementById('sysDefaultTheme').value = currentUserData.settings.defaultTheme || 'light';
+                        if (isAdmin) {
+                            document.getElementById('userManagementPanel').style.display = 'block';
+                            document.getElementById('systemSettingsPanel').style.display = 'block';
+                            document.getElementById('escalationPanel').style.display = 'block';
+                            document.getElementById('customFieldsPanel').style.display = 'block';
+                            document.getElementById('statusesPanel').style.display = 'block';
+                            document.getElementById('brandingPanel').style.display = 'block';
+                            loadUsers();
+                            showApplyAllToggles(true);
+                            if (currentUserData.settings) {
+                                document.getElementById('sysCompanyName').value = currentUserData.settings.companyName ||
+                                    '';
+                                document.getElementById('sysCurrency').value = currentUserData.settings.currency || '₹';
+                                document.getElementById('sysDateFormat').value = currentUserData.settings.dateFormat ||
+                                    'DD/MM/YYYY';
+                                document.getElementById('sysDefaultTheme').value = currentUserData.settings.defaultTheme ||
+                                    'light';
+                            }
+                        } else {
+                            document.getElementById('userManagementPanel').style.display = 'none';
+                            document.getElementById('systemSettingsPanel').style.display = 'none';
+                            document.getElementById('escalationPanel').style.display = 'none';
+                            document.getElementById('customFieldsPanel').style.display = 'none';
+                            document.getElementById('statusesPanel').style.display = 'none';
+                            document.getElementById('brandingPanel').style.display = 'none';
+                            showApplyAllToggles(false);
                         }
-                    } else {
-                        document.getElementById('userManagementPanel').style.display = 'none';
-                        document.getElementById('systemSettingsPanel').style.display = 'none';
-                        document.getElementById('escalationPanel').style.display = 'none';
-                        document.getElementById('customFieldsPanel').style.display = 'none';
-                        document.getElementById('statusesPanel').style.display = 'none';
-                        document.getElementById('brandingPanel').style.display = 'none';
-                        showApplyAllToggles(false);
+
+                        document.getElementById('userEmail').textContent = user.email;
+                        document.getElementById('userRole').textContent = 'Role: ' + (currentUserData.role || 'user');
+
+                        const auditUser = document.getElementById('auditUser');
+                        if (auditUser) {
+                            const users = allUsers.map(u => `<option value="${u.email}">${u.email}</option>`);
+                            auditUser.innerHTML = '<option value="">All Users</option>' + users.join('');
+                        }
+
+                        if (currentUserData.settings?.prefs) {
+                            const prefs = currentUserData.settings.prefs;
+                            if (prefs.defaultTab) navigateTo(prefs.defaultTab);
+                            if (prefs.rowsPerPage) rowsPerPage = prefs.rowsPerPage;
+                            document.getElementById('prefDefaultTab').value = prefs.defaultTab || 'dashboard';
+                            document.getElementById('prefSort').value = prefs.sort || 'createdAt';
+                            document.getElementById('prefRowsPerPage').value = prefs.rowsPerPage || 25;
+                        }
+
+                        setTimeout(() => { window.renderAll(); }, 300);
+
+                    } catch (err) {
+                        console.error('Auth init error:', err);
+                        // Still show the app even if settings fail
+                        document.querySelector('.main').style.display = 'block';
+                        authOverlay.classList.add('hidden');
+                        await loadData();
+                        setupRealtimeListener();
+                        setTimeout(() => { window.renderAll(); }, 300);
                     }
-
-                    document.getElementById('userEmail').textContent = user.email;
-                    document.getElementById('userRole').textContent = 'Role: ' + (currentUserData.role || 'user');
-
-                    const auditUser = document.getElementById('auditUser');
-                    if (auditUser) {
-                        const users = allUsers.map(u => `<option value="${u.email}">${u.email}</option>`);
-                        auditUser.innerHTML = '<option value="">All Users</option>' + users.join('');
-                    }
-
-                    if (currentUserData.settings?.prefs) {
-                        const prefs = currentUserData.settings.prefs;
-                        if (prefs.defaultTab) navigateTo(prefs.defaultTab);
-                        if (prefs.rowsPerPage) rowsPerPage = prefs.rowsPerPage;
-                        document.getElementById('prefDefaultTab').value = prefs.defaultTab || 'dashboard';
-                        document.getElementById('prefSort').value = prefs.sort || 'createdAt';
-                        document.getElementById('prefRowsPerPage').value = prefs.rowsPerPage || 25;
-                    }
-
-                    setTimeout(() => { window.renderAll(); }, 300);
-
-                } catch (err) { console.error('Auth init error:', err); }
-            } else {
-                document.querySelector('.main').style.display = 'none';
-                authOverlay.classList.remove('hidden');
-                setAuthMode(true);
+                } else {
+                    document.querySelector('.main').style.display = 'none';
+                    authOverlay.classList.remove('hidden');
+                    setAuthMode(true);
+                }
+            } catch (e) {
+                console.error('Auth listener error:', e);
             }
         });
 
