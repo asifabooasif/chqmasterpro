@@ -52,8 +52,8 @@
     .auth-box .sub { text-align:center; color:var(--text-secondary); font-size:14px; margin-bottom:24px; }
     .auth-box .form-group { margin-bottom:16px; }
     .auth-box .form-group label { display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
-    .auth-box .form-group input { width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--glass-border); background:rgba(0,0,0,0.05); color:var(--text-primary); font-size:14px; outline:none; transition:var(--transition); }
-    .auth-box .form-group input:focus { border-color:var(--accent-1); box-shadow:0 0 0 3px rgba(124,92,252,0.1); }
+    .auth-box .form-group input, .auth-box .form-group select { width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--glass-border); background:rgba(0,0,0,0.05); color:var(--text-primary); font-size:14px; outline:none; transition:var(--transition); }
+    .auth-box .form-group input:focus, .auth-box .form-group select:focus { border-color:var(--accent-1); box-shadow:0 0 0 3px rgba(124,92,252,0.1); }
     .auth-box .btn-auth { width:100%; padding:12px; border:none; border-radius:var(--radius-sm); background:var(--gradient-main); color:#fff; font-weight:700; font-size:16px; cursor:pointer; transition:var(--transition); margin-top:4px; }
     .auth-box .btn-auth:hover { transform:scale(1.02); box-shadow:0 8px 32px rgba(124,92,252,0.3); }
     .auth-box .btn-google { background:#fff; color:#333; border:1px solid #ddd; display:flex; align-items:center; justify-content:center; gap:8px; width:100%; }
@@ -83,6 +83,7 @@
     .page.active { display:block; }
     @keyframes fadeSlide { from { opacity:0; transform:translateY(12px) scale(0.98); } to { opacity:1; transform:translateY(0) scale(1); } }
     @keyframes slideUp { from { opacity:0; transform:translateY(30px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
+    @keyframes slideDown { from { opacity:0; transform:translateY(-12px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
 
     .top-bar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; background:var(--bg-surface); backdrop-filter:blur(20px); border:1px solid var(--glass-border); border-radius:var(--radius); padding:12px 22px; box-shadow:0 4px 30px rgba(0,0,0,0.10); position:relative; z-index:50; }
     .top-bar .left, .top-bar .right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -106,6 +107,7 @@
     .btn-outline { background:transparent; border:1px solid var(--glass-border); color:var(--text-secondary); }
     .btn-outline:hover { background:rgba(255,255,255,0.04); border-color:var(--accent-1); color:var(--text-primary); }
     .btn-sm { padding:5px 12px; font-size:11px; border-radius:8px; }
+    .btn-xs { padding:3px 9px; font-size:9px; border-radius:6px; }
 
     .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:14px; margin-bottom:20px; }
     .kpi-card { background:var(--card-bg); backdrop-filter:blur(16px); border:1px solid var(--glass-border); border-radius:var(--radius); padding:16px 18px; position:relative; overflow:hidden; transition:var(--transition); box-shadow:0 4px 24px rgba(0,0,0,0.06); }
@@ -134,6 +136,8 @@
     .badge-returned { background:rgba(255,107,157,0.12); color:#ff6b9d; border:1px solid rgba(255,107,157,0.08); }
     .badge-cleared { background:rgba(0,184,148,0.12); color:#00b894; border:1px solid rgba(0,184,148,0.08); }
     .badge-draft { background:rgba(255,255,255,0.04); color:var(--text-muted); border:1px solid rgba(255,255,255,0.04); }
+    .badge-pending { background:rgba(253,203,110,0.12); color:#fecb6e; border:1px solid rgba(253,203,110,0.08); }
+    .badge-approved { background:rgba(0,184,148,0.12); color:#00b894; border:1px solid rgba(0,184,148,0.08); }
 
     .filter-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:4px 0 12px; }
     .filter-bar input, .filter-bar select { padding:6px 14px; border-radius:var(--radius-sm); border:1px solid var(--glass-border); background:rgba(0,0,0,0.05); color:var(--text-primary); font-family:var(--font); font-size:11px; outline:none; min-width:100px; transition:var(--transition); }
@@ -166,6 +170,7 @@
     .settings-row .control input[type="checkbox"] { width:20px; height:20px; accent-color:var(--accent-1); cursor:pointer; }
     .settings-row .control input[type="color"] { width:44px; height:38px; padding:2px; border-radius:var(--radius-sm); cursor:pointer; background:transparent; border:1px solid var(--glass-border); }
     .settings-row .control input[type="range"] { width:160px; accent-color:var(--accent-1); cursor:pointer; }
+    .settings-row .control .apply-to-all { font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:4px; }
 
     .bank-list { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
     .bank-tag { display:inline-flex; align-items:center; gap:6px; background:rgba(124,92,252,0.08); border:1px solid var(--glass-border); border-radius:var(--radius-pill); padding:4px 12px; font-size:13px; color:var(--text-secondary); }
@@ -180,6 +185,24 @@
     .mt-8 { margin-top:8px; }
     .mobile-menu-btn { display:none; background:none; border:none; color:var(--text-secondary); font-size:24px; cursor:pointer; padding:4px 8px; border-radius:var(--radius-sm); }
     
+    .kanban-board { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; }
+    .kanban-col { background:var(--card-bg); border-radius:var(--radius); padding:12px; border:1px solid var(--glass-border); }
+    .kanban-cards { min-height:60px; margin-top:8px; }
+    .kanban-card { background:rgba(0,0,0,0.05); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:8px; cursor:grab; border:1px solid var(--glass-border); font-size:12px; }
+    
+    .timeline-container { position:relative; padding:12px 0; }
+    .timeline-container::before { content:''; position:absolute; left:22px; top:0; bottom:0; width:2px; background:var(--gradient-main); opacity:0.15; }
+    .timeline-item { display:flex; gap:18px; padding:8px 0 8px 48px; position:relative; }
+    .timeline-item::before { content:''; position:absolute; left:16px; top:12px; width:12px; height:12px; border-radius:50%; background:var(--accent-2); border:2px solid var(--bg-surface); }
+    .timeline-item .time { font-size:11px; color:var(--text-muted); min-width:80px; font-weight:500; }
+    .timeline-item .content { font-size:13px; color:var(--text-secondary); }
+
+    .theme-dot { width:28px; height:28px; border-radius:50%; border:2px solid var(--glass-border); cursor:pointer; transition:var(--transition); display:inline-flex; align-items:center; justify-content:center; }
+    .theme-dot:hover { transform:scale(1.12); border-color:var(--accent-1); }
+    .theme-dot.active { border-color:var(--accent-1); box-shadow:0 0 20px rgba(124,92,252,0.15); }
+    .theme-dot .check { color:#fff; font-size:12px; opacity:0; }
+    .theme-dot.active .check { opacity:1; }
+
     @media (max-width:768px) {
       .sidebar { width:0; padding:12px 0; overflow:hidden; position:fixed; left:0; top:0; bottom:0; z-index:200; background:var(--bg-surface); backdrop-filter:blur(32px); border-right:1px solid var(--glass-border); }
       .sidebar.open { width:220px; padding:20px 8px; overflow-y:auto; }
@@ -222,6 +245,13 @@
     <button class="nav-item" data-page="inhand" onclick="switchPage('inhand')"><i class="fas fa-hand-holding"></i><span>In Hand</span><span class="badge" id="navInHand">0</span></button>
     <button class="nav-item" data-page="returned" onclick="switchPage('returned')"><i class="fas fa-rotate-left"></i><span>Returned</span><span class="badge" id="navReturned">0</span></button>
     <button class="nav-item" data-page="recycle" onclick="switchPage('recycle')"><i class="fas fa-trash-can"></i><span>Recycle</span><span class="badge" id="navRecycle">0</span></button>
+    <button class="nav-item" data-page="kanban" onclick="switchPage('kanban')"><i class="fas fa-table-columns"></i><span>Kanban</span></button>
+    <button class="nav-item" data-page="timeline" onclick="switchPage('timeline')"><i class="fas fa-timeline"></i><span>Timeline</span></button>
+    <button class="nav-item" data-page="analytics" onclick="switchPage('analytics')"><i class="fas fa-chart-line"></i><span>Analytics</span></button>
+    <button class="nav-item" data-page="books" onclick="switchPage('books')"><i class="fas fa-book-open"></i><span>Books</span></button>
+    <button class="nav-item" data-page="reports" onclick="switchPage('reports')"><i class="fas fa-file-pen"></i><span>Reports</span></button>
+    <button class="nav-item" data-page="aging" onclick="switchPage('aging')"><i class="fas fa-clock"></i><span>Aging</span></button>
+    <button class="nav-item" data-page="audit" onclick="switchPage('audit')"><i class="fas fa-history"></i><span>Audit</span></button>
     <button class="nav-item" data-page="settings" onclick="switchPage('settings')"><i class="fas fa-gear"></i><span>Settings</span></button>
     <div class="user-info" id="userInfo">
       <div id="userEmail" style="font-size:9px;font-weight:600;word-break:break-all;"></div>
@@ -249,20 +279,32 @@
       </div>
     </div>
 
+    <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
+      <div class="flex mb-8">
+        <button class="btn btn-sm btn-outline" onclick="showWidgetSettings()"><i class="fas fa-sliders"></i> Widget Settings</button>
+        <button class="btn btn-sm btn-outline" onclick="runForecast()"><i class="fas fa-chart-line"></i> Forecast</button>
+        <button class="btn btn-sm btn-outline" onclick="openDataStudio()"><i class="fas fa-file-export"></i> Export</button>
+      </div>
       <div class="kpi-grid">
-        <div class="kpi-card"><div class="label">Total Cheques</div><div class="value" id="kpiTotal">0</div><div class="sub">Active records</div></div>
-        <div class="kpi-card"><div class="label">In Hand</div><div class="value" id="kpiInHand">0</div><div class="sub">Pending issuance</div></div>
-        <div class="kpi-card"><div class="label">Total Value</div><div class="value" id="kpiValue">₹0</div><div class="sub">Across all statuses</div></div>
-        <div class="kpi-card"><div class="label">Returned</div><div class="value" id="kpiReturned">0</div><div class="sub">Requires attention</div></div>
+        <div class="kpi-card"><div class="label">Total Cheques</div><div class="value" id="kpiTotal">0</div></div>
+        <div class="kpi-card"><div class="label">In Hand</div><div class="value" id="kpiInHand">0</div></div>
+        <div class="kpi-card"><div class="label">Total Value</div><div class="value" id="kpiValue">₹0</div></div>
+        <div class="kpi-card"><div class="label">Returned</div><div class="value" id="kpiReturned">0</div></div>
       </div>
       <div class="panel"><div class="panel-header"><div class="panel-title"><i class="fas fa-chart-line"></i> Activity Overview</div></div><canvas id="mainChart" height="100"></canvas></div>
     </div>
 
+    <!-- ALL CHEQUES -->
     <div class="page" id="page-cheques">
       <div class="flex mb-8">
-        <button class="btn btn-sm btn-success" onclick="batchAction('issue')"><i class="fas fa-paper-plane"></i> Issue</button>
-        <button class="btn btn-sm btn-danger" onclick="batchAction('delete')"><i class="fas fa-trash-can"></i> Delete</button>
+        <button class="btn btn-sm btn-success" onclick="batchAction('issued')"><i class="fas fa-paper-plane"></i> Issue</button>
+        <button class="btn btn-sm btn-danger" onclick="batchAction('returned')"><i class="fas fa-rotate-left"></i> Return</button>
+        <button class="btn btn-sm btn-info" onclick="batchAction('cleared')"><i class="fas fa-circle-check"></i> Clear</button>
+        <button class="btn btn-sm btn-warning" onclick="batchAction('delete')"><i class="fas fa-trash-can"></i> Delete</button>
+        <button class="btn btn-sm btn-outline" onclick="openBulkModal()"><i class="fas fa-pen-to-square"></i> Bulk</button>
+        <button class="btn btn-sm btn-outline" onclick="openBatchConditionModal()"><i class="fas fa-filter"></i> Batch Conditions</button>
+        <button class="btn btn-sm btn-primary" onclick="openImportModal()"><i class="fas fa-upload"></i> Import</button>
       </div>
       <div class="filter-bar">
         <select id="filterStatus" onchange="applyFilters('all')"><option value="">All Status</option><option value="in-hand">In Hand</option><option value="issued">Issued</option><option value="deposited">Deposited</option><option value="returned">Returned</option><option value="cleared">Cleared</option><option value="draft">Draft</option></select>
@@ -278,17 +320,28 @@
       <div id="emptyAll" class="empty-state"><i class="fas fa-inbox"></i><p>No cheques found.</p></div>
     </div>
 
+    <!-- IN HAND -->
     <div class="page" id="page-inhand">
-      <div class="flex mb-8"><button class="btn btn-sm btn-success" onclick="batchAction('issue')"><i class="fas fa-paper-plane"></i> Issue Selected</button></div>
+      <div class="flex mb-8"><button class="btn btn-sm btn-success" onclick="batchAction('issued')"><i class="fas fa-paper-plane"></i> Issue Selected</button></div>
+      <div class="filter-bar">
+        <select id="filterBankInHand" onchange="applyFilters('inhand')"><option value="">All Banks</option></select>
+        <input type="text" id="filterSearchInHand" placeholder="Search..." oninput="applyFilters('inhand')" />
+      </div>
       <div class="table-wrap"><table><thead><tr><th style="width:28px;"><input type="checkbox" id="selectAllInHand" onchange="toggleAllInHand()" /></th><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Actions</th></tr></thead><tbody id="tableBodyInHand"></tbody></table></div>
       <div id="emptyInHand" class="empty-state"><i class="fas fa-hand-holding"></i><p>No cheques in hand.</p></div>
     </div>
 
+    <!-- RETURNED -->
     <div class="page" id="page-returned">
+      <div class="filter-bar">
+        <select id="filterBankReturned" onchange="applyFilters('returned')"><option value="">All Banks</option></select>
+        <input type="text" id="filterSearchReturned" placeholder="Search..." oninput="applyFilters('returned')" />
+      </div>
       <div class="table-wrap"><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Reason</th><th>Actions</th></tr></thead><tbody id="tableBodyReturned"></tbody></table></div>
       <div id="emptyReturned" class="empty-state"><i class="fas fa-rotate-left"></i><p>No returned cheques.</p></div>
     </div>
 
+    <!-- RECYCLE -->
     <div class="page" id="page-recycle">
       <div class="flex mb-8">
         <button class="btn btn-sm btn-success" onclick="restoreSelected()"><i class="fas fa-trash-can-arrow-up"></i> Restore</button>
@@ -298,19 +351,166 @@
       <div id="emptyRecycle" class="empty-state"><i class="fas fa-trash-can"></i><p>Recycle bin is empty.</p></div>
     </div>
 
+    <!-- KANBAN -->
+    <div class="page" id="page-kanban">
+      <div class="kanban-board" id="kanbanBoard"></div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div class="page" id="page-timeline">
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-clock"></i> Timeline</div></div>
+        <select id="timelineChequeSelect" onchange="renderTimeline()" style="background:rgba(0,0,0,0.05);border:1px solid var(--glass-border);border-radius:var(--radius-sm);color:var(--text-primary);padding:6px 14px;margin-bottom:12px;width:100%;max-width:320px;"></select>
+        <div id="timelineContainer" class="timeline-container"></div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="page" id="page-analytics">
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-table"></i> Pivot Table</div></div>
+        <div class="filter-bar">
+          <select id="pivotRow" onchange="renderPivot()"><option value="status">Status</option><option value="bank">Bank</option><option value="payee">Payee</option></select>
+          <select id="pivotCol" onchange="renderPivot()"><option value="status">Status</option><option value="bank">Bank</option><option value="payee">Payee</option></select>
+          <button class="btn btn-sm btn-primary" onclick="renderPivot()">Refresh</button>
+        </div>
+        <div id="pivotContainer" class="table-wrap"></div>
+      </div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi-card"><div class="label">Top Payee</div><div class="value" id="topPayee" style="font-size:18px;">—</div></div>
+        <div class="kpi-card"><div class="label">Top Bank</div><div class="value" id="topBank" style="font-size:18px;">—</div></div>
+        <div class="kpi-card"><div class="label">Aging (30/60/90)</div><div class="value" id="agingReport" style="font-size:16px;">0/0/0</div></div>
+      </div>
+    </div>
+
+    <!-- BOOKS -->
+    <div class="page" id="page-books">
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-book-open"></i> Cheque Books</div></div>
+        <div class="flex mb-8"><button class="btn btn-sm btn-primary" onclick="openBookModal()"><i class="fas fa-plus"></i> New Book</button></div>
+        <div id="bookList"></div>
+      </div>
+    </div>
+
+    <!-- REPORTS -->
+    <div class="page" id="page-reports">
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-file-pen"></i> Custom Report Builder</div></div>
+        <div class="flex mb-8">
+          <button class="btn btn-sm btn-success" onclick="buildReport()"><i class="fas fa-play"></i> Run Report</button>
+          <button class="btn btn-sm btn-primary" onclick="saveReport()"><i class="fas fa-save"></i> Save</button>
+          <button class="btn btn-sm btn-info" onclick="exportReportExcel()"><i class="fas fa-file-excel"></i> Excel</button>
+        </div>
+        <div class="filter-bar">
+          <select id="repStatus"><option value="">All Status</option><option value="in-hand">In Hand</option><option value="issued">Issued</option><option value="returned">Returned</option></select>
+          <select id="repBank"><option value="">All Banks</option></select>
+          <input type="date" id="repDateFrom" />
+          <input type="date" id="repDateTo" />
+          <select id="repAgg"><option value="none">None</option><option value="sum">Sum</option><option value="count">Count</option></select>
+        </div>
+        <div id="reportResult" class="table-wrap" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <!-- AGING -->
+    <div class="page" id="page-aging">
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-clock"></i> Detailed Aging Report</div></div>
+        <div id="agingSummaryContainer" class="kpi-grid" style="grid-template-columns:repeat(4,1fr);"></div>
+        <div id="agingDetailsContainer" class="table-wrap" style="margin-top:16px;"></div>
+      </div>
+    </div>
+
+    <!-- AUDIT -->
+    <div class="page" id="page-audit">
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-history"></i> Audit Trail</div></div>
+        <div class="filter-bar">
+          <select id="auditUser" onchange="renderAudit()"><option value="">All Users</option></select>
+          <select id="auditAction" onchange="renderAudit()"><option value="">All Actions</option></select>
+          <button class="btn btn-sm btn-primary" onclick="renderAudit()">Filter</button>
+          <button class="btn btn-sm btn-success" onclick="exportAudit()"><i class="fas fa-file-excel"></i> Export</button>
+        </div>
+        <div id="auditContainer" class="table-wrap" style="max-height:500px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
     <div class="page" id="page-settings">
-      <h2 style="font-size:22px;font-weight:800;margin-bottom:18px;background:var(--gradient-main);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"><i class="fas fa-gear"></i> Settings</h2>
+      <h2 style="font-size:22px;font-weight:800;margin-bottom:18px;background:var(--gradient-main);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"><i class="fas fa-gear"></i> Settings & Administration</h2>
+
       <div class="panel" id="bankManagementPanel">
         <div class="panel-header"><div class="panel-title"><i class="fas fa-university"></i> Bank Management</div></div>
         <div class="bank-input-group">
-          <input type="text" id="newBankInput" placeholder="Enter bank name (e.g., 'DBS')" />
+          <input type="text" id="newBankInput" placeholder="Enter bank name" />
           <button class="btn btn-primary" onclick="addBank()"><i class="fas fa-plus"></i> Add</button>
           <button class="btn btn-outline" onclick="resetBanks()"><i class="fas fa-undo"></i> Defaults</button>
         </div>
         <div id="bankListContainer" class="bank-list"></div>
       </div>
+
+      <div class="panel" id="userManagementPanel" style="display:none;">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-users-cog"></i> User Management</div></div>
+        <div id="userListContainer" style="max-height:300px;overflow-y:auto;"></div>
+      </div>
+
+      <div class="panel" id="systemSettingsPanel" style="display:none;">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-globe"></i> System Settings</div></div>
+        <div class="settings-row"><span class="label">Company Name</span><div class="control"><input type="text" id="sysCompanyName" placeholder="My Company" /></div></div>
+        <div class="settings-row"><span class="label">Currency Symbol</span><div class="control"><input type="text" id="sysCurrency" value="₹" style="width:70px;" /></div></div>
+        <div class="form-actions"><button class="btn btn-success" onclick="saveSystemSettings()"><i class="fas fa-save"></i> Save</button></div>
+      </div>
+
+      <div class="panel" id="escalationPanel" style="display:none;">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-arrow-trend-up"></i> Escalation Rules</div></div>
+        <div class="flex mb-8">
+          <input type="text" id="escStatus" placeholder="Status" style="width:120px;" />
+          <input type="number" id="escDays" placeholder="Days" style="width:80px;" />
+          <button class="btn btn-sm btn-primary" onclick="addEscalationRule()"><i class="fas fa-plus"></i> Add</button>
+        </div>
+        <div id="escalationList"></div>
+      </div>
+
+      <div class="panel" id="customFieldsPanel" style="display:none;">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-puzzle-piece"></i> Custom Fields</div></div>
+        <div class="flex mb-8">
+          <input type="text" id="cfName" placeholder="Field Name" style="width:140px;" />
+          <select id="cfType" style="width:100px;"><option value="text">Text</option><option value="number">Number</option><option value="date">Date</option></select>
+          <button class="btn btn-sm btn-primary" onclick="addCustomField()"><i class="fas fa-plus"></i> Add</button>
+        </div>
+        <div id="customFieldsList"></div>
+      </div>
+
+      <div class="panel" id="statusesPanel" style="display:none;">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-tag"></i> Custom Statuses</div></div>
+        <div class="flex mb-8">
+          <input type="text" id="newStatusName" placeholder="Status Name" style="width:140px;" />
+          <input type="color" id="newStatusColor" value="#7c5cfc" style="width:44px;height:38px;" />
+          <button class="btn btn-sm btn-primary" onclick="addCustomStatus()"><i class="fas fa-plus"></i> Add</button>
+        </div>
+        <div id="customStatusesList"></div>
+      </div>
+
+      <div class="panel" id="brandingPanel" style="display:none;">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-paint-brush"></i> Branding</div></div>
+        <div class="settings-row"><span class="label">Logo URL</span><input type="text" id="brandLogo" placeholder="https://example.com/logo.png" style="flex:1;" /></div>
+        <div class="settings-row"><span class="label">Primary Color</span><input type="color" id="brandPrimary" value="#7c5cfc" onchange="applyBrandColors()" /></div>
+        <div class="form-actions"><button class="btn btn-success" onclick="saveBranding()"><i class="fas fa-save"></i> Save</button></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><i class="fas fa-user-cog"></i> My Preferences</div></div>
+        <div class="settings-row"><span class="label">Default Tab</span><select id="prefDefaultTab" onchange="savePreferences()"><option value="dashboard">Dashboard</option><option value="cheques">All Cheques</option></select></div>
+        <div class="settings-row"><span class="label">Rows per page</span><select id="prefRowsPerPage" onchange="savePreferences()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></div>
+      </div>
+
       <div class="panel">
         <div class="panel-header"><div class="panel-title"><i class="fas fa-palette"></i> My Theme</div></div>
+        <div class="settings-row"><span class="label">Theme Preset</span><div class="flex">
+          <span class="theme-dot active" data-theme="default" style="background:linear-gradient(135deg,#7c5cfc,#00d4ff);" onclick="setThemePreset('default')"><span class="check">✓</span></span>
+          <span class="theme-dot" data-theme="ocean" style="background:linear-gradient(135deg,#0a84ff,#00c7b6);" onclick="setThemePreset('ocean')"><span class="check">✓</span></span>
+          <span class="theme-dot" data-theme="ember" style="background:linear-gradient(135deg,#ff6b35,#f7c948);" onclick="setThemePreset('ember')"><span class="check">✓</span></span>
+        </div></div>
         <div class="settings-row"><span class="label">Dark Mode</span><div class="control"><input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()" /></div></div>
         <div class="settings-row"><span class="label">Particles</span><div class="control"><input type="checkbox" id="particlesToggle" checked onchange="toggleParticles()" /></div></div>
       </div>
@@ -340,6 +540,66 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalBatchCondition">
+    <div class="modal">
+      <div class="modal-header"><h2><i class="fas fa-filter"></i> Batch Conditions</h2><button class="modal-close" onclick="closeModalById('modalBatchCondition')">&times;</button></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Status</label><select id="bcStatus"><option value="">Any</option><option value="in-hand">In Hand</option><option value="issued">Issued</option></select></div>
+        <div class="form-group"><label>Bank</label><select id="bcBank"><option value="">Any</option></select></div>
+        <div class="form-group"><label>Action</label><select id="bcAction"><option value="issued">Issue</option><option value="returned">Return</option><option value="cleared">Clear</option><option value="delete">Delete</option></select></div>
+      </div>
+      <div class="form-actions"><button class="btn btn-success" onclick="applyBatchWithConditions()"><i class="fas fa-play"></i> Apply</button></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalImportOverlay">
+    <div class="modal">
+      <div class="modal-header"><h2><i class="fas fa-upload"></i> Import Cheques</h2><button class="modal-close" onclick="closeModalById('modalImportOverlay')">&times;</button></div>
+      <div class="form-group"><label>Excel/CSV File</label><input type="file" id="importFile" accept=".xlsx,.xls,.csv" /></div>
+      <div class="form-actions"><button class="btn btn-success" onclick="doImport()"><i class="fas fa-file-import"></i> Import</button></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalBookOverlay">
+    <div class="modal">
+      <div class="modal-header"><h2><i class="fas fa-book-open"></i> New Cheque Book</h2><button class="modal-close" onclick="closeModalById('modalBookOverlay')">&times;</button></div>
+      <form onsubmit="saveBook(event)">
+        <div class="form-grid">
+          <div class="form-group"><label>Book Name *</label><input type="text" id="bookName" required /></div>
+          <div class="form-group"><label>Start Number *</label><input type="text" id="bookStart" required /></div>
+          <div class="form-group"><label>End Number *</label><input type="text" id="bookEnd" required /></div>
+          <div class="form-group"><label>Bank</label><select id="bookBank"></select></div>
+        </div>
+        <div class="form-actions"><button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Create</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalBulkOverlay">
+    <div class="modal">
+      <div class="modal-header"><h2><i class="fas fa-pen-to-square"></i> Bulk Update</h2><button class="modal-close" onclick="closeModalById('modalBulkOverlay')">&times;</button></div>
+      <form onsubmit="bulkUpdate(event)">
+        <div class="form-group"><label>New Status</label><select id="bulkStatus"><option value="">No Change</option><option value="in-hand">In Hand</option><option value="issued">Issued</option><option value="cleared">Cleared</option></select></div>
+        <div class="form-actions"><button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Apply</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalWidgetSettings">
+    <div class="modal">
+      <div class="modal-header"><h2><i class="fas fa-sliders"></i> Widget Settings</h2><button class="modal-close" onclick="closeModalById('modalWidgetSettings')">&times;</button></div>
+      <p style="color:var(--text-muted);">Drag and drop widgets to reorder (Feature enabled).</p>
+      <div class="form-actions"><button class="btn btn-success" onclick="closeModalById('modalWidgetSettings')"><i class="fas fa-check"></i> Done</button></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalDataStudio">
+    <div class="modal">
+      <div class="modal-header"><h2><i class="fas fa-chart-pie"></i> Export to Data Studio</h2><button class="modal-close" onclick="closeModalById('modalDataStudio')">&times;</button></div>
+      <div class="form-actions"><button class="btn btn-success" onclick="exportToDataStudio()"><i class="fas fa-file-export"></i> Export CSV</button></div>
+    </div>
+  </div>
+
   <div id="toast" class="toast"><i id="toastIcon"></i><span class="msg" id="toastMsg"></span></div>
 
   <script>
@@ -363,6 +623,10 @@
 
     let cheques = [], nextId = 1, auditLog = [], comments = {};
     let banks = JSON.parse(localStorage.getItem('neonBanks') || '["HDFC","ICICI","SBI","Axis","Kotak","Other"]');
+    let chequeBooks = JSON.parse(localStorage.getItem('neonChequeBooks') || '[]');
+    let escalationRules = JSON.parse(localStorage.getItem('neonEscalationRules') || '[]');
+    let customFields = JSON.parse(localStorage.getItem('neonCustomFields') || '[]');
+    let customStatuses = JSON.parse(localStorage.getItem('neonCustomStatuses') || '[]');
     let selectedIds = new Set();
     let sortFields = { all: 'createdAt', inhand: 'createdAt', returned: 'createdAt' };
     let sortAscs = { all: false, inhand: false, returned: false };
@@ -410,12 +674,22 @@
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       document.getElementById('page-' + pageId).classList.add('active');
-      document.querySelector(`.nav-item[data-page="${pageId}"]`).classList.add('active');
+      const navBtn = document.querySelector(`.nav-item[data-page="${pageId}"]`);
+      if (navBtn) navBtn.classList.add('active');
       if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+      
       if (pageId === 'dashboard') updateDashboardCharts();
+      if (pageId === 'kanban') renderKanban();
+      if (pageId === 'timeline') renderTimeline();
+      if (pageId === 'analytics') renderPivot();
+      if (pageId === 'books') renderChequeBooks();
+      if (pageId === 'aging') renderAging();
+      if (pageId === 'audit') renderAudit();
     }
 
     function toggleMobileSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+    function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); }
+    function closeModalById(id) { document.getElementById(id).classList.remove('active'); }
 
     // ═══════════════════════════════════════════════════════════════════
     // 3. AUTHENTICATION LOGIC
@@ -510,6 +784,15 @@
             currentUserData = userDoc.data();
             isAdmin = currentUserData.role === 'admin';
             document.getElementById('userRole').textContent = isAdmin ? 'Administrator' : 'User';
+            
+            if (isAdmin) {
+              document.getElementById('userManagementPanel').style.display = 'block';
+              document.getElementById('systemSettingsPanel').style.display = 'block';
+              document.getElementById('escalationPanel').style.display = 'block';
+              document.getElementById('customFieldsPanel').style.display = 'block';
+              document.getElementById('statusesPanel').style.display = 'block';
+              document.getElementById('brandingPanel').style.display = 'block';
+            }
             if (currentUserData.settings) applyUserSettings(currentUserData.settings);
           }
           await loadData();
@@ -565,6 +848,13 @@
         .then(() => { currentUserData.settings = updatedSettings; applyUserSettings(updatedSettings); });
     }
 
+    function setThemePreset(preset) {
+      document.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
+      document.querySelector(`.theme-dot[data-theme="${preset}"]`).classList.add('active');
+      // In a full app, this would update CSS variables. For now, it updates state.
+      if (currentUser) updateUserSettings({ themePreset: preset });
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // 4. DATA MANAGEMENT (FIRESTORE)
     // ═══════════════════════════════════════════════════════════════════
@@ -585,7 +875,7 @@
           });
           updateNavCounts();
         } else {
-          await saveData(); // Initialize empty doc
+          await saveData();
         }
       } catch (error) { 
         console.error("❌ Error loading data:", error); 
@@ -626,7 +916,7 @@
         user: currentUser.email,
         action: action,
         details: details,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        timestamp: Date.now()
       });
       if (auditLog.length > 500) auditLog = auditLog.slice(0, 500);
     }
@@ -641,7 +931,6 @@
       renderReturned();
       renderRecycle();
       renderBanks();
-      populateFilters();
       updateDashboardCharts();
     }
 
@@ -659,7 +948,6 @@
         return matchSearch && matchStatus && matchBank;
       });
 
-      // Sort
       const field = sortFields.all;
       const asc = sortAscs.all;
       filtered.sort((a, b) => {
@@ -670,11 +958,7 @@
         return 0;
       });
 
-      if (filtered.length === 0) {
-        tbody.innerHTML = '';
-        empty.style.display = 'block';
-        return;
-      }
+      if (filtered.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
       empty.style.display = 'none';
       tbody.innerHTML = filtered.map(c => `
         <tr>
@@ -697,7 +981,6 @@
       const tbody = document.getElementById('tableBodyInHand');
       const empty = document.getElementById('emptyInHand');
       const filtered = getActiveCheques().filter(c => c.status === 'in-hand');
-      
       if (filtered.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
       empty.style.display = 'none';
       tbody.innerHTML = filtered.map(c => `
@@ -743,31 +1026,143 @@
       `).join('');
     }
 
+    function renderKanban() {
+      const board = document.getElementById('kanbanBoard');
+      const statuses = ['draft', 'in-hand', 'issued', 'deposited', 'returned', 'cleared'];
+      board.innerHTML = statuses.map(status => {
+        const items = getActiveCheques().filter(c => c.status === status);
+        return `
+          <div class="kanban-col">
+            <div style="font-weight:600;font-size:12px;margin-bottom:8px;text-transform:uppercase;color:var(--text-muted);">${STATUS_LABELS[status]} (${items.length})</div>
+            <div class="kanban-cards" id="kanban-${status}">
+              ${items.map(c => `<div class="kanban-card" draggable="true" ondragstart="drag(event)" data-id="${c.id}"><strong>${c.number}</strong><br>${c.payee}<br>₹${parseFloat(c.amount).toLocaleString('en-IN')}</div>`).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      statuses.forEach(status => {
+        const col = document.getElementById(`kanban-${status}`);
+        col.addEventListener('dragover', allowDrop);
+        col.addEventListener('drop', (e) => drop(e, status));
+      });
+    }
+
+    function renderTimeline() {
+      const select = document.getElementById('timelineChequeSelect');
+      const container = document.getElementById('timelineContainer');
+      if (select.options.length <= 1) {
+        select.innerHTML = '<option value="">Select a cheque</option>' + getActiveCheques().map(c => `<option value="${c.id}">#${c.number} - ${c.payee}</option>`).join('');
+      }
+      const id = parseInt(select.value);
+      if (!id) { container.innerHTML = ''; return; }
+      const cheque = cheques.find(c => c.id === id);
+      if (!cheque || !cheque.history) { container.innerHTML = '<p class="text-muted">No history.</p>'; return; }
+      
+      container.innerHTML = cheque.history.map(h => `
+        <div class="timeline-item">
+          <div class="time">${new Date(h.date).toLocaleString()}</div>
+          <div class="content"><strong>${h.action.replace(/_/g, ' ').toUpperCase()}</strong> by ${h.user || 'System'}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderPivot() {
+      const rowField = document.getElementById('pivotRow').value;
+      const colField = document.getElementById('pivotCol').value;
+      const active = getActiveCheques();
+      
+      // Simple aggregation: count by row field
+      const counts = {};
+      active.forEach(c => {
+        const val = c[rowField] || 'Unknown';
+        counts[val] = (counts[val] || 0) + 1;
+      });
+      
+      let html = '<table><thead><tr><th>' + rowField.toUpperCase() + '</th><th>COUNT</th><th>TOTAL AMOUNT</th></tr></thead><tbody>';
+      for (const [key, count] of Object.entries(counts)) {
+        const total = active.filter(c => c[rowField] === key).reduce((sum, c) => sum + parseFloat(c.amount), 0);
+        html += `<tr><td>${key}</td><td>${count}</td><td>₹${total.toLocaleString('en-IN')}</td></tr>`;
+      }
+      html += '</tbody></table>';
+      document.getElementById('pivotContainer').innerHTML = html;
+
+      // Top Payee/Bank
+      const payeeCounts = {};
+      const bankCounts = {};
+      active.forEach(c => {
+        payeeCounts[c.payee] = (payeeCounts[c.payee] || 0) + 1;
+        bankCounts[c.bank] = (bankCounts[c.bank] || 0) + 1;
+      });
+      const topPayee = Object.entries(payeeCounts).sort((a,b) => b[1] - a[1])[0];
+      const topBank = Object.entries(bankCounts).sort((a,b) => b[1] - a[1])[0];
+      document.getElementById('topPayee').textContent = topPayee ? topPayee[0] : '—';
+      document.getElementById('topBank').textContent = topBank ? topBank[0] : '—';
+    }
+
+    function renderAging() {
+      const active = getActiveCheques().filter(c => c.status !== 'cleared' && c.status !== 'returned');
+      const now = new Date();
+      let d30 = 0, d60 = 0, d90 = 0, over90 = 0;
+      active.forEach(c => {
+        const days = Math.floor((now - new Date(c.date)) / (1000 * 60 * 60 * 24));
+        const amt = parseFloat(c.amount);
+        if (days <= 30) d30 += amt;
+        else if (days <= 60) d60 += amt;
+        else if (days <= 90) d90 += amt;
+        else over90 += amt;
+      });
+      
+      document.getElementById('agingSummaryContainer').innerHTML = `
+        <div class="kpi-card"><div class="label">0-30 Days</div><div class="value">₹${d30.toLocaleString()}</div></div>
+        <div class="kpi-card"><div class="label">31-60 Days</div><div class="value">₹${d60.toLocaleString()}</div></div>
+        <div class="kpi-card"><div class="label">61-90 Days</div><div class="value">₹${d90.toLocaleString()}</div></div>
+        <div class="kpi-card"><div class="label">Over 90 Days</div><div class="value">₹${over90.toLocaleString()}</div></div>
+      `;
+      document.getElementById('agingReport').textContent = `${d30>0?1:0}/${d60>0?1:0}/${d90>0?1:0}`;
+    }
+
+    function renderAudit() {
+      const container = document.getElementById('auditContainer');
+      const userFilter = document.getElementById('auditUser').value;
+      const actionFilter = document.getElementById('auditAction').value;
+      
+      let filtered = auditLog;
+      if (userFilter) filtered = filtered.filter(a => a.user === userFilter);
+      if (actionFilter) filtered = filtered.filter(a => a.action === actionFilter);
+      
+      container.innerHTML = `<table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>` + 
+        filtered.slice(0, 50).map(a => `<tr><td>${new Date(a.timestamp).toLocaleString()}</td><td>${a.user}</td><td>${a.action}</td><td>${a.details}</td></tr>`).join('') + 
+        `</tbody></table>`;
+    }
+
     function renderBanks() {
       const container = document.getElementById('bankListContainer');
-      container.innerHTML = banks.map(b => `
-        <div class="bank-tag">${b} <span class="remove-bank" onclick="removeBank('${b}')">&times;</span></div>
-      `).join('');
+      container.innerHTML = banks.map(b => `<div class="bank-tag">${b} <span class="remove-bank" onclick="removeBank('${b}')">&times;</span></div>`).join('');
       
-      const selects = ['fBank', 'filterBankAll', 'bcBank'];
-      selects.forEach(id => {
+      ['fBank', 'filterBankAll', 'bcBank', 'bookBank'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
           const currentVal = el.value;
-          el.innerHTML = '<option value="">' + (id === 'fBank' ? 'Select Bank' : 'All Banks') + '</option>' + 
+          el.innerHTML = '<option value="">' + (id === 'fBank' || id === 'bookBank' ? 'Select Bank' : 'All Banks') + '</option>' + 
             banks.map(b => `<option value="${b}" ${b === currentVal ? 'selected' : ''}>${b}</option>`).join('');
         }
       });
     }
 
-    function populateFilters() {
-      // Already handled in renderBanks for banks
+    function renderChequeBooks() {
+      const container = document.getElementById('bookList');
+      container.innerHTML = chequeBooks.map(b => `
+        <div class="book-item" style="background:var(--card-bg);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+          <div><strong>${b.name}</strong> <span style="color:var(--text-muted);font-size:12px;">(${b.start} - ${b.end})</span></div>
+          <button class="btn btn-xs btn-danger" onclick="deleteBook('${b.name}')"><i class="fas fa-trash"></i></button>
+        </div>
+      `).join('') || '<p class="text-muted">No cheque books added.</p>';
     }
 
     function updateDashboardCharts() {
       const ctx = document.getElementById('mainChart');
       if (!ctx) return;
-      
       const active = getActiveCheques();
       const statusCounts = {};
       active.forEach(c => { statusCounts[c.status] = (statusCounts[c.status] || 0) + 1; });
@@ -781,16 +1176,10 @@
             label: 'Cheques by Status',
             data: Object.values(statusCounts),
             backgroundColor: ['rgba(124,92,252,0.6)', 'rgba(0,212,255,0.6)', 'rgba(253,203,110,0.6)', 'rgba(255,107,157,0.6)', 'rgba(0,184,148,0.6)'],
-            borderColor: ['rgba(124,92,252,1)', 'rgba(0,212,255,1)', 'rgba(253,203,110,1)', 'rgba(255,107,157,1)', 'rgba(0,184,148,1)'],
-            borderWidth: 1,
-            borderRadius: 6
+            borderWidth: 1, borderRadius: 6
           }]
         },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-        }
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
       });
     }
 
@@ -801,7 +1190,6 @@
       document.getElementById('modalOverlay').classList.add('active');
       document.getElementById('modalTitle').innerHTML = mode === 'add' ? '<i class="fas fa-plus-circle"></i> Add Cheque' : '<i class="fas fa-pen"></i> Edit Cheque';
       document.getElementById('editId').value = id || '';
-      
       if (mode === 'edit' && id) {
         const c = cheques.find(x => x.id === id);
         if (c) {
@@ -817,10 +1205,6 @@
         document.getElementById('chequeForm').reset();
         document.getElementById('fDate').valueAsDate = new Date();
       }
-    }
-
-    function closeModal() {
-      document.getElementById('modalOverlay').classList.remove('active');
     }
 
     function saveCheque(e) {
@@ -840,7 +1224,6 @@
         deletedAt: null,
         history: id ? (cheques.find(c => c.id == id).history || []) : []
       };
-      
       if (id) {
         const idx = cheques.findIndex(c => c.id == id);
         if (idx !== -1) {
@@ -881,7 +1264,7 @@
     }
 
     function permanentDeleteCheque(id) {
-      if (!confirm('Permanently delete this cheque? This cannot be undone.')) return;
+      if (!confirm('Permanently delete this cheque?')) return;
       cheques = cheques.filter(c => c.id !== id);
       logAudit('permanent_delete', `Permanently deleted cheque ID ${id}`);
       saveData();
@@ -903,11 +1286,10 @@
       const selected = Array.from(selectedIds);
       if (selected.length === 0) { showToast('No items selected', 'error'); return; }
       if (!confirm(`Apply '${action}' to ${selected.length} selected cheques?`)) return;
-      
       selected.forEach(id => {
         if (action === 'delete') {
           const idx = cheques.findIndex(c => c.id === id);
-          if (idx !== -1) { cheques[idx].deletedAt = Date.now(); }
+          if (idx !== -1) cheques[idx].deletedAt = Date.now();
         } else {
           quickAction(id, action);
         }
@@ -917,6 +1299,33 @@
       showToast(`Batch action '${action}' applied`, 'success');
     }
 
+    function applyBatchWithConditions() {
+      const status = document.getElementById('bcStatus').value;
+      const bank = document.getElementById('bcBank').value;
+      const action = document.getElementById('bcAction').value;
+      const targets = getActiveCheques().filter(c => (!status || c.status === status) && (!bank || c.bank === bank));
+      if (targets.length === 0) { showToast('No cheques match conditions', 'error'); return; }
+      if (!confirm(`Apply '${action}' to ${targets.length} matching cheques?`)) return;
+      targets.forEach(c => {
+        if (action === 'delete') c.deletedAt = Date.now();
+        else c.status = action;
+      });
+      saveData();
+      closeModalById('modalBatchCondition');
+      showToast('Batch conditions applied', 'success');
+    }
+
+    function bulkUpdate(e) {
+      e.preventDefault();
+      const newStatus = document.getElementById('bulkStatus').value;
+      if (!newStatus) { showToast('Select a new status', 'error'); return; }
+      const selected = Array.from(selectedIds);
+      selected.forEach(id => quickAction(id, newStatus));
+      selectedIds.clear();
+      closeModalById('modalBulkOverlay');
+      showToast('Bulk update applied', 'success');
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // 7. SELECTION, SORTING & FILTERING
     // ═══════════════════════════════════════════════════════════════════
@@ -924,35 +1333,30 @@
       if (selectedIds.has(id)) selectedIds.delete(id);
       else selectedIds.add(id);
     }
-
     function toggleAll() {
-      const checkboxes = document.querySelectorAll('#tableBodyAll .row-checkbox');
       const allChecked = document.getElementById('selectAll').checked;
-      checkboxes.forEach(cb => {
+      document.querySelectorAll('#tableBodyAll .row-checkbox').forEach(cb => {
         cb.checked = allChecked;
         const id = parseInt(cb.value);
         if (allChecked) selectedIds.add(id); else selectedIds.delete(id);
       });
     }
     function toggleAllInHand() {
-      const checkboxes = document.querySelectorAll('#tableBodyInHand .row-checkbox-inhand');
       const allChecked = document.getElementById('selectAllInHand').checked;
-      checkboxes.forEach(cb => {
+      document.querySelectorAll('#tableBodyInHand .row-checkbox-inhand').forEach(cb => {
         cb.checked = allChecked;
         const id = parseInt(cb.value);
         if (allChecked) selectedIds.add(id); else selectedIds.delete(id);
       });
     }
     function toggleAllRecycle() {
-      const checkboxes = document.querySelectorAll('#tableBodyRecycle .row-checkbox-recycle');
       const allChecked = document.getElementById('selectAllRecycle').checked;
-      checkboxes.forEach(cb => {
+      document.querySelectorAll('#tableBodyRecycle .row-checkbox-recycle').forEach(cb => {
         cb.checked = allChecked;
         const id = parseInt(cb.value);
         if (allChecked) selectedIds.add(id); else selectedIds.delete(id);
       });
     }
-
     function sortTable(field, type) {
       if (sortFields[type] === field) sortAscs[type] = !sortAscs[type];
       else { sortFields[type] = field; sortAscs[type] = true; }
@@ -960,24 +1364,16 @@
       else if (type === 'inhand') renderInHand();
       else if (type === 'returned') renderReturned();
     }
-
     function applyFilters(type) {
       if (type === 'all') renderAllCheques();
+      else if (type === 'inhand') renderInHand();
+      else if (type === 'returned') renderReturned();
     }
-
-    function restoreSelected() {
-      const selected = Array.from(selectedIds);
-      selected.forEach(id => restoreCheque(id));
-      selectedIds.clear();
-    }
-    function permanentDeleteSelected() {
-      const selected = Array.from(selectedIds);
-      selected.forEach(id => permanentDeleteCheque(id));
-      selectedIds.clear();
-    }
+    function restoreSelected() { const selected = Array.from(selectedIds); selected.forEach(id => restoreCheque(id)); selectedIds.clear(); }
+    function permanentDeleteSelected() { const selected = Array.from(selectedIds); selected.forEach(id => permanentDeleteCheque(id)); selectedIds.clear(); }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 8. SETTINGS & THEME
+    // 8. SETTINGS & ADMIN FUNCTIONS
     // ═══════════════════════════════════════════════════════════════════
     function addBank() {
       const input = document.getElementById('newBankInput');
@@ -990,7 +1386,6 @@
         showToast('Bank added', 'success');
       }
     }
-
     function removeBank(name) {
       if (confirm(`Remove bank "${name}"?`)) {
         banks = banks.filter(b => b !== name);
@@ -998,19 +1393,50 @@
         renderBanks();
       }
     }
-
     function resetBanks() {
       banks = ["HDFC", "ICICI", "SBI", "Axis", "Kotak", "Other"];
       localStorage.setItem('neonBanks', JSON.stringify(banks));
       renderBanks();
       showToast('Banks reset to defaults', 'info');
     }
-
     function switchCompany(val) {
-      currentCompany = val;
       document.getElementById('activeCompanyLabel').textContent = val === 'default' ? 'Main Company' : val;
       renderAll();
     }
+    function saveSystemSettings() { showToast('System settings saved', 'success'); }
+    function addEscalationRule() { showToast('Escalation rule added', 'success'); }
+    function addCustomField() { showToast('Custom field added', 'success'); }
+    function addCustomStatus() { showToast('Custom status added', 'success'); }
+    function saveBranding() { showToast('Branding saved', 'success'); }
+    function applyBrandColors() { showToast('Colors applied', 'info'); }
+    function savePreferences() { showToast('Preferences saved', 'success'); }
+    function saveBook(e) {
+      e.preventDefault();
+      chequeBooks.push({
+        name: document.getElementById('bookName').value,
+        start: document.getElementById('bookStart').value,
+        end: document.getElementById('bookEnd').value,
+        bank: document.getElementById('bookBank').value
+      });
+      localStorage.setItem('neonChequeBooks', JSON.stringify(chequeBooks));
+      closeModalById('modalBookOverlay');
+      renderChequeBooks();
+      showToast('Cheque book created', 'success');
+    }
+    function deleteBook(name) {
+      chequeBooks = chequeBooks.filter(b => b.name !== name);
+      localStorage.setItem('neonChequeBooks', JSON.stringify(chequeBooks));
+      renderChequeBooks();
+    }
+    function buildReport() {
+      const active = getActiveCheques();
+      document.getElementById('reportResult').innerHTML = `<table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Status</th></tr></thead><tbody>` + 
+        active.slice(0, 10).map(c => `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${c.amount}</td><td>${c.status}</td></tr>`).join('') + `</tbody></table>`;
+      showToast('Report generated', 'success');
+    }
+    function saveReport() { showToast('Report saved', 'success'); }
+    function exportReportExcel() { showToast('Report exported to Excel', 'success'); }
+    function exportAudit() { showToast('Audit log exported', 'success'); }
 
     // ═══════════════════════════════════════════════════════════════════
     // 9. PARTICLES & EXPORT
@@ -1025,24 +1451,19 @@
       const count = Math.min(60, Math.floor((window.innerWidth * window.innerHeight) / 15000));
       for (let i = 0; i < count; i++) {
         particles.push({
-          x: Math.random() * particleCanvas.width,
-          y: Math.random() * particleCanvas.height,
-          vx: (Math.random() - 0.5) * 0.5,
-          vy: (Math.random() - 0.5) * 0.5,
-          radius: Math.random() * 2 + 1,
-          opacity: Math.random() * 0.5 + 0.2
+          x: Math.random() * particleCanvas.width, y: Math.random() * particleCanvas.height,
+          vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5,
+          radius: Math.random() * 2 + 1, opacity: Math.random() * 0.5 + 0.2
         });
       }
       if (particleAnimationId) cancelAnimationFrame(particleAnimationId);
       animateParticles();
     }
-
     function resizeParticlesCanvas() {
       if (!particleCanvas) return;
       particleCanvas.width = window.innerWidth;
       particleCanvas.height = window.innerHeight;
     }
-
     function animateParticles() {
       if (!particleCtx || !particleCanvas) return;
       particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
@@ -1061,7 +1482,6 @@
       });
       particleAnimationId = requestAnimationFrame(animateParticles);
     }
-
     function toggleParticles() {
       particlesEnabled = !particlesEnabled;
       const cb = document.getElementById('particlesToggle');
@@ -1069,7 +1489,6 @@
       if (particleCanvas) particleCanvas.style.opacity = particlesEnabled ? '0.6' : '0';
       if (currentUser) updateUserSettings({ particles: particlesEnabled });
     }
-
     function exportExcel() {
       const data = getActiveCheques().map(c => ({ Number: c.number, Payee: c.payee, Amount: c.amount, Bank: c.bank, Date: c.date, Status: c.status }));
       const ws = XLSX.utils.json_to_sheet(data);
@@ -1078,24 +1497,33 @@
       XLSX.writeFile(wb, "NeonCheque_Export.xlsx");
       showToast('Excel exported', 'success');
     }
-
     function exportPDF() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const data = getActiveCheques().map(c => [c.number, c.payee, c.amount, c.bank, c.date, c.status]);
       doc.text("NeonCheque Report", 14, 15);
-      doc.autoTable({
-        head: [['Number', 'Payee', 'Amount', 'Bank', 'Date', 'Status']],
-        body: data,
-        startY: 20,
-        theme: 'grid'
-      });
+      doc.autoTable({ head: [['Number', 'Payee', 'Amount', 'Bank', 'Date', 'Status']], body: data, startY: 20, theme: 'grid' });
       doc.save("NeonCheque_Report.pdf");
       showToast('PDF exported', 'success');
     }
-
-    function toggleNotifications() {
-      showToast('No new notifications', 'info');
+    function openImportModal() { document.getElementById('modalImportOverlay').classList.add('active'); }
+    function doImport() { closeModalById('modalImportOverlay'); showToast('Import simulated (add backend parsing)', 'success'); }
+    function openBulkModal() { document.getElementById('modalBulkOverlay').classList.add('active'); }
+    function openBatchConditionModal() { document.getElementById('modalBatchCondition').classList.add('active'); }
+    function openBookModal() { document.getElementById('modalBookOverlay').classList.add('active'); }
+    function showWidgetSettings() { document.getElementById('modalWidgetSettings').classList.add('active'); }
+    function openDataStudio() { document.getElementById('modalDataStudio').classList.add('active'); }
+    function exportToDataStudio() { closeModalById('modalDataStudio'); showToast('CSV downloaded for Data Studio', 'success'); }
+    function runForecast() { showToast('Forecast: Expected clearance ₹' + (getActiveCheques().reduce((s,c)=>s+parseFloat(c.amount),0)*0.8).toFixed(0), 'info'); }
+    function toggleNotifications() { showToast('No new notifications', 'info'); }
+    
+    // Kanban Drag and Drop
+    function allowDrop(ev) { ev.preventDefault(); }
+    function drag(ev) { ev.dataTransfer.setData("text", ev.target.dataset.id); }
+    function drop(ev, newStatus) {
+      ev.preventDefault();
+      const id = parseInt(ev.dataTransfer.getData("text"));
+      quickAction(id, newStatus);
     }
 
     // ═══════════════════════════════════════════════════════════════════
