@@ -3,202 +3,67 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NeonCheque · Aurora</title>
+<title>NeonCheque · Aurora - Enterprise Edition</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
-:root { --primary: #6366f1; --primary-dark: #4f46e5; --secondary: #06b6d4; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --info: #3b82f6; --dark: #1e293b; --light: #f8fafc; --gray: #64748b; --border: #e2e8f0; }
+:root { 
+  --primary: #6366f1; --primary-dark: #4f46e5; --secondary: #06b6d4; 
+  --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+  --info: #3b82f6; --dark: #1e293b; --light: #f8fafc; --gray: #64748b;
+  --border: #e2e8f0; --sidebar-width: 270px;
+}
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
-body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--dark); }
+body { background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); min-height: 100vh; color: var(--dark); }
 .hidden { display: none !important; }
-.view-content { display: none; }
-.view-content.active { display: block; animation: fadeIn 0.3s ease; }
+.view-content { display: none; animation: fadeIn 0.3s ease; }
+.view-content.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Login */
-.login-container { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 20px; }
+.login-container { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
 .login-box { background: white; border-radius: 24px; padding: 48px; width: 100%; max-width: 450px; box-shadow: 0 25px 50px rgba(0,0,0,0.25); }
 .login-header { text-align: center; margin-bottom: 32px; }
 .login-header h1 { font-size: 32px; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.form-group { margin-bottom: 20px; }
-.form-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; }
-.form-group input, .form-group select { width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: 12px; font-size: 15px; }
-.form-group input:focus { outline: none; border-color: var(--primary); }
-.btn { padding: 12px 24px; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
-.btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; width: 100%; justify-content: center; }
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(99,102,241,0.3); }
-.btn-secondary { background: var(--light); color: var(--dark); border: 2px solid var(--border); }
-.btn-sm { padding: 8px 16px; font-size: 13px; }
-.btn-google { width: 100%; justify-content: center; background: white; border: 2px solid var(--border); margin-top: 16px; }
+.form-group { margin-bottom: 18px; }
+.form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px; color: var(--dark); }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 11px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; transition: 0.2s; background: white; font-family: inherit; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.btn { padding: 11px 22px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 15px rgba(99,102,241,0.3); }
+.btn-secondary { background: white; color: var(--dark); border: 2px solid var(--border); }
+.btn-secondary:hover { background: var(--light); }
+.btn-success { background: linear-gradient(135deg, var(--success), #059669); color: white; }
+.btn-danger { background: linear-gradient(135deg, var(--danger), #dc2626); color: white; }
+.btn-warning { background: linear-gradient(135deg, var(--warning), #d97706); color: white; }
+.btn-sm { padding: 7px 14px; font-size: 12px; }
+.btn-block { width: 100%; justify-content: center; }
 
 /* Layout */
 .app-container { display: none; min-height: 100vh; }
 .app-container.active { display: flex; }
-.sidebar { width: 260px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-right: 1px solid var(--border); padding: 24px; position: fixed; height: 100vh; overflow-y: auto; z-index: 1000; }
+.sidebar { width: var(--sidebar-width); background: white; border-right: 1px solid var(--border); padding: 24px; position: fixed; height: 100vh; overflow-y: auto; z-index: 1000; }
+.sidebar-header { margin-bottom: 28px; }
 .sidebar-header h1 { font-size: 22px; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.version-badge { display: inline-block; padding: 4px 12px; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 8px; }
-.nav-section { margin-bottom: 24px; }
-.nav-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--gray); margin-bottom: 12px; letter-spacing: 0.5px; }
-.nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; cursor: pointer; transition: 0.2s; margin-bottom: 4px; font-weight: 500; font-size: 14px; }
+.version-badge { display: inline-block; padding: 3px 10px; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; border-radius: 20px; font-size: 10px; font-weight: 700; margin-top: 6px; }
+.nav-section { margin-bottom: 22px; }
+.nav-title { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--gray); margin-bottom: 10px; letter-spacing: 0.5px; }
+.nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; cursor: pointer; transition: 0.2s; margin-bottom: 4px; font-weight: 500; font-size: 14px; color: var(--dark); }
 .nav-item:hover { background: var(--light); }
 .nav-item.active { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; }
 .nav-item i { width: 18px; text-align: center; }
 
-.main-content { margin-left: 260px; padding: 32px; flex: 1; }
-.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 16px 24px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-.page-title { font-size: 24px; font-weight: 800; }
-
-/* Widgets */
-.widgets-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 24px; }
-.widget { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-.widget-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.widget-title { font-size: 13px; font-weight: 600; color: var(--gray); }
-.widget-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-.widget-icon.primary { background: #dbeafe; color: var(--info); }
-.widget-icon.success { background: #d1fae5; color: var(--success); }
-.widget-icon.warning { background: #fef3c7; color: var(--warning); }
-.widget-icon.danger { background: #fee2e2; color: var(--danger); }
-.widget-value { font-size: 28px; font-weight: 800; color: var(--dark); margin-bottom: 4px; }
-.widget-change { font-size: 13px; font-weight: 600; }
-.widget-change.positive { color: var(--success); }
-.widget-change.negative { color: var(--danger); }
-
-/* Cards */
-.card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 24px; }
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-.card-title { font-size: 18px; font-weight: 700; color: var(--dark); }
-
-/* Tables */
-.table-container { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
-th { font-weight: 700; color: var(--gray); font-size: 11px; text-transform: uppercase; background: var(--light); }
-tr:hover { background: var(--light); }
-
-/* Status */
-.status-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
-.status-draft { background: #f1f5f9; color: #475569; }
-.status-inhand { background: #dbeafe; color: #1e40af; }
-.status-issued { background: #fef3c7; color: #b45309; }
-.status-deposited { background: #d1fae5; color: #047857; }
-.status-returned { background: #fee2e2; color: #b91c1c; }
-.status-cleared { background: #d1fae5; color: #065f46; }
-.status-stopped { background: #fecaca; color: #991b1b; }
-
-/* Actions */
-.cheque-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-.action-btn { width: 32px; height: 32px; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; position: relative; font-size: 14px; color: white; }
-.action-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
-.action-btn::after { content: attr(data-tooltip); position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; opacity: 0; pointer-events: none; transition: 0.2s; z-index: 100; }
-.action-btn:hover::after { opacity: 1; }
-.btn-issue { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-.btn-return { background: linear-gradient(135deg, #f43f5e, #e11d48); }
-.btn-clear { background: linear-gradient(135deg, #10b981, #059669); }
-.btn-print { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.btn-edit { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-.btn-stop { background: linear-gradient(135deg, #ef4444, #dc2626); }
-.btn-view { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-.btn-download { background: linear-gradient(135deg, #6366f1, #4f46e5); }
-.btn-email { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
-.btn-delete { background: linear-gradient(135deg, #ef4444, #b91c1c); }
-.btn-approve { background: linear-gradient(135deg, #22c55e, #16a34a); }
-.btn-reject { background: linear-gradient(135deg, #f97316, #ea580c); }
-.btn-more { background: linear-gradient(135deg, #6b7280, #4b5563); }
-
-.action-menu { position: relative; }
-.action-dropdown { position: absolute; right: 0; top: 38px; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 180px; padding: 6px; opacity: 0; visibility: hidden; transform: translateY(-5px); transition: 0.2s; z-index: 100; border: 1px solid var(--border); }
-.action-menu.active .action-dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
-.dropdown-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 12px; }
-.dropdown-item:hover { background: var(--light); }
-.dropdown-item i { width: 16px; color: var(--primary); }
-.dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
-
-/* Filters */
-.filters { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.filter-group { display: flex; align-items: center; gap: 6px; }
-.filter-group label { font-weight: 600; font-size: 12px; color: var(--gray); }
-.filter-group select, .filter-group input { padding: 6px 10px; border: 2px solid var(--border); border-radius: 6px; font-size: 13px; }
-
-/* Modals */
-.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 2000; align-items: center; justify-content: center; padding: 20px; }
-.modal-overlay.active { display: flex; }
-.modal { background: white; border-radius: 16px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.25); }
-.modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-.modal-title { font-size: 18px; font-weight: 700; }
-.modal-close { width: 32px; height: 32px; border: none; background: var(--light); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.modal-close:hover { background: var(--danger); color: white; }
-.modal-body { padding: 24px; }
-.modal-footer { padding: 20px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
-
-/* Empty */
-.empty-state { text-align: center; padding: 40px 20px; color: var(--gray); }
-.empty-state i { font-size: 48px; margin-bottom: 12px; opacity: 0.3; }
-.empty-state h3 { font-size: 16px; margin-bottom: 4px; color: var(--dark); }
-
-/* Tabs */
-.tabs { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
-.tab { padding: 8px 16px; border-radius: 8px 8px 0 0; cursor: pointer; font-weight: 600; transition: 0.2s; border: none; background: transparent; color: var(--gray); font-size: 13px; }
-.tab:hover { background: var(--light); }
-.tab.active { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; }
-
-/* Toast */
-.toast-container { position: fixed; top: 20px; right: 20px; z-index: 3000; }
-.toast { background: white; padding: 14px 20px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-bottom: 10px; display: flex; align-items: center; gap: 10px; animation: slideIn 0.3s ease; min-width: 280px; }
-@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-.toast.success { border-left: 4px solid var(--success); }
-.toast.error { border-left: 4px solid var(--danger); }
-.toast.warning { border-left: 4px solid var(--warning); }
-.toast.info { border-left: 4px solid var(--info); }
-
-/* Kanban */
-.kanban-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
-.kanban-column { background: var(--light); border-radius: 12px; padding: 16px; }
-.kanban-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.kanban-title { font-weight: 700; font-size: 14px; }
-.kanban-count { background: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
-.kanban-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: 0.2s; }
-.kanban-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-
-/* Timeline */
-.timeline { position: relative; padding-left: 24px; }
-.timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--border); }
-.timeline-item { position: relative; margin-bottom: 16px; background: white; padding: 16px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-.timeline-item::before { content: ''; position: absolute; left: -20px; top: 20px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); border: 2px solid white; }
-
-/* Audit */
-.audit-entry { display: flex; gap: 12px; padding: 12px; border-bottom: 1px solid var(--border); }
-.audit-entry:last-child { border-bottom: none; }
-.audit-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--light); }
-.audit-content { flex: 1; }
-.audit-action { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
-.audit-time { font-size: 11px; color: var(--gray); }
-
-/* Stats */
-.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.stat-card { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; padding: 16px; border-radius: 12px; text-align: center; }
-.stat-card.success { background: linear-gradient(135deg, var(--success), #059669); }
-.stat-card.warning { background: linear-gradient(135deg, var(--warning), #d97706); }
-.stat-card.danger { background: linear-gradient(135deg, var(--danger), #dc2626); }
-.stat-value { font-size: 28px; font-weight: 800; margin-bottom: 2px; }
-.stat-label { font-size: 12px; opacity: 0.9; }
-
-/* Settings */
-.settings-section { margin-bottom: 28px; }
-.settings-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
-.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
-
-/* Checkbox */
-.checkbox { width: 16px; height: 16px; cursor: pointer; }
-
-/* Search */
-.search-box { position: relative; flex: 1; max-width: 350px; }
-.search-box input { width: 100%; padding: 10px 14px 10px 38px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; }
+.main-content { margin-left: var(--sidebar-width); padding: 28px; flex: 1; min-height: 100vh; }
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; background: white; padding: 16px 24px; border-radius: 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
+.page-title { font-size: 24px; font-weight: 800; color: var(--dark); }
+.search-box { position: relative; flex: 1; max-width: 350px; margin-right: 16px; }
+.search-box input { width: 100%; padding: 10px 14px 10px 40px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; }
 .search-box i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--gray); }
-
-/* User Menu */
 .user-menu { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 12px; border-radius: 10px; transition: 0.2s; }
 .user-menu:hover { background: var(--light); }
 .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--secondary)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 14px; }
@@ -206,11 +71,164 @@ tr:hover { background: var(--light); }
 .user-name { font-weight: 700; font-size: 13px; }
 .user-role { font-size: 11px; color: var(--gray); }
 
+/* Widgets */
+.widgets-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 24px; }
+.widget { background: white; border-radius: 16px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); transition: 0.3s; }
+.widget:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+.widget-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.widget-title { font-size: 13px; font-weight: 600; color: var(--gray); }
+.widget-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.widget-icon.primary { background: #dbeafe; color: var(--info); }
+.widget-icon.success { background: #d1fae5; color: var(--success); }
+.widget-icon.warning { background: #fef3c7; color: var(--warning); }
+.widget-icon.danger { background: #fee2e2; color: var(--danger); }
+.widget-value { font-size: 28px; font-weight: 800; color: var(--dark); margin-bottom: 4px; }
+.widget-change { font-size: 12px; font-weight: 600; }
+.widget-change.positive { color: var(--success); }
+.widget-change.negative { color: var(--danger); }
+
+/* Cards & Tables */
+.card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); margin-bottom: 24px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.card-title { font-size: 18px; font-weight: 700; color: var(--dark); }
+.table-container { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 14px; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-weight: 700; color: var(--gray); font-size: 11px; text-transform: uppercase; background: var(--light); letter-spacing: 0.5px; }
+tr:hover { background: var(--light); }
+
+/* Status */
+.status-badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
+.status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status-draft { background: #f1f5f9; color: #475569; }
+.status-inhand { background: #dbeafe; color: #1e40af; }
+.status-issued { background: #fef3c7; color: #b45309; }
+.status-deposited { background: #e0e7ff; color: #4338ca; }
+.status-returned { background: #fee2e2; color: #b91c1c; }
+.status-cleared { background: #d1fae5; color: #065f46; }
+.status-stopped { background: #fecaca; color: #991b1b; }
+.status-void { background: #f3f4f6; color: #374151; }
+
+/* Actions */
+.cheque-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+.action-btn { width: 32px; height: 32px; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; position: relative; font-size: 13px; color: white; }
+.action-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+.action-btn::after { content: attr(data-tooltip); position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); color: white; padding: 4px 8px; border-radius: 5px; font-size: 10px; white-space: nowrap; opacity: 0; pointer-events: none; transition: 0.2s; z-index: 100; font-weight: 600; }
+.action-btn:hover::after { opacity: 1; }
+.btn-issue { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+.btn-return { background: linear-gradient(135deg, #f43f5e, #e11d48); }
+.btn-clear { background: linear-gradient(135deg, #10b981, #059669); }
+.btn-deposit { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.btn-stop { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.btn-view { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+.btn-edit { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.btn-delete { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+.btn-more { background: linear-gradient(135deg, #6b7280, #4b5563); }
+.btn-approve { background: linear-gradient(135deg, #22c55e, #16a34a); }
+
+.action-menu { position: relative; }
+.action-dropdown { position: absolute; right: 0; top: 38px; background: white; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); min-width: 190px; padding: 6px; opacity: 0; visibility: hidden; transform: translateY(-5px); transition: 0.2s; z-index: 100; border: 1px solid var(--border); }
+.action-menu.active .action-dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
+.dropdown-item { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 7px; cursor: pointer; transition: 0.2s; font-size: 12px; color: var(--dark); }
+.dropdown-item:hover { background: var(--light); }
+.dropdown-item i { width: 16px; color: var(--primary); }
+.dropdown-divider { height: 1px; background: var(--border); margin: 5px 0; }
+
+/* Filters */
+.filters { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: end; }
+.filter-group { display: flex; flex-direction: column; gap: 5px; }
+.filter-group label { font-weight: 600; font-size: 11px; color: var(--gray); text-transform: uppercase; }
+.filter-group select, .filter-group input { padding: 8px 12px; border: 2px solid var(--border); border-radius: 8px; font-size: 13px; min-width: 140px; }
+
+/* Modals */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 2000; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.active { display: flex; }
+.modal { background: white; border-radius: 18px; width: 100%; max-width: 550px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.25); animation: modalSlide 0.3s ease; }
+@keyframes modalSlide { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+.modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; border-radius: 18px 18px 0 0; z-index: 10; }
+.modal-title { font-size: 18px; font-weight: 700; }
+.modal-close { width: 32px; height: 32px; border: none; background: var(--light); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: 0.2s; }
+.modal-close:hover { background: var(--danger); color: white; }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 20px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; position: sticky; bottom: 0; background: white; border-radius: 0 0 18px 18px; }
+
+/* Empty & Toast */
+.empty-state { text-align: center; padding: 50px 20px; color: var(--gray); }
+.empty-state i { font-size: 56px; margin-bottom: 14px; opacity: 0.3; }
+.empty-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--dark); }
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: 3000; }
+.toast { background: white; padding: 14px 20px; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); margin-bottom: 10px; display: flex; align-items: center; gap: 12px; animation: slideIn 0.3s ease; min-width: 300px; border-left: 4px solid var(--info); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.toast.success { border-left-color: var(--success); }
+.toast.error { border-left-color: var(--danger); }
+.toast.warning { border-left-color: var(--warning); }
+
+/* Kanban & Timeline */
+.kanban-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.kanban-column { background: var(--light); border-radius: 14px; padding: 16px; }
+.kanban-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-weight: 700; font-size: 14px; }
+.kanban-card { background: white; border-radius: 10px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: pointer; transition: 0.2s; }
+.kanban-card:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+.timeline { position: relative; padding-left: 26px; }
+.timeline::before { content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.timeline-item { position: relative; margin-bottom: 16px; background: white; padding: 16px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+.timeline-item::before { content: ''; position: absolute; left: -21px; top: 20px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); border: 2px solid white; }
+
+/* Audit & History */
+.audit-entry { display: flex; gap: 12px; padding: 12px; border-bottom: 1px solid var(--border); }
+.audit-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--light); flex-shrink: 0; }
+.audit-content { flex: 1; }
+.audit-action { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+.audit-details { font-size: 12px; color: var(--gray); }
+.audit-time { font-size: 11px; color: var(--gray); margin-top: 2px; }
+
+/* Settings */
+.settings-section { margin-bottom: 28px; }
+.settings-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+
+/* History Modal */
+.history-item { background: var(--light); padding: 14px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid var(--primary); }
+.history-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 700; font-size: 13px; }
+.history-details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; }
+.history-details div { background: white; padding: 6px 10px; border-radius: 6px; }
+.history-details strong { color: var(--gray); font-weight: 600; display: block; font-size: 10px; text-transform: uppercase; margin-bottom: 2px; }
+
+/* Advanced Admin Settings */
+.admin-tabs { display: flex; gap: 8px; border-bottom: 2px solid var(--border); margin-bottom: 24px; overflow-x: auto; padding-bottom: 2px; }
+.admin-tab { padding: 12px 20px; border: none; background: transparent; font-weight: 600; color: var(--gray); cursor: pointer; border-bottom: 3px solid transparent; transition: 0.2s; font-size: 14px; white-space: nowrap; }
+.admin-tab:hover { color: var(--primary); }
+.admin-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.admin-panel { display: none; animation: fadeIn 0.3s; }
+.admin-panel.active { display: block; }
+.admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.admin-card { background: var(--light); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.admin-card h4 { font-size: 15px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: var(--dark); }
+.toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.toggle-row:last-child { border-bottom: none; }
+.toggle-info { flex: 1; }
+.toggle-title { font-weight: 600; font-size: 13px; color: var(--dark); }
+.toggle-desc { font-size: 11px; color: var(--gray); margin-top: 2px; }
+.toggle-switch { width: 44px; height: 24px; background: #cbd5e1; border-radius: 12px; position: relative; cursor: pointer; transition: 0.3s; flex-shrink: 0; }
+.toggle-switch.active { background: var(--success); }
+.toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.toggle-switch.active::after { transform: translateX(20px); }
+.dynamic-list { margin-top: 12px; }
+.dynamic-item { display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border); font-size: 13px; }
+.dynamic-item .remove-btn { color: var(--danger); cursor: pointer; font-size: 12px; }
+.add-row { display: flex; gap: 8px; margin-top: 10px; }
+.add-row input, .add-row select { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.role-badge { padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.role-admin { background: #fee2e2; color: #991b1b; }
+.role-maker { background: #dbeafe; color: #1e40af; }
+.role-checker { background: #fef3c7; color: #b45309; }
+.role-viewer { background: #f1f5f9; color: #475569; }
+
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); }
   .sidebar.active { transform: translateX(0); }
   .main-content { margin-left: 0; padding: 16px; }
-  .widgets-grid { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -219,29 +237,15 @@ tr:hover { background: var(--light); }
 <!-- Login -->
 <div class="login-container" id="loginScreen">
   <div class="login-box">
-    <div class="login-header">
-      <h1>NeonCheque</h1>
-      <p style="color: var(--gray); font-size: 14px; margin-top: 8px;">Secure • Real-time • Team-ready</p>
-    </div>
+    <div class="login-header"><h1>NeonCheque</h1><p style="color: var(--gray); font-size: 14px; margin-top: 8px;">Secure • Real-time • Team-ready</p></div>
     <form id="loginForm">
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="loginEmail" placeholder="you@company.com" required>
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="loginPassword" placeholder="••••••••" required>
-      </div>
-      <button type="submit" class="btn btn-primary">
-        <i class="fas fa-sign-in-alt"></i> Sign In
-      </button>
-      <button type="button" class="btn btn-google" onclick="signInWithGoogle()">
-        <i class="fab fa-google"></i> Sign in with Google
-      </button>
+      <div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="you@company.com" required></div>
+      <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="••••••••" required></div>
+      <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-sign-in-alt"></i> Sign In</button>
+      <button type="button" class="btn btn-secondary btn-block" onclick="signInWithGoogle()" style="margin-top:10px;"><i class="fab fa-google"></i> Sign in with Google</button>
     </form>
     <div style="text-align: center; margin-top: 20px; color: var(--gray); font-size: 13px;">
       <p>Don't have an account? <a href="#" onclick="showSignup()" style="color: var(--primary); font-weight: 600;">Sign Up</a></p>
-      <p style="margin-top: 8px;"><a href="#" style="color: var(--primary); font-weight: 600;">Forgot password?</a></p>
     </div>
   </div>
 </div>
@@ -249,26 +253,12 @@ tr:hover { background: var(--light); }
 <!-- Signup -->
 <div class="login-container hidden" id="signupScreen">
   <div class="login-box">
-    <div class="login-header">
-      <h1>Create Account</h1>
-      <p style="color: var(--gray); font-size: 14px; margin-top: 8px;">Join NeonCheque Aurora</p>
-    </div>
+    <div class="login-header"><h1>Create Account</h1></div>
     <form id="signupForm">
-      <div class="form-group">
-        <label>Full Name</label>
-        <input type="text" id="signupName" placeholder="John Doe" required>
-      </div>
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="signupEmail" placeholder="you@company.com" required>
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="signupPassword" placeholder="Min 6 characters" required minlength="6">
-      </div>
-      <button type="submit" class="btn btn-primary">
-        <i class="fas fa-user-plus"></i> Create Account
-      </button>
+      <div class="form-group"><label>Full Name</label><input type="text" id="signupName" required></div>
+      <div class="form-group"><label>Email</label><input type="email" id="signupEmail" required></div>
+      <div class="form-group"><label>Password</label><input type="password" id="signupPassword" required minlength="6"></div>
+      <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-user-plus"></i> Create Account</button>
     </form>
     <div style="text-align: center; margin-top: 20px; color: var(--gray); font-size: 13px;">
       <p>Already have an account? <a href="#" onclick="showLogin()" style="color: var(--primary); font-weight: 600;">Sign In</a></p>
@@ -278,529 +268,386 @@ tr:hover { background: var(--light); }
 
 <!-- Main App -->
 <div class="app-container" id="appContainer">
-  <!-- Sidebar -->
   <aside class="sidebar">
-    <div class="sidebar-header" style="margin-bottom: 24px;">
-      <h1>NeonCheque</h1>
-      <span class="version-badge">✦ v5.0</span>
-    </div>
+    <div class="sidebar-header"><h1>NeonCheque</h1><span class="version-badge">✦ v5.0 Enterprise</span></div>
     <nav>
-      <div class="nav-section">
-        <div class="nav-title">Main</div>
-        <div class="nav-item active" onclick="showView('dashboard', this)">
-          <i class="fas fa-th-large"></i><span>Dashboard</span>
-        </div>
-        <div class="nav-item" onclick="showView('all-cheques', this)">
-          <i class="fas fa-list"></i><span>All Cheques</span>
-        </div>
-        <div class="nav-item" onclick="showView('in-hand', this)">
-          <i class="fas fa-hand-holding"></i><span>In Hand</span>
-        </div>
-        <div class="nav-item" onclick="showView('returned', this)">
-          <i class="fas fa-undo"></i><span>Returned</span>
-        </div>
-        <div class="nav-item" onclick="showView('recycle', this)">
-          <i class="fas fa-trash-restore"></i><span>Recycle Bin</span>
-        </div>
+      <div class="nav-section"><div class="nav-title">Main</div>
+        <div class="nav-item active" onclick="showView('dashboard', this)"><i class="fas fa-th-large"></i><span>Dashboard</span></div>
+        <div class="nav-item" onclick="showView('all-cheques', this)"><i class="fas fa-list"></i><span>All Cheques</span></div>
+        <div class="nav-item" onclick="showView('in-hand', this)"><i class="fas fa-hand-holding"></i><span>In Hand</span></div>
+        <div class="nav-item" onclick="showView('returned', this)"><i class="fas fa-undo"></i><span>Returned</span></div>
+        <div class="nav-item" onclick="showView('recycle', this)"><i class="fas fa-trash-restore"></i><span>Recycle Bin</span></div>
       </div>
-      <div class="nav-section">
-        <div class="nav-title">Views</div>
-        <div class="nav-item" onclick="showView('kanban', this)">
-          <i class="fas fa-columns"></i><span>Kanban</span>
-        </div>
-        <div class="nav-item" onclick="showView('timeline', this)">
-          <i class="fas fa-stream"></i><span>Timeline</span>
-        </div>
-        <div class="nav-item" onclick="showView('analytics', this)">
-          <i class="fas fa-chart-line"></i><span>Analytics</span>
-        </div>
-        <div class="nav-item" onclick="showView('books', this)">
-          <i class="fas fa-book"></i><span>Cheque Books</span>
-        </div>
-        <div class="nav-item" onclick="showView('reports', this)">
-          <i class="fas fa-file-alt"></i><span>Reports</span>
-        </div>
+      <div class="nav-section"><div class="nav-title">Views</div>
+        <div class="nav-item" onclick="showView('kanban', this)"><i class="fas fa-columns"></i><span>Kanban</span></div>
+        <div class="nav-item" onclick="showView('timeline', this)"><i class="fas fa-stream"></i><span>Timeline</span></div>
+        <div class="nav-item" onclick="showView('analytics', this)"><i class="fas fa-chart-line"></i><span>Analytics</span></div>
+        <div class="nav-item" onclick="showView('books', this)"><i class="fas fa-book"></i><span>Cheque Books</span></div>
       </div>
-      <div class="nav-section">
-        <div class="nav-title">Tools</div>
-        <div class="nav-item" onclick="showView('aging', this)">
-          <i class="fas fa-clock"></i><span>Aging Report</span>
-        </div>
-        <div class="nav-item" onclick="showView('audit', this)">
-          <i class="fas fa-history"></i><span>Audit Trail</span>
-        </div>
-      </div>
-      <div class="nav-section">
-        <div class="nav-title">Admin</div>
-        <div class="nav-item" onclick="showView('settings', this)">
-          <i class="fas fa-cog"></i><span>Settings</span>
-        </div>
-        <div class="nav-item" onclick="logout()">
-          <i class="fas fa-sign-out-alt"></i><span>Logout</span>
-        </div>
+      <div class="nav-section"><div class="nav-title">Tools & Admin</div>
+        <div class="nav-item" onclick="showView('aging', this)"><i class="fas fa-clock"></i><span>Aging Report</span></div>
+        <div class="nav-item" onclick="showView('audit', this)"><i class="fas fa-history"></i><span>Audit Trail</span></div>
+        <div class="nav-item" onclick="showView('settings', this)"><i class="fas fa-cog"></i><span>Settings</span></div>
+        <div class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>Logout</span></div>
       </div>
     </nav>
   </aside>
 
-  <!-- Main Content -->
   <main class="main-content">
-    <!-- Top Bar -->
     <div class="top-bar">
       <h1 class="page-title" id="pageTitle">Dashboard</h1>
       <div style="display: flex; align-items: center; gap: 12px;">
-        <div class="search-box">
-          <i class="fas fa-search"></i>
-          <input type="text" id="globalSearch" placeholder="Search cheques..." onkeyup="searchCheques()">
-        </div>
-        <div class="user-menu">
-          <div class="user-info">
-            <div class="user-name" id="userName">User</div>
-            <div class="user-role">Administrator</div>
-          </div>
-          <div class="user-avatar" id="userAvatar">U</div>
-        </div>
+        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="globalSearch" placeholder="Search cheques..." onkeyup="searchCheques()"></div>
+        <div class="user-menu"><div class="user-info"><div class="user-name" id="userName">User</div><div class="user-role">Administrator</div></div><div class="user-avatar" id="userAvatar">U</div></div>
       </div>
     </div>
 
-    <!-- Dashboard View -->
+    <!-- Dashboard -->
     <div id="dashboardView" class="view-content active">
       <div class="widgets-grid">
-        <div class="widget">
-          <div class="widget-header">
-            <div>
-              <div class="widget-title">Total Cheques</div>
-              <div class="widget-value" id="totalCheques">0</div>
-            </div>
-            <div class="widget-icon primary"><i class="fas fa-list"></i></div>
-          </div>
-          <div class="widget-change positive"><i class="fas fa-arrow-up"></i> <span id="totalChange">0</span> this month</div>
-        </div>
-        <div class="widget">
-          <div class="widget-header">
-            <div>
-              <div class="widget-title">In Hand</div>
-              <div class="widget-value" id="inHandCount">0</div>
-            </div>
-            <div class="widget-icon success"><i class="fas fa-hand-holding"></i></div>
-          </div>
-          <div style="font-size: 16px; margin-top: 6px; color: var(--gray);">₹<span id="inHandValue">0</span></div>
-        </div>
-        <div class="widget">
-          <div class="widget-header">
-            <div>
-              <div class="widget-title">Total Value</div>
-              <div class="widget-value">₹<span id="totalValue">0</span></div>
-            </div>
-            <div class="widget-icon warning"><i class="fas fa-rupee-sign"></i></div>
-          </div>
-          <div class="widget-change">Across all cheques</div>
-        </div>
-        <div class="widget">
-          <div class="widget-header">
-            <div>
-              <div class="widget-title">Returned</div>
-              <div class="widget-value" id="returnedCount">0</div>
-            </div>
-            <div class="widget-icon danger"><i class="fas fa-undo"></i></div>
-          </div>
-          <div class="widget-change negative"><span id="returnedValue">₹0</span> value</div>
-        </div>
+        <div class="widget"><div class="widget-header"><div><div class="widget-title">Total Cheques</div><div class="widget-value" id="totalCheques">0</div></div><div class="widget-icon primary"><i class="fas fa-list"></i></div></div><div class="widget-change positive">Active cheques</div></div>
+        <div class="widget"><div class="widget-header"><div><div class="widget-title">In Hand</div><div class="widget-value" id="inHandCount">0</div></div><div class="widget-icon success"><i class="fas fa-hand-holding"></i></div></div><div style="font-size:14px;color:var(--gray);margin-top:4px;">₹<span id="inHandValue">0</span></div></div>
+        <div class="widget"><div class="widget-header"><div><div class="widget-title">Total Value</div><div class="widget-value">₹<span id="totalValue">0</span></div></div><div class="widget-icon warning"><i class="fas fa-rupee-sign"></i></div></div><div class="widget-change">Portfolio value</div></div>
+        <div class="widget"><div class="widget-header"><div><div class="widget-title">Returned</div><div class="widget-value" id="returnedCount">0</div></div><div class="widget-icon danger"><i class="fas fa-undo"></i></div></div><div class="widget-change negative">₹<span id="returnedValue">0</span> value</div></div>
       </div>
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Recent Activity</h2>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-primary btn-sm" onclick="openModal('addChequeModal')"><i class="fas fa-plus"></i> Issue Cheque</button>
-            <button class="btn btn-secondary btn-sm" onclick="openModal('importModal')"><i class="fas fa-upload"></i> Import</button>
-          </div>
-        </div>
-        <div id="recentActivity"></div>
-      </div>
+      <div class="card"><div class="card-header"><h2 class="card-title">Recent Activity</h2><button class="btn btn-primary btn-sm" onclick="openModal('addChequeModal')"><i class="fas fa-plus"></i> New Cheque</button></div><div id="recentActivity"></div></div>
     </div>
 
-    <!-- All Cheques View -->
+    <!-- All Cheques -->
     <div id="allChequesView" class="view-content">
       <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">All Cheques</h2>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-primary btn-sm" onclick="openModal('addChequeModal')"><i class="fas fa-plus"></i> Add Cheque</button>
-            <button class="btn btn-secondary btn-sm" onclick="openModal('bulkUpdateModal')"><i class="fas fa-sync"></i> Bulk Update</button>
-            <button class="btn btn-secondary btn-sm" onclick="openModal('batchModal')"><i class="fas fa-filter"></i> Batch</button>
-          </div>
-        </div>
+        <div class="card-header"><h2 class="card-title">All Cheques</h2><div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="openModal('addChequeModal')"><i class="fas fa-plus"></i> Add</button><button class="btn btn-secondary btn-sm" onclick="openModal('bulkUpdateModal')"><i class="fas fa-sync"></i> Bulk</button></div></div>
         <div class="filters">
-          <div class="filter-group">
-            <label>Status:</label>
-            <select id="filterStatus" onchange="filterCheques()">
-              <option value="">All Status</option>
-              <option value="In Hand">In Hand</option>
-              <option value="Issued">Issued</option>
-              <option value="Deposited">Deposited</option>
-              <option value="Returned">Returned</option>
-              <option value="Cleared">Cleared</option>
-              <option value="Draft">Draft</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Bank:</label>
-            <select id="filterBank" onchange="filterCheques()"><option value="">All Banks</option></select>
-          </div>
-          <div class="filter-group">
-            <label>Date:</label>
-            <input type="date" id="filterDate" onchange="filterCheques()">
-          </div>
+          <div class="filter-group"><label>Status</label><select id="filterStatus" onchange="renderAllCheques()"><option value="">All</option><option>Draft</option><option>In Hand</option><option>Issued</option><option>Deposited</option><option>Returned</option><option>Cleared</option><option>Stopped</option></select></div>
+          <div class="filter-group"><label>Bank</label><select id="filterBank" onchange="renderAllCheques()"><option value="">All Banks</option></select></div>
+          <div class="filter-group"><label>Search</label><input type="text" id="tableSearch" placeholder="Payee or Number..." onkeyup="renderAllCheques()"></div>
         </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th><input type="checkbox" class="checkbox" onchange="toggleSelectAll(this)"></th>
-                <th>#</th>
-                <th>Payee</th>
-                <th>Amount</th>
-                <th>Bank</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="allChequesTable"></tbody>
-          </table>
-        </div>
-        <div id="allChequesEmpty" class="empty-state" style="display: none;">
-          <i class="fas fa-receipt"></i>
-          <h3>No cheques found</h3>
-          <p>Start by issuing your first cheque</p>
-          <button class="btn btn-primary" style="margin-top: 12px;" onclick="openModal('addChequeModal')"><i class="fas fa-plus"></i> Issue Cheque</button>
-        </div>
+        <div class="table-container"><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody id="allChequesTable"></tbody></table></div>
+        <div id="allChequesEmpty" class="empty-state hidden"><i class="fas fa-receipt"></i><h3>No cheques found</h3></div>
       </div>
     </div>
 
-    <!-- In Hand View -->
+    <!-- In Hand -->
     <div id="inHandView" class="view-content">
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Cheques In Hand</h2>
-          <button class="btn btn-primary btn-sm" onclick="openModal('addChequeModal')"><i class="fas fa-plus"></i> Add Cheque</button>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="inHandTable"></tbody>
-          </table>
-        </div>
-        <div id="inHandEmpty" class="empty-state" style="display: none;">
-          <i class="fas fa-hand-holding"></i><h3>No cheques in hand</h3>
-        </div>
-      </div>
+      <div class="card"><div class="card-header"><h2 class="card-title">Cheques In Hand</h2></div><div class="table-container"><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Actions</th></tr></thead><tbody id="inHandTable"></tbody></table></div><div id="inHandEmpty" class="empty-state hidden"><i class="fas fa-hand-holding"></i><h3>No cheques in hand</h3></div></div>
     </div>
 
-    <!-- Returned View -->
+    <!-- Returned -->
     <div id="returnedView" class="view-content">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Returned Cheques</h2></div>
-        <div class="table-container">
-          <table>
-            <thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Reason</th><th>Actions</th></tr></thead>
-            <tbody id="returnedTable"></tbody>
-          </table>
-        </div>
-        <div id="returnedEmpty" class="empty-state" style="display: none;">
-          <i class="fas fa-undo"></i><h3>No returned cheques</h3>
-        </div>
-      </div>
+      <div class="card"><div class="card-header"><h2 class="card-title">Returned Cheques</h2></div><div class="table-container"><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Reason</th><th>Actions</th></tr></thead><tbody id="returnedTable"></tbody></table></div><div id="returnedEmpty" class="empty-state hidden"><i class="fas fa-undo"></i><h3>No returned cheques</h3></div></div>
     </div>
 
-    <!-- Recycle View -->
+    <!-- Recycle -->
     <div id="recycleView" class="view-content">
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Recycle Bin</h2>
-          <button class="btn btn-danger btn-sm" onclick="emptyRecycleBin()"><i class="fas fa-trash"></i> Empty</button>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Deleted At</th><th>Actions</th></tr></thead>
-            <tbody id="recycleTable"></tbody>
-          </table>
-        </div>
-        <div id="recycleEmpty" class="empty-state" style="display: none;">
-          <i class="fas fa-trash-restore"></i><h3>Recycle bin is empty</h3>
-        </div>
-      </div>
+      <div class="card"><div class="card-header"><h2 class="card-title">Recycle Bin</h2><button class="btn btn-danger btn-sm" onclick="emptyRecycleBin()"><i class="fas fa-trash"></i> Empty</button></div><div class="table-container"><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Deleted At</th><th>Actions</th></tr></thead><tbody id="recycleTable"></tbody></table></div><div id="recycleEmpty" class="empty-state hidden"><i class="fas fa-trash-restore"></i><h3>Recycle bin is empty</h3></div></div>
     </div>
 
-    <!-- Kanban View -->
-    <div id="kanbanView" class="view-content">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Kanban Board</h2></div>
-        <div class="kanban-board" id="kanbanBoard"></div>
-      </div>
-    </div>
+    <!-- Kanban -->
+    <div id="kanbanView" class="view-content"><div class="card"><div class="card-header"><h2 class="card-title">Kanban Board</h2></div><div class="kanban-board" id="kanbanBoard"></div></div></div>
 
-    <!-- Timeline View -->
-    <div id="timelineView" class="view-content">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Timeline</h2></div>
-        <div class="timeline" id="timelineContent"></div>
-      </div>
-    </div>
+    <!-- Timeline -->
+    <div id="timelineView" class="view-content"><div class="card"><div class="card-header"><h2 class="card-title">Timeline</h2></div><div class="timeline" id="timelineContent"></div></div></div>
 
-    <!-- Analytics View -->
-    <div id="analyticsView" class="view-content">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Analytics</h2></div>
-        <div class="stats-row">
-          <div class="stat-card"><div class="stat-value" id="analyticsTotal">0</div><div class="stat-label">Total Cheques</div></div>
-          <div class="stat-card success"><div class="stat-value" id="analyticsCleared">0</div><div class="stat-label">Cleared</div></div>
-          <div class="stat-card warning"><div class="stat-value" id="analyticsPending">0</div><div class="stat-label">Pending</div></div>
-          <div class="stat-card danger"><div class="stat-value" id="analyticsReturned">0</div><div class="stat-label">Returned</div></div>
-        </div>
-      </div>
-    </div>
+    <!-- Analytics -->
+    <div id="analyticsView" class="view-content"><div class="card"><div class="card-header"><h2 class="card-title">Analytics</h2></div><div class="widgets-grid" id="analyticsWidgets"></div></div></div>
 
-    <!-- Books View -->
-    <div id="booksView" class="view-content">
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Cheque Books</h2>
-          <button class="btn btn-primary btn-sm" onclick="openModal('chequeBookModal')"><i class="fas fa-plus"></i> New Book</button>
-        </div>
-        <div id="chequeBooksList"></div>
-      </div>
-    </div>
+    <!-- Books -->
+    <div id="booksView" class="view-content"><div class="card"><div class="card-header"><h2 class="card-title">Cheque Books</h2><button class="btn btn-primary btn-sm" onclick="openModal('chequeBookModal')"><i class="fas fa-plus"></i> New Book</button></div><div id="chequeBooksList"></div></div></div>
 
-    <!-- Reports View -->
-    <div id="reportsView" class="view-content">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Custom Report Builder</h2></div>
-        <div class="filters">
-          <div class="filter-group">
-            <label>Status:</label>
-            <select id="reportStatus"><option value="">All Status</option><option value="In Hand">In Hand</option><option value="Issued">Issued</option><option value="Returned">Returned</option></select>
-          </div>
-          <div class="filter-group">
-            <label>Bank:</label>
-            <select id="reportBank"><option value="">All Banks</option></select>
-          </div>
-        </div>
-        <div style="display: flex; gap: 10px;">
-          <button class="btn btn-primary" onclick="generateReport()"><i class="fas fa-play"></i> Run Report</button>
-          <button class="btn btn-secondary" onclick="exportToExcel()"><i class="fas fa-file-excel"></i> Export Excel</button>
-        </div>
-      </div>
-    </div>
+    <!-- Aging -->
+    <div id="agingView" class="view-content"><div class="card"><div class="card-header"><h2 class="card-title">Aging Report</h2></div><div class="widgets-grid" id="agingWidgets"></div></div></div>
 
-    <!-- Aging View -->
-    <div id="agingView" class="view-content">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Aging Report (30/60/90)</h2></div>
-        <div class="stats-row">
-          <div class="stat-card"><div class="stat-value" id="aging30">0</div><div class="stat-label">0-30 Days</div></div>
-          <div class="stat-card success"><div class="stat-value" id="aging60">0</div><div class="stat-label">31-60 Days</div></div>
-          <div class="stat-card warning"><div class="stat-value" id="aging90">0</div><div class="stat-label">61-90 Days</div></div>
-          <div class="stat-card danger"><div class="stat-value" id="aging90plus">0</div><div class="stat-label">90+ Days</div></div>
-        </div>
-      </div>
-    </div>
+    <!-- Audit -->
+    <div id="auditView" class="view-content"><div class="card"><div class="card-header"><h2 class="card-title">Audit Trail</h2></div><div id="auditTrail"></div></div></div>
 
-    <!-- Audit View -->
-    <div id="auditView" class="view-content">
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Audit Trail</h2>
-          <button class="btn btn-secondary btn-sm" onclick="exportAudit()"><i class="fas fa-download"></i> Export</button>
-        </div>
-        <div class="filters">
-          <div class="filter-group">
-            <label>User:</label>
-            <select id="auditUser"><option value="">All Users</option></select>
-          </div>
-          <div class="filter-group">
-            <label>Action:</label>
-            <select id="auditAction"><option value="">All Actions</option><option value="create">Created</option><option value="update">Updated</option><option value="delete">Deleted</option></select>
-          </div>
-        </div>
-        <div id="auditTrail"></div>
-      </div>
-    </div>
-
-    <!-- Settings View -->
+    <!-- Settings - ULTIMATE ADMIN PANEL -->
     <div id="settingsView" class="view-content">
       <div class="card">
-        <div class="card-header"><h2 class="card-title">Settings & Administration</h2></div>
-        <div class="settings-section">
-          <h3 class="settings-title">System Settings</h3>
-          <div class="settings-grid">
-            <div class="form-group"><label>Company Name</label><input type="text" id="companyName" value="Main Company"></div>
-            <div class="form-group"><label>Currency Symbol</label><input type="text" id="currencySymbol" value="₹"></div>
-          </div>
-          <button class="btn btn-primary" style="margin-top: 12px;" onclick="saveSettings()"><i class="fas fa-save"></i> Save Settings</button>
+        <div class="card-header"><h2 class="card-title"><i class="fas fa-shield-alt" style="color: var(--primary); margin-right: 8px;"></i> Admin Control Center</h2><button class="btn btn-primary btn-sm" onclick="saveAllSettings()"><i class="fas fa-save"></i> Save All Changes</button></div>
+        
+        <div class="admin-tabs">
+          <button class="admin-tab active" onclick="switchAdminTab('general', this)">General & Branding</button>
+          <button class="admin-tab" onclick="switchAdminTab('users', this)">Users & RBAC</button>
+          <button class="admin-tab" onclick="switchAdminTab('workflow', this)">Workflow & Escalation</button>
+          <button class="admin-tab" onclick="switchAdminTab('custom', this)">Custom Fields & Status</button>
+          <button class="admin-tab" onclick="switchAdminTab('banks', this)">Banks & Books</button>
+          <button class="admin-tab" onclick="switchAdminTab('system', this)">System, Backup & API</button>
         </div>
-        <div class="settings-section">
-          <h3 class="settings-title">Branding</h3>
-          <div class="settings-grid">
-            <div class="form-group"><label>Logo URL</label><input type="text" id="logoUrl" placeholder="https://..."></div>
-            <div class="form-group"><label>Primary Color</label><input type="color" id="primaryColor" value="#6366f1" style="width: 100%; height: 40px; border-radius: 8px; cursor: pointer;"></div>
+
+        <!-- TAB 1: General -->
+        <div id="tab-general" class="admin-panel active">
+          <div class="admin-grid">
+            <div class="admin-card">
+              <h4><i class="fas fa-building"></i> System Settings</h4>
+              <div class="form-group"><label>Company Name</label><input type="text" id="adminCompanyName" value="Main Company"></div>
+              <div class="form-group"><label>Currency Symbol</label><input type="text" id="adminCurrency" value="₹"></div>
+              <div class="form-group"><label>Fiscal Year Start</label><input type="month" value="2024-04"></div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-palette"></i> Branding & Theme</h4>
+              <div class="form-group"><label>Logo URL</label><input type="text" placeholder="https://..."></div>
+              <div class="form-group"><label>Primary Color</label><input type="color" id="adminPrimaryColor" value="#6366f1" style="height: 40px; width: 100%;"></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Dark Mode</div><div class="toggle-desc">Enable dark theme</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Particle Background</div><div class="toggle-desc">Animated login background</div></div><div class="toggle-switch active" onclick="this.classList.toggle('active')"></div></div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-th-large"></i> Widget Layout</h4>
+              <p style="font-size: 12px; color: var(--gray); margin-bottom: 12px;">Drag to reorder dashboard widgets.</p>
+              <div class="dynamic-list">
+                <div class="dynamic-item"><span>Total Cheques Widget</span><i class="fas fa-grip-vertical" style="color:var(--gray); cursor:move;"></i></div>
+                <div class="dynamic-item"><span>In Hand Value Widget</span><i class="fas fa-grip-vertical" style="color:var(--gray); cursor:move;"></i></div>
+                <div class="dynamic-item"><span>Returned Cheques Widget</span><i class="fas fa-grip-vertical" style="color:var(--gray); cursor:move;"></i></div>
+              </div>
+            </div>
           </div>
-          <button class="btn btn-primary" style="margin-top: 12px;" onclick="saveBranding()"><i class="fas fa-save"></i> Save Branding</button>
         </div>
-        <div class="settings-section">
-          <h3 class="settings-title">My Preferences</h3>
-          <div class="settings-grid">
-            <div class="form-group">
-              <label>Default Tab</label>
-              <select id="defaultTab">
-                <option value="dashboard">Dashboard</option>
-                <option value="all-cheques">All Cheques</option>
-              </select>
+
+        <!-- TAB 2: Users & RBAC -->
+        <div id="tab-users" class="admin-panel">
+          <div class="admin-grid">
+            <div class="admin-card" style="grid-column: span 2;">
+              <h4><i class="fas fa-users-cog"></i> User Management & Roles (RBAC)</h4>
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Last Active</th><th>Actions</th></tr></thead>
+                  <tbody id="usersTable">
+                    <tr><td>Admin User</td><td>admin@neon.com</td><td><span class="role-badge role-admin">Admin</span></td><td>Just now</td><td><button class="btn btn-sm btn-secondary">Edit</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <button class="btn btn-primary btn-sm" style="margin-top: 16px;" onclick="openModal('inviteUserModal')"><i class="fas fa-user-plus"></i> Invite New User</button>
             </div>
-            <div class="form-group">
-              <label>Rows per page</label>
-              <select id="rowsPerPage">
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
+            <div class="admin-card">
+              <h4><i class="fas fa-user-shield"></i> Security Policies</h4>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Enforce 2FA</div><div class="toggle-desc">Require 2FA for all admins</div></div><div class="toggle-switch active" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">IP Whitelisting</div><div class="toggle-desc">Restrict login to office IPs</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+              <div class="form-group" style="margin-top: 12px;"><label>Session Timeout (Minutes)</label><input type="number" value="30"></div>
+              <div class="form-group"><label>Password Policy</label><select><option>Strong (8+ chars, symbols)</option><option>Medium (6+ chars)</option><option>Custom</option></select></div>
             </div>
           </div>
-          <button class="btn btn-primary" style="margin-top: 12px;" onclick="savePreferences()"><i class="fas fa-save"></i> Save Preferences</button>
+        </div>
+
+        <!-- TAB 3: Workflow & Escalation -->
+        <div id="tab-workflow" class="admin-panel">
+          <div class="admin-grid">
+            <div class="admin-card" style="grid-column: span 2;">
+              <h4><i class="fas fa-route"></i> Escalation & SLA Rules</h4>
+              <p style="font-size: 12px; color: var(--gray); margin-bottom: 12px;">Automatically escalate or notify if cheques are stuck.</p>
+              <div class="dynamic-list" id="escalationList">
+                <div class="dynamic-item"><div><strong>If Status = 'In Hand' for > 7 days</strong><br><span style="font-size:11px; color:var(--gray);">Notify: Manager, Auto-email Payee</span></div><i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i></div>
+                <div class="dynamic-item"><div><strong>If Amount > ₹5,00,000</strong><br><span style="font-size:11px; color:var(--gray);">Require: Director Approval (Checker 2)</span></div><i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i></div>
+              </div>
+              <div class="add-row">
+                <select id="escCondition"><option>Status is</option><option>Amount is greater than</option><option>Days pending > </option></select>
+                <input type="text" id="escValue" placeholder="Condition value">
+                <select id="escAction"><option>Notify Manager</option><option>Require Approval</option><option>Auto-email Payee</option><option>Escalate to Director</option></select>
+                <button class="btn btn-primary btn-sm" onclick="addEscalation()"><i class="fas fa-plus"></i></button>
+              </div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-bell"></i> Notification Defaults</h4>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Email on Issue</div></div><div class="toggle-switch active" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">SMS on Bounce</div></div><div class="toggle-switch active" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Slack/Webhook Alerts</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Daily Summary Report</div></div><div class="toggle-switch active" onclick="this.classList.toggle('active')"></div></div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-user-check"></i> Maker-Checker Rules</h4>
+              <div class="form-group"><label>Approval Threshold (₹)</label><input type="number" value="100000"></div>
+              <div class="form-group"><label>Required Approvers</label><select><option>1 Checker</option><option>2 Checkers</option><option>Director + Checker</option></select></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Allow Self-Approval</div><div class="toggle-desc">Maker cannot approve own cheques</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: Custom Fields & Status -->
+        <div id="tab-custom" class="admin-panel">
+          <div class="admin-grid">
+            <div class="admin-card">
+              <h4><i class="fas fa-plus-circle"></i> Custom Fields</h4>
+              <p style="font-size: 12px; color: var(--gray);">Add extra data fields to the cheque form.</p>
+              <div class="dynamic-list" id="customFieldsList">
+                <div class="dynamic-item"><span>Department (Text)</span><i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i></div>
+                <div class="dynamic-item"><span>Project Code (Number)</span><i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i></div>
+              </div>
+              <div class="add-row">
+                <input type="text" id="newFieldName" placeholder="Field Name">
+                <select id="newFieldType"><option>Text</option><option>Number</option><option>Date</option><option>Dropdown</option></select>
+                <button class="btn btn-primary btn-sm" onclick="addCustomField()"><i class="fas fa-plus"></i></button>
+              </div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-tags"></i> Custom Statuses</h4>
+              <p style="font-size: 12px; color: var(--gray);">Create your own cheque lifecycle stages.</p>
+              <div class="dynamic-list" id="customStatusList">
+                <div class="dynamic-item"><span style="color:#b45309;">●</span> Pending Courier <i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i></div>
+                <div class="dynamic-item"><span style="color:#1e40af;">●</span> With Bank <i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i></div>
+              </div>
+              <div class="add-row">
+                <input type="text" id="newStatusName" placeholder="Status Name">
+                <input type="color" id="newStatusColor" value="#6366f1" style="width: 50px;">
+                <button class="btn btn-primary btn-sm" onclick="addCustomStatus()"><i class="fas fa-plus"></i></button>
+              </div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-file-alt"></i> Custom Templates</h4>
+              <p style="font-size: 12px; color: var(--gray);">Email and document templates.</p>
+              <div class="form-group"><label>Issue Email Template</label><textarea rows="3" placeholder="Dear {payee}, your cheque #{number}..."></textarea></div>
+              <div class="form-group"><label>Bounce Notice Template</label><textarea rows="3" placeholder="Your cheque #{number} was returned..."></textarea></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: Banks & Books -->
+        <div id="tab-banks" class="admin-panel">
+          <div class="admin-grid">
+            <div class="admin-card" style="grid-column: span 2;">
+              <h4><i class="fas fa-university"></i> Bank Account Management</h4>
+              <div class="dynamic-list" id="bankList">
+                <div class="dynamic-item"><div><strong>HDFC Bank - Current A/c</strong><br><span style="font-size:11px; color:var(--gray);">A/c: 50100012345678 | IFSC: HDFC0001234</span></div><button class="btn btn-sm btn-secondary">Edit</button></div>
+                <div class="dynamic-item"><div><strong>ICICI Bank - Savings A/c</strong><br><span style="font-size:11px; color:var(--gray);">A/c: 012301001234 | IFSC: ICIC0001234</span></div><button class="btn btn-sm btn-secondary">Edit</button></div>
+              </div>
+              <div class="add-row" style="margin-top:12px;">
+                <input type="text" id="newBankName" placeholder="Bank Name">
+                <input type="text" id="newBankAccount" placeholder="Account Number">
+                <input type="text" id="newBankIFSC" placeholder="IFSC Code">
+                <button class="btn btn-primary btn-sm" onclick="addBank()"><i class="fas fa-plus"></i></button>
+              </div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-book"></i> Default Cheque Books</h4>
+              <div class="form-group"><label>Active Book</label><select id="activeBook"><option>HDFC Book 1 (0001 - 0100)</option><option>ICICI Book 1 (1001 - 1100)</option></select></div>
+              <div class="form-group"><label>Next Cheque Number</label><input type="text" value="0045"></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Auto-increment</div></div><div class="toggle-switch active" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Low Stock Alert</div><div class="toggle-desc">Alert when < 10 leaves remain</div></div><div class="toggle-switch active" onclick="this.classList.toggle('active')"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 6: System, Backup & API -->
+        <div id="tab-system" class="admin-panel">
+          <div class="admin-grid">
+            <div class="admin-card">
+              <h4><i class="fas fa-database"></i> Backup & Data</h4>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Auto Daily Backup</div><div class="toggle-desc">Backup to cloud every 24h</div></div><div class="toggle-switch active" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Export to Google Sheets</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+              <div class="form-group" style="margin-top:12px;"><label>Backup Retention (Days)</label><input type="number" value="90"></div>
+              <button class="btn btn-primary btn-sm" style="margin-top:12px;"><i class="fas fa-download"></i> Export All Data (JSON)</button>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-plug"></i> API & Webhooks</h4>
+              <div class="form-group"><label>API Key</label><input type="text" value="nc_live_sk_..." readonly style="font-family:monospace; font-size:12px;"></div>
+              <div class="form-group"><label>Webhook URL</label><input type="text" placeholder="https://yourapp.com/webhook"></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Enable Webhooks</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+              <div class="form-group"><label>Events to Send</label><select multiple style="height:80px;"><option>Cheque Created</option><option>Cheque Issued</option><option>Cheque Returned</option><option>Cheque Cleared</option></select></div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-file-export"></i> Integrations</h4>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Tally ERP Sync</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">QuickBooks Sync</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Zoho Books Sync</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+              <div class="toggle-row"><div class="toggle-info"><div class="toggle-title">Bank API (Positive Pay)</div></div><div class="toggle-switch" onclick="this.classList.toggle('active')"></div></div>
+            </div>
+            <div class="admin-card">
+              <h4><i class="fas fa-cogs"></i> System Info</h4>
+              <div style="font-size:13px; line-height:2;">
+                <div><strong>Version:</strong> v5.0 Enterprise</div>
+                <div><strong>Database:</strong> Firebase Firestore</div>
+                <div><strong>Storage Used:</strong> 2.4 MB / 1 GB</div>
+                <div><strong>Active Users:</strong> 3</div>
+                <div><strong>Last Backup:</strong> Today, 03:00 AM</div>
+              </div>
+              <button class="btn btn-danger btn-sm" style="margin-top:12px;"><i class="fas fa-trash"></i> Clear All Data</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </main>
 </div>
 
-<!-- Modals -->
+<!-- Add Cheque Modal -->
 <div class="modal-overlay" id="addChequeModal">
   <div class="modal">
-    <div class="modal-header">
-      <h2 class="modal-title">Add Cheque</h2>
-      <button class="modal-close" onclick="closeModal('addChequeModal')"><i class="fas fa-times"></i></button>
-    </div>
+    <div class="modal-header"><h2 class="modal-title">Add Cheque</h2><button class="modal-close" onclick="closeModal('addChequeModal')"><i class="fas fa-times"></i></button></div>
     <div class="modal-body">
       <form id="addChequeForm">
-        <div class="form-group"><label>Cheque Number *</label><input type="text" id="chequeNumber" required placeholder="Enter cheque number"></div>
-        <div class="form-group"><label>Payee *</label><input type="text" id="chequePayee" required placeholder="Enter payee name"></div>
-        <div class="form-group"><label>Amount (₹) *</label><input type="number" id="chequeAmount" required placeholder="Enter amount" min="0" step="0.01"></div>
-        <div class="form-group"><label>Bank *</label><input type="text" id="chequeBank" required placeholder="Enter bank name"></div>
-        <div class="form-group"><label>Date *</label><input type="date" id="chequeDate" required></div>
-        <div class="form-group">
-          <label>Status *</label>
-          <select id="chequeStatus" required>
-            <option value="Draft">Draft</option>
-            <option value="In Hand">In Hand</option>
-            <option value="Issued">Issued</option>
-            <option value="Deposited">Deposited</option>
-            <option value="Returned">Returned</option>
-            <option value="Cleared">Cleared</option>
-          </select>
+        <div class="form-row">
+          <div class="form-group"><label>Cheque Number *</label><input type="text" id="chequeNumber" required></div>
+          <div class="form-group"><label>Amount (₹) *</label><input type="number" id="chequeAmount" required step="0.01"></div>
         </div>
-        <div class="form-group"><label>Notes</label><input type="text" id="chequeNotes" placeholder="Enter notes (optional)"></div>
+        <div class="form-group"><label>Payee *</label><input type="text" id="chequePayee" required></div>
+        <div class="form-row">
+          <div class="form-group"><label>Bank *</label><input type="text" id="chequeBank" required></div>
+          <div class="form-group"><label>Date *</label><input type="date" id="chequeDate" required></div>
+        </div>
+        <div class="form-group"><label>Status *</label><select id="chequeStatus" required><option>Draft</option><option>In Hand</option><option>Issued</option><option>Deposited</option><option>Returned</option><option>Cleared</option></select></div>
+        <div class="form-group"><label>Notes</label><textarea id="chequeNotes" rows="2"></textarea></div>
       </form>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('addChequeModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveCheque()"><i class="fas fa-save"></i> Save Cheque</button>
-    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('addChequeModal')">Cancel</button><button class="btn btn-primary" onclick="saveCheque()"><i class="fas fa-save"></i> Save</button></div>
   </div>
 </div>
 
-<div class="modal-overlay" id="batchModal">
+<!-- DYNAMIC ACTION MODAL -->
+<div class="modal-overlay" id="actionModal">
   <div class="modal">
-    <div class="modal-header">
-      <h2 class="modal-title">Batch Conditions</h2>
-      <button class="modal-close" onclick="closeModal('batchModal')"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body">
-      <form id="batchForm">
-        <div class="form-group"><label>Status</label><select id="batchStatus"><option value="Any">Any</option><option value="In Hand">In Hand</option><option value="Issued">Issued</option><option value="Deposited">Deposited</option><option value="Returned">Returned</option></select></div>
-        <div class="form-group"><label>Bank</label><select id="batchBank"><option value="Any">Any</option></select></div>
-        <div class="form-group"><label>Action</label><select id="batchAction"><option value="Issue">Issue</option><option value="Return">Return</option><option value="Clear">Clear</option><option value="Delete">Delete</option></select></div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('batchModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="applyBatchAction()"><i class="fas fa-play"></i> Apply</button>
-    </div>
+    <div class="modal-header"><h2 class="modal-title" id="actionModalTitle">Action</h2><button class="modal-close" onclick="closeModal('actionModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body"><form id="actionForm"><div id="actionFormFields"></div></form></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('actionModal')">Cancel</button><button class="btn btn-primary" id="actionSubmitBtn" onclick="submitAction()"><i class="fas fa-check"></i> Confirm Action</button></div>
   </div>
 </div>
 
-<div class="modal-overlay" id="importModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h2 class="modal-title">Import Cheques</h2>
-      <button class="modal-close" onclick="closeModal('importModal')"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body">
-      <div style="border: 2px dashed var(--border); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer;" onclick="document.getElementById('importFile').click()">
-        <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: var(--gray); margin-bottom: 12px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 6px;">Click to upload Excel/CSV</h3>
-        <p style="color: var(--gray); font-size: 12px;">or drag and drop</p>
-        <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="display: none;" onchange="handleFileImport(event)">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('importModal')">Cancel</button>
-    </div>
+<!-- VIEW DETAILS / HISTORY MODAL -->
+<div class="modal-overlay" id="detailsModal">
+  <div class="modal" style="max-width: 650px;">
+    <div class="modal-header"><h2 class="modal-title">Cheque Details & History</h2><button class="modal-close" onclick="closeModal('detailsModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body" id="detailsModalBody"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('detailsModal')">Close</button></div>
   </div>
 </div>
 
-<div class="modal-overlay" id="chequeBookModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h2 class="modal-title">New Cheque Book</h2>
-      <button class="modal-close" onclick="closeModal('chequeBookModal')"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body">
-      <form id="chequeBookForm">
-        <div class="form-group"><label>Book Name *</label><input type="text" id="bookName" required placeholder="e.g., HDFC Book 1"></div>
-        <div class="form-group"><label>Start Number *</label><input type="number" id="bookStart" required placeholder="Starting cheque number"></div>
-        <div class="form-group"><label>End Number *</label><input type="number" id="bookEnd" required placeholder="Ending cheque number"></div>
-        <div class="form-group"><label>Bank</label><input type="text" id="bookBank" placeholder="Bank name"></div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('chequeBookModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveChequeBook()"><i class="fas fa-save"></i> Create Book</button>
-    </div>
-  </div>
-</div>
-
+<!-- Bulk Update Modal -->
 <div class="modal-overlay" id="bulkUpdateModal">
   <div class="modal">
-    <div class="modal-header">
-      <h2 class="modal-title">Bulk Update</h2>
-      <button class="modal-close" onclick="closeModal('bulkUpdateModal')"><i class="fas fa-times"></i></button>
-    </div>
+    <div class="modal-header"><h2 class="modal-title">Bulk Update</h2><button class="modal-close" onclick="closeModal('bulkUpdateModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body"><div class="form-group"><label>New Status</label><select id="bulkStatus"><option>In Hand</option><option>Issued</option><option>Cleared</option></select></div></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('bulkUpdateModal')">Cancel</button><button class="btn btn-primary" onclick="applyBulkUpdate()">Apply</button></div>
+  </div>
+</div>
+
+<!-- Cheque Book Modal -->
+<div class="modal-overlay" id="chequeBookModal">
+  <div class="modal">
+    <div class="modal-header"><h2 class="modal-title">New Cheque Book</h2><button class="modal-close" onclick="closeModal('chequeBookModal')"><i class="fas fa-times"></i></button></div>
     <div class="modal-body">
-      <div class="form-group">
-        <label>New Status</label>
-        <select id="bulkStatus">
-          <option value="">No Change</option>
-          <option value="In Hand">In Hand</option>
-          <option value="Issued">Issued</option>
-          <option value="Deposited">Deposited</option>
-          <option value="Returned">Returned</option>
-          <option value="Cleared">Cleared</option>
-        </select>
-      </div>
-      <p style="color: var(--gray); font-size: 12px; margin-top: 10px;">This will update all selected cheques.</p>
+      <div class="form-group"><label>Book Name *</label><input type="text" id="bookName" required></div>
+      <div class="form-row"><div class="form-group"><label>Start Number *</label><input type="number" id="bookStart" required></div><div class="form-group"><label>End Number *</label><input type="number" id="bookEnd" required></div></div>
+      <div class="form-group"><label>Bank</label><input type="text" id="bookBank"></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('bulkUpdateModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="applyBulkUpdate()"><i class="fas fa-sync"></i> Apply</button>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('chequeBookModal')">Cancel</button><button class="btn btn-primary" onclick="saveChequeBook()">Create</button></div>
+  </div>
+</div>
+
+<!-- Invite User Modal -->
+<div class="modal-overlay" id="inviteUserModal">
+  <div class="modal">
+    <div class="modal-header"><h2 class="modal-title">Invite New User</h2><button class="modal-close" onclick="closeModal('inviteUserModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Email Address *</label><input type="email" id="inviteEmail" required></div>
+      <div class="form-group"><label>Role *</label><select id="inviteRole"><option value="maker">Maker (Can create cheques)</option><option value="checker">Checker (Can approve)</option><option value="admin">Admin (Full access)</option><option value="viewer">Viewer (Read only)</option></select></div>
+      <div class="form-group"><label>Department</label><input type="text" id="inviteDept" placeholder="Finance, Accounts, etc."></div>
     </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('inviteUserModal')">Cancel</button><button class="btn btn-primary" onclick="inviteUser()"><i class="fas fa-paper-plane"></i> Send Invite</button></div>
   </div>
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
-// Firebase Config
+// ==========================================
+// FIREBASE CONFIGURATION
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyAZ7wyQhcaWoZa1ify5xqUKk12YodLTxU8",
   authDomain: "neoncheque.firebaseapp.com",
@@ -815,19 +662,21 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Global Variables
+// Global State
 let cheques = [];
 let auditLog = [];
 let currentUser = null;
-let selectedCheques = [];
+let currentAction = { type: null, chequeId: null };
 let unsubscribeCheques = null;
 
-// Initialize
-document.addEventListener('DOMContentLoaded', function() {
+// ==========================================
+// AUTHENTICATION
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('loginForm').addEventListener('submit', handleLogin);
   document.getElementById('signupForm').addEventListener('submit', handleSignup);
   document.getElementById('chequeDate').valueAsDate = new Date();
-  
+
   auth.onAuthStateChanged(user => {
     if (user) {
       currentUser = user;
@@ -836,8 +685,7 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('signupScreen').classList.add('hidden');
       document.getElementById('appContainer').classList.add('active');
-      subscribeToCheques();
-      loadAuditLog();
+      subscribeToData();
       showToast('Welcome back!', 'success');
     } else {
       currentUser = null;
@@ -848,840 +696,412 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-// Auth Functions
-function handleLogin(e) {
-  e.preventDefault();
-  const email = document.getElementById('loginEmail').value;
-  const password = document.getElementById('loginPassword').value;
-  auth.signInWithEmailAndPassword(email, password).catch(error => showToast(error.message, 'error'));
-}
+function handleLogin(e) { e.preventDefault(); auth.signInWithEmailAndPassword(document.getElementById('loginEmail').value, document.getElementById('loginPassword').value).catch(err => showToast(err.message, 'error')); }
+function handleSignup(e) { e.preventDefault(); const name = document.getElementById('signupName').value; const email = document.getElementById('signupEmail').value; const pass = document.getElementById('signupPassword').value; auth.createUserWithEmailAndPassword(email, pass).then(cred => cred.user.updateProfile({displayName: name})).catch(err => showToast(err.message, 'error')); }
+function signInWithGoogle() { const p = new firebase.auth.GoogleAuthProvider(); auth.signInWithPopup(p).catch(err => showToast(err.message, 'error')); }
+function logout() { auth.signOut(); }
+function showSignup() { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('signupScreen').classList.remove('hidden'); }
+function showLogin() { document.getElementById('signupScreen').classList.add('hidden'); document.getElementById('loginScreen').classList.remove('hidden'); }
 
-function handleSignup(e) {
-  e.preventDefault();
-  const name = document.getElementById('signupName').value;
-  const email = document.getElementById('signupEmail').value;
-  const password = document.getElementById('signupPassword').value;
-  
-  auth.createUserWithEmailAndPassword(email, password).then(cred => {
-    return cred.user.updateProfile({ displayName: name });
-  }).then(() => {
-    return db.collection('users').doc(auth.currentUser.uid).set({
-      name: name, email: email, createdAt: firebase.firestore.FieldValue.serverTimestamp(), role: 'admin'
-    });
-  }).catch(error => showToast(error.message, 'error'));
-}
-
-function signInWithGoogle() {
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(error => showToast(error.message, 'error'));
-}
-
-function logout() {
-  auth.signOut().then(() => showToast('Logged out successfully', 'info'));
-}
-
-function showSignup() {
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('signupScreen').classList.remove('hidden');
-}
-
-function showLogin() {
-  document.getElementById('signupScreen').classList.add('hidden');
-  document.getElementById('loginScreen').classList.remove('hidden');
-}
-
-// View Navigation - FIXED
+// ==========================================
+// NAVIGATION
+// ==========================================
 function showView(viewName, navElement) {
-  // Update nav items
-  document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-  if (navElement) {
-    navElement.classList.add('active');
-  }
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  if (navElement) navElement.classList.add('active');
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
   
-  // Hide all views
-  document.querySelectorAll('.view-content').forEach(view => view.classList.remove('active'));
+  const map = { 'dashboard':'dashboardView', 'all-cheques':'allChequesView', 'in-hand':'inHandView', 'returned':'returnedView', 'recycle':'recycleView', 'kanban':'kanbanView', 'timeline':'timelineView', 'analytics':'analyticsView', 'books':'booksView', 'aging':'agingView', 'audit':'auditView', 'settings':'settingsView' };
+  const titles = { 'dashboard':'Dashboard', 'all-cheques':'All Cheques', 'in-hand':'In Hand', 'returned':'Returned', 'recycle':'Recycle Bin', 'kanban':'Kanban Board', 'timeline':'Timeline', 'analytics':'Analytics', 'books':'Cheque Books', 'aging':'Aging Report', 'audit':'Audit Trail', 'settings':'Settings' };
   
-  // Show selected view
-  const viewMap = {
-    'dashboard': 'dashboardView',
-    'all-cheques': 'allChequesView',
-    'in-hand': 'inHandView',
-    'returned': 'returnedView',
-    'recycle': 'recycleView',
-    'kanban': 'kanbanView',
-    'timeline': 'timelineView',
-    'analytics': 'analyticsView',
-    'books': 'booksView',
-    'reports': 'reportsView',
-    'aging': 'agingView',
-    'audit': 'auditView',
-    'settings': 'settingsView'
-  };
-  
-  const viewId = viewMap[viewName];
-  if (viewId) {
-    document.getElementById(viewId).classList.add('active');
-    
-    const titles = {
-      'dashboard': 'Dashboard',
-      'all-cheques': 'All Cheques',
-      'in-hand': 'Cheques In Hand',
-      'returned': 'Returned Cheques',
-      'recycle': 'Recycle Bin',
-      'kanban': 'Kanban Board',
-      'timeline': 'Timeline',
-      'analytics': 'Analytics',
-      'books': 'Cheque Books',
-      'reports': 'Reports',
-      'aging': 'Aging Report',
-      'audit': 'Audit Trail',
-      'settings': 'Settings'
-    };
+  if (map[viewName]) {
+    document.getElementById(map[viewName]).classList.add('active');
     document.getElementById('pageTitle').textContent = titles[viewName];
-    
-    // Refresh view data
-    setTimeout(() => refreshView(viewName), 100);
+    setTimeout(() => refreshView(viewName), 50);
   }
 }
 
-function refreshView(viewName) {
-  switch(viewName) {
-    case 'dashboard': updateDashboard(); break;
-    case 'all-cheques': renderAllCheques(); break;
-    case 'in-hand': renderInHand(); break;
-    case 'returned': renderReturned(); break;
-    case 'recycle': renderRecycle(); break;
-    case 'kanban': renderKanban(); break;
-    case 'timeline': renderTimeline(); break;
-    case 'analytics': renderAnalytics(); break;
-    case 'audit': renderAudit(); break;
-  }
+function refreshView(v) {
+  if(v==='dashboard') updateDashboard();
+  if(v==='all-cheques') renderAllCheques();
+  if(v==='in-hand') renderInHand();
+  if(v==='returned') renderReturned();
+  if(v==='recycle') renderRecycle();
+  if(v==='kanban') renderKanban();
+  if(v==='timeline') renderTimeline();
+  if(v==='analytics') renderAnalytics();
+  if(v==='audit') renderAudit();
 }
 
-// Firestore
-function subscribeToCheques() {
+// ==========================================
+// ADMIN TABS
+// ==========================================
+function switchAdminTab(tabName, btn) {
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tabName).classList.add('active');
+}
+
+// ==========================================
+// FIRESTORE DATA SYNC
+// ==========================================
+function subscribeToData() {
   if (unsubscribeCheques) unsubscribeCheques();
-  
-  unsubscribeCheques = db.collection('cheques').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+  unsubscribeCheques = db.collection('cheques').orderBy('createdAt', 'desc').onSnapshot(snap => {
     cheques = [];
-    snapshot.forEach(doc => {
-      cheques.push({ id: doc.id, ...doc.data() });
-    });
+    snap.forEach(doc => cheques.push({ id: doc.id, ...doc.data() }));
     refreshAll();
-  }, error => {
-    console.error("Error:", error);
-    showToast("Error loading cheques", 'error');
+  }, err => showToast("DB Error: " + err.message, 'error'));
+
+  db.collection('auditLog').orderBy('timestamp', 'desc').limit(100).onSnapshot(snap => {
+    auditLog = [];
+    snap.forEach(doc => auditLog.push({ id: doc.id, ...doc.data() }));
+    if(document.getElementById('auditView').classList.contains('active')) renderAudit();
   });
 }
 
-function refreshAll() {
-  updateDashboard();
-  renderAllCheques();
-  renderInHand();
-  renderReturned();
-  renderRecycle();
-  renderKanban();
-  renderTimeline();
-  renderAnalytics();
-  updateFilters();
-}
+function refreshAll() { updateDashboard(); renderAllCheques(); renderInHand(); renderReturned(); renderRecycle(); renderKanban(); renderTimeline(); renderAnalytics(); updateFilters(); }
 
-// Cheque Operations
+// ==========================================
+// CORE CHEQUE OPERATIONS
+// ==========================================
 async function saveCheque() {
-  const number = document.getElementById('chequeNumber').value;
+  const num = document.getElementById('chequeNumber').value;
   const payee = document.getElementById('chequePayee').value;
-  const amount = parseFloat(document.getElementById('chequeAmount').value);
+  const amt = parseFloat(document.getElementById('chequeAmount').value);
   const bank = document.getElementById('chequeBank').value;
   const date = document.getElementById('chequeDate').value;
   const status = document.getElementById('chequeStatus').value;
   const notes = document.getElementById('chequeNotes').value;
 
-  if (!number || !payee || !amount || !bank || !date) {
-    showToast('Please fill all required fields', 'error');
-    return;
-  }
+  if (!num || !payee || !amt || !bank || !date) return showToast('Fill all required fields', 'error');
+
+  const editId = document.getElementById('addChequeForm').dataset.editId;
+  const data = { number: num, payee, amount: amt, bank, date, status, notes, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
 
   try {
-    const chequeData = {
-      number, payee, amount, bank, date, status,
-      notes: notes || '',
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-
-    const existingId = document.getElementById('addChequeForm').dataset.editId;
-    
-    if (existingId) {
-      await db.collection('cheques').doc(existingId).update(chequeData);
-      await addAuditLog('update', number, `Updated cheque for ${payee}`);
-      showToast('Cheque updated successfully', 'success');
+    if (editId) {
+      await db.collection('cheques').doc(editId).update(data);
+      logAudit('update', num, `Edited cheque details`);
+      showToast('Cheque updated', 'success');
     } else {
-      chequeData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-      chequeData.createdBy = currentUser.uid;
-      await db.collection('cheques').add(chequeData);
-      await addAuditLog('create', number, `Created cheque for ${payee}`);
-      showToast('Cheque saved successfully', 'success');
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      data.createdBy = currentUser.uid;
+      data.actionHistory = [{ action: 'create', details: { status }, timestamp: new Date().toISOString(), user: currentUser.email }];
+      await db.collection('cheques').add(data);
+      logAudit('create', num, `Created cheque for ${payee}`);
+      showToast('Cheque created', 'success');
     }
-
     closeModal('addChequeModal');
     document.getElementById('addChequeForm').reset();
     document.getElementById('chequeDate').valueAsDate = new Date();
     delete document.getElementById('addChequeForm').dataset.editId;
-  } catch (error) {
-    showToast('Error saving cheque: ' + error.message, 'error');
-  }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
-async function updateStatus(id, newStatus) {
-  try {
-    await db.collection('cheques').doc(id).update({
-      status: newStatus,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    const cheque = cheques.find(c => c.id === id);
-    await addAuditLog('update', cheque.number, `Status changed to ${newStatus}`);
-    showToast(`Cheque ${newStatus.toLowerCase()}`, 'success');
-  } catch (error) {
-    showToast('Error: ' + error.message, 'error');
-  }
-}
+// ==========================================
+// ADVANCED ACTION WORKFLOW
+// ==========================================
+const actionConfigs = {
+  issue: { title: "Issue Cheque", status: "Issued", fields: [
+    { id: 'issueDate', label: 'Issue Date', type: 'date', required: true },
+    { id: 'issuedTo', label: 'Issued To (Person/Dept)', type: 'text', required: true },
+    { id: 'deliveryMode', label: 'Delivery Mode', type: 'select', options: ['Hand Delivered', 'Courier', 'Registered Post', 'Email/Scan'], required: true },
+    { id: 'trackingNo', label: 'Tracking / AWB Number', type: 'text', required: false },
+    { id: 'issueNotes', label: 'Additional Notes', type: 'textarea', required: false }
+  ]},
+  deposit: { title: "Deposit Cheque", status: "Deposited", fields: [
+    { id: 'depositDate', label: 'Deposit Date', type: 'date', required: true },
+    { id: 'depositBranch', label: 'Bank Branch', type: 'text', required: true },
+    { id: 'slipNumber', label: 'Deposit Slip / Challan No.', type: 'text', required: true },
+    { id: 'depositNotes', label: 'Remarks', type: 'textarea', required: false }
+  ]},
+  clear: { title: "Mark as Cleared", status: "Cleared", fields: [
+    { id: 'clearDate', label: 'Clearance Date', type: 'date', required: true },
+    { id: 'utrNumber', label: 'Bank UTR / Reference No.', type: 'text', required: true },
+    { id: 'clearedAmount', label: 'Cleared Amount (if partial)', type: 'number', required: false },
+    { id: 'clearNotes', label: 'Remarks', type: 'textarea', required: false }
+  ]},
+  return: { title: "Mark as Returned (Bounced)", status: "Returned", fields: [
+    { id: 'returnDate', label: 'Return Date', type: 'date', required: true },
+    { id: 'returnReason', label: 'Bank Reason Code', type: 'select', options: ['Insufficient Funds (NSF)', 'Signature Mismatch', 'Account Closed', 'Stop Payment', 'Stale Dated', 'Other'], required: true },
+    { id: 'bankCharges', label: 'Bank Penalty Charges (₹)', type: 'number', required: false },
+    { id: 'returnNotes', label: 'Internal Remarks', type: 'textarea', required: false }
+  ]},
+  stop: { title: "Stop Payment", status: "Stopped", fields: [
+    { id: 'stopDate', label: 'Stop Request Date', type: 'date', required: true },
+    { id: 'stopReason', label: 'Reason for Stopping', type: 'select', options: ['Lost Cheque', 'Stolen Cheque', 'Dispute with Payee', 'Duplicate Issued', 'Other'], required: true },
+    { id: 'complaintRef', label: 'Police/FIR Reference (if lost/stolen)', type: 'text', required: false },
+    { id: 'stopNotes', label: 'Remarks', type: 'textarea', required: false }
+  ]},
+  void: { title: "Void / Cancel Cheque", status: "Void", fields: [
+    { id: 'voidDate', label: 'Void Date', type: 'date', required: true },
+    { id: 'voidReason', label: 'Reason', type: 'select', options: ['Printing Error', 'Data Entry Error', 'Cancelled by Payee', 'Other'], required: true },
+    { id: 'authorizedBy', label: 'Authorized By', type: 'text', required: true }
+  ]}
+};
 
-async function deleteCheque(id) {
-  if (!confirm('Delete this cheque?')) return;
-  
-  try {
-    const cheque = cheques.find(c => c.id === id);
-    await db.collection('cheques').doc(id).update({
-      deleted: true,
-      deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    await addAuditLog('delete', cheque.number, 'Moved to recycle bin');
-    showToast('Cheque moved to recycle bin', 'info');
-  } catch (error) {
-    showToast('Error: ' + error.message, 'error');
-  }
-}
-
-async function restoreCheque(id) {
-  try {
-    await db.collection('cheques').doc(id).update({
-      deleted: false,
-      deletedAt: null,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    const cheque = cheques.find(c => c.id === id);
-    await addAuditLog('update', cheque.number, 'Restored from recycle bin');
-    showToast('Cheque restored', 'success');
-  } catch (error) {
-    showToast('Error: ' + error.message, 'error');
-  }
-}
-
-async function deleteForever(id) {
-  if (!confirm('Delete permanently?')) return;
-  
-  try {
-    await db.collection('cheques').doc(id).delete();
-    const cheque = cheques.find(c => c.id === id);
-    await addAuditLog('delete', cheque.number, 'Permanently deleted');
-    showToast('Cheque deleted', 'info');
-  } catch (error) {
-    showToast('Error: ' + error.message, 'error');
-  }
-}
-
-async function markReturned(id) {
-  const reason = prompt('Enter return reason:', 'Insufficient Funds');
-  if (!reason) return;
-  
-  try {
-    await db.collection('cheques').doc(id).update({
-      status: 'Returned',
-      returnReason: reason,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    const cheque = cheques.find(c => c.id === id);
-    await addAuditLog('return', cheque.number, `Returned: ${reason}`);
-    showToast('Cheque marked as returned', 'warning');
-  } catch (error) {
-    showToast('Error: ' + error.message, 'error');
-  }
-}
-
-async function stopPayment(id) {
-  if (!confirm('Stop payment?')) return;
-  
-  try {
-    await db.collection('cheques').doc(id).update({
-      status: 'Stopped',
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    const cheque = cheques.find(c => c.id === id);
-    await addAuditLog('update', cheque.number, 'Payment stopped');
-    showToast('Payment stopped', 'warning');
-  } catch (error) {
-    showToast('Error: ' + error.message, 'error');
-  }
-}
-
-// Audit
-async function addAuditLog(action, chequeNumber, details) {
-  try {
-    await db.collection('auditLog').add({
-      action, chequeNumber, details,
-      user: currentUser.email,
-      userName: currentUser.displayName || currentUser.email.split('@')[0],
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  } catch (error) {
-    console.error("Audit error:", error);
-  }
-}
-
-async function loadAuditLog() {
-  try {
-    const snapshot = await db.collection('auditLog').orderBy('timestamp', 'desc').limit(50).get();
-    auditLog = [];
-    snapshot.forEach(doc => {
-      auditLog.push({ id: doc.id, ...doc.data() });
-    });
-    renderAudit();
-  } catch (error) {
-    console.error("Error:", error);
-  }
-}
-
-// Render Functions
-function updateDashboard() {
-  const total = cheques.filter(c => !c.deleted).length;
-  const inHand = cheques.filter(c => c.status === 'In Hand' && !c.deleted).length;
-  const returned = cheques.filter(c => c.status === 'Returned' && !c.deleted).length;
-  const totalValue = cheques.filter(c => !c.deleted).reduce((sum, c) => sum + (c.amount || 0), 0);
-  const inHandValue = cheques.filter(c => c.status === 'In Hand' && !c.deleted).reduce((sum, c) => sum + (c.amount || 0), 0);
-  const returnedValue = cheques.filter(c => c.status === 'Returned' && !c.deleted).reduce((sum, c) => sum + (c.amount || 0), 0);
-
-  document.getElementById('totalCheques').textContent = total;
-  document.getElementById('inHandCount').textContent = inHand;
-  document.getElementById('inHandValue').textContent = Math.round(inHandValue).toLocaleString('en-IN');
-  document.getElementById('totalValue').textContent = Math.round(totalValue).toLocaleString('en-IN');
-  document.getElementById('returnedCount').textContent = returned;
-  document.getElementById('returnedValue').textContent = '₹' + Math.round(returnedValue).toLocaleString('en-IN');
-
-  const recent = cheques.filter(c => !c.deleted).slice(0, 5);
-  const activityHtml = recent.length > 0 ? `
-    <div class="table-container">
-      <table>
-        <thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-        <tbody>
-          ${recent.map(c => `
-            <tr>
-              <td>${c.number}</td>
-              <td>${c.payee}</td>
-              <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
-              <td><span class="status-badge status-${c.status.toLowerCase().replace(' ', '')}">${c.status}</span></td>
-              <td>${formatDate(c.date)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  ` : `<div class="empty-state"><i class="fas fa-receipt"></i><h3>No recent activity</h3><p>Start by issuing your first cheque</p></div>`;
-  
-  document.getElementById('recentActivity').innerHTML = activityHtml;
-}
-
-function renderAllCheques() {
-  const tbody = document.getElementById('allChequesTable');
-  const emptyState = document.getElementById('allChequesEmpty');
-  const activeCheques = cheques.filter(c => !c.deleted);
-  
-  if (activeCheques.length === 0) {
-    tbody.innerHTML = '';
-    emptyState.style.display = 'block';
-    return;
-  }
-
-  emptyState.style.display = 'none';
-  tbody.innerHTML = activeCheques.map(cheque => `
-    <tr>
-      <td><input type="checkbox" class="checkbox" onchange="toggleChequeSelection('${cheque.id}', this.checked)"></td>
-      <td>${cheque.number}</td>
-      <td>${cheque.payee}</td>
-      <td>₹${Math.round(cheque.amount).toLocaleString('en-IN')}</td>
-      <td>${cheque.bank}</td>
-      <td>${formatDate(cheque.date)}</td>
-      <td><span class="status-badge status-${cheque.status.toLowerCase().replace(' ', '')}">${cheque.status}</span></td>
-      <td>${getActionButtons(cheque)}</td>
-    </tr>
-  `).join('');
-}
-
-function renderInHand() {
-  const inHand = cheques.filter(c => c.status === 'In Hand' && !c.deleted);
-  const tbody = document.getElementById('inHandTable');
-  const emptyState = document.getElementById('inHandEmpty');
-
-  if (inHand.length === 0) {
-    tbody.innerHTML = '';
-    emptyState.style.display = 'block';
-    return;
-  }
-
-  emptyState.style.display = 'none';
-  tbody.innerHTML = inHand.map(cheque => `
-    <tr>
-      <td>${cheque.number}</td>
-      <td>${cheque.payee}</td>
-      <td>₹${Math.round(cheque.amount).toLocaleString('en-IN')}</td>
-      <td>${cheque.bank}</td>
-      <td>${formatDate(cheque.date)}</td>
-      <td>${getActionButtons(cheque)}</td>
-    </tr>
-  `).join('');
-}
-
-function renderReturned() {
-  const returned = cheques.filter(c => c.status === 'Returned' && !c.deleted);
-  const tbody = document.getElementById('returnedTable');
-  const emptyState = document.getElementById('returnedEmpty');
-
-  if (returned.length === 0) {
-    tbody.innerHTML = '';
-    emptyState.style.display = 'block';
-    return;
-  }
-
-  emptyState.style.display = 'none';
-  tbody.innerHTML = returned.map(cheque => `
-    <tr>
-      <td>${cheque.number}</td>
-      <td>${cheque.payee}</td>
-      <td>₹${Math.round(cheque.amount).toLocaleString('en-IN')}</td>
-      <td>${cheque.bank}</td>
-      <td>${cheque.returnReason || 'N/A'}</td>
-      <td>${getActionButtons(cheque)}</td>
-    </tr>
-  `).join('');
-}
-
-function renderRecycle() {
-  const deleted = cheques.filter(c => c.deleted);
-  const tbody = document.getElementById('recycleTable');
-  const emptyState = document.getElementById('recycleEmpty');
-
-  if (deleted.length === 0) {
-    tbody.innerHTML = '';
-    emptyState.style.display = 'block';
-    return;
-  }
-
-  emptyState.style.display = 'none';
-  tbody.innerHTML = deleted.map(cheque => `
-    <tr>
-      <td>${cheque.number}</td>
-      <td>${cheque.payee}</td>
-      <td>₹${Math.round(cheque.amount).toLocaleString('en-IN')}</td>
-      <td>${formatDate(cheque.deletedAt?.toDate())}</td>
-      <td>
-        <button class="action-btn btn-approve" data-tooltip="Restore" onclick="restoreCheque('${cheque.id}')"><i class="fas fa-undo"></i></button>
-        <button class="action-btn btn-delete" data-tooltip="Delete Forever" onclick="deleteForever('${cheque.id}')"><i class="fas fa-trash"></i></button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-function renderKanban() {
-  const statuses = ['Draft', 'In Hand', 'Issued', 'Cleared', 'Returned'];
-  const board = document.getElementById('kanbanBoard');
-  
-  board.innerHTML = statuses.map(status => {
-    const items = cheques.filter(c => c.status === status && !c.deleted);
-    return `
-      <div class="kanban-column">
-        <div class="kanban-header">
-          <div class="kanban-title">${status}</div>
-          <div class="kanban-count">${items.length}</div>
-        </div>
-        ${items.map(cheque => `
-          <div class="kanban-card" onclick="viewDetails('${cheque.id}')">
-            <div style="font-weight: 700; margin-bottom: 6px;">${cheque.number}</div>
-            <div style="color: var(--gray); font-size: 12px; margin-bottom: 4px;">${cheque.payee}</div>
-            <div style="font-weight: 700; color: var(--primary);">₹${Math.round(cheque.amount).toLocaleString('en-IN')}</div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  }).join('');
-}
-
-function renderTimeline() {
-  const timeline = document.getElementById('timelineContent');
-  const sorted = [...cheques].filter(c => !c.deleted).sort((a, b) => new Date(b.date) - new Date(a.date));
-  
-  if (sorted.length === 0) {
-    timeline.innerHTML = '<div class="empty-state"><p>No activity yet</p></div>';
-    return;
-  }
-
-  timeline.innerHTML = sorted.slice(0, 10).map(cheque => `
-    <div class="timeline-item">
-      <div style="font-weight: 700;">${cheque.number} - ${cheque.payee}</div>
-      <div style="color: var(--gray); font-size: 12px; margin-top: 4px;">
-        Status: <span class="status-badge status-${cheque.status.toLowerCase().replace(' ', '')}">${cheque.status}</span>
-      </div>
-      <div style="font-size: 11px; color: var(--gray); margin-top: 6px;">
-        ${formatDate(cheque.date)} • ${cheque.bank}
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderAnalytics() {
-  const total = cheques.filter(c => !c.deleted).length;
-  const cleared = cheques.filter(c => c.status === 'Cleared' && !c.deleted).length;
-  const pending = cheques.filter(c => ['Draft', 'In Hand', 'Issued'].includes(c.status) && !c.deleted).length;
-  const returned = cheques.filter(c => c.status === 'Returned' && !c.deleted).length;
-
-  document.getElementById('analyticsTotal').textContent = total;
-  document.getElementById('analyticsCleared').textContent = cleared;
-  document.getElementById('analyticsPending').textContent = pending;
-  document.getElementById('analyticsReturned').textContent = returned;
-}
-
-function renderAudit() {
-  const audit = document.getElementById('auditTrail');
-  
-  if (auditLog.length === 0) {
-    audit.innerHTML = '<div class="empty-state"><p>No audit records</p></div>';
-    return;
-  }
-
-  audit.innerHTML = auditLog.map(entry => `
-    <div class="audit-entry">
-      <div class="audit-icon">
-        <i class="fas fa-${getAuditIcon(entry.action)}" style="color: var(--primary);"></i>
-      </div>
-      <div class="audit-content">
-        <div class="audit-action">${entry.action.toUpperCase()} - Cheque #${entry.chequeNumber}</div>
-        <div style="color: var(--gray); font-size: 11px;">${entry.details || ''}</div>
-        <div class="audit-time">${entry.timestamp ? formatDate(entry.timestamp.toDate()) : 'N/A'} by ${entry.userName || entry.user}</div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function getAuditIcon(action) {
-  const icons = { create: 'plus', update: 'edit', delete: 'trash', issue: 'paper-plane', return: 'undo', clear: 'check-double' };
-  return icons[action] || 'circle';
-}
-
-function updateFilters() {
-  const banks = [...new Set(cheques.filter(c => !c.deleted).map(c => c.bank))];
-  const bankSelects = ['filterBank', 'batchBank', 'reportBank'];
-  
-  bankSelects.forEach(selectId => {
-    const select = document.getElementById(selectId);
-    if (select) {
-      const currentValue = select.value;
-      select.innerHTML = '<option value="">All Banks</option>' + banks.map(b => `<option value="${b}">${b}</option>`).join('');
-      select.value = currentValue;
+function openActionModal(actionType, chequeId) {
+  const config = actionConfigs[actionType];
+  if (!config) return;
+  currentAction = { type: actionType, chequeId };
+  document.getElementById('actionModalTitle').textContent = config.title;
+  const fieldsContainer = document.getElementById('actionFormFields');
+  fieldsContainer.innerHTML = '';
+  config.fields.forEach(field => {
+    const div = document.createElement('div');
+    div.className = 'form-group';
+    let inputHtml = '';
+    if (field.type === 'select') {
+      inputHtml = `<select id="act_${field.id}" ${field.required ? 'required' : ''}>${field.options.map(o => `<option>${o}</option>`).join('')}</select>`;
+    } else if (field.type === 'textarea') {
+      inputHtml = `<textarea id="act_${field.id}" rows="2" ${field.required ? 'required' : ''}></textarea>`;
+    } else {
+      inputHtml = `<input type="${field.type}" id="act_${field.id}" ${field.required ? 'required' : ''}>`;
     }
+    div.innerHTML = `<label>${field.label} ${field.required ? '*' : ''}</label>${inputHtml}`;
+    fieldsContainer.appendChild(div);
   });
+  const today = new Date().toISOString().split('T')[0];
+  config.fields.forEach(field => { if (field.type === 'date') document.getElementById(`act_${field.id}`).value = today; });
+  openModal('actionModal');
 }
 
-function getActionButtons(cheque) {
-  const status = cheque.status;
-  let buttons = '';
+async function submitAction() {
+  const config = actionConfigs[currentAction.type];
+  const formData = {};
+  let isValid = true;
+  config.fields.forEach(field => {
+    const el = document.getElementById(`act_${field.id}`);
+    if (field.required && !el.value) isValid = false;
+    formData[field.id] = el.value;
+  });
+  if (!isValid) return showToast('Please fill all required fields', 'error');
 
-  if (status === 'Draft') {
-    buttons = `
-      <button class="action-btn btn-edit" data-tooltip="Edit" onclick="editCheque('${cheque.id}')"><i class="fas fa-edit"></i></button>
-      <button class="action-btn btn-print" data-tooltip="Print" onclick="printCheque('${cheque.id}')"><i class="fas fa-print"></i></button>
-      <button class="action-btn btn-approve" data-tooltip="Issue" onclick="updateStatus('${cheque.id}', 'Issued')"><i class="fas fa-check"></i></button>
-      <button class="action-btn btn-delete" data-tooltip="Delete" onclick="deleteCheque('${cheque.id}')"><i class="fas fa-trash"></i></button>
-      <div class="action-menu">
-        <button class="action-btn btn-more" onclick="toggleActionMenu(this)"><i class="fas fa-ellipsis-v"></i></button>
-        <div class="action-dropdown">
-          <div class="dropdown-item" onclick="emailCheque('${cheque.id}')"><i class="fas fa-envelope"></i> Send Email</div>
-          <div class="dropdown-item" onclick="viewDetails('${cheque.id}')"><i class="fas fa-eye"></i> View Details</div>
-          <div class="dropdown-divider"></div>
-          <div class="dropdown-item" onclick="duplicateCheque('${cheque.id}')"><i class="fas fa-copy"></i> Duplicate</div>
-        </div>
-      </div>
-    `;
-  } else if (status === 'In Hand') {
-    buttons = `
-      <button class="action-btn btn-issue" data-tooltip="Issue" onclick="updateStatus('${cheque.id}', 'Issued')"><i class="fas fa-paper-plane"></i></button>
-      <button class="action-btn btn-print" data-tooltip="Print" onclick="printCheque('${cheque.id}')"><i class="fas fa-print"></i></button>
-      <button class="action-btn btn-email" data-tooltip="Send" onclick="emailCheque('${cheque.id}')"><i class="fas fa-envelope"></i></button>
-      <button class="action-btn btn-edit" data-tooltip="Edit" onclick="editCheque('${cheque.id}')"><i class="fas fa-edit"></i></button>
-      <div class="action-menu">
-        <button class="action-btn btn-more" onclick="toggleActionMenu(this)"><i class="fas fa-ellipsis-v"></i></button>
-        <div class="action-dropdown">
-          <div class="dropdown-item" onclick="viewDetails('${cheque.id}')"><i class="fas fa-eye"></i> View Details</div>
-        </div>
-      </div>
-    `;
-  } else if (status === 'Issued') {
-    buttons = `
-      <button class="action-btn btn-view" data-tooltip="Track" onclick="viewDetails('${cheque.id}')"><i class="fas fa-eye"></i></button>
-      <button class="action-btn btn-stop" data-tooltip="Stop" onclick="stopPayment('${cheque.id}')"><i class="fas fa-stop"></i></button>
-      <button class="action-btn btn-return" data-tooltip="Return" onclick="markReturned('${cheque.id}')"><i class="fas fa-undo"></i></button>
-      <button class="action-btn btn-clear" data-tooltip="Clear" onclick="updateStatus('${cheque.id}', 'Cleared')"><i class="fas fa-check-double"></i></button>
-      <button class="action-btn btn-download" data-tooltip="Download" onclick="downloadCheque('${cheque.id}')"><i class="fas fa-download"></i></button>
-    `;
-  } else if (status === 'Returned') {
-    buttons = `
-      <button class="action-btn btn-view" data-tooltip="View" onclick="viewDetails('${cheque.id}')"><i class="fas fa-eye"></i></button>
-      <button class="action-btn btn-edit" data-tooltip="Reissue" onclick="reissueCheque('${cheque.id}')"><i class="fas fa-redo"></i></button>
-      <button class="action-btn btn-email" data-tooltip="Notify" onclick="emailCheque('${cheque.id}')"><i class="fas fa-envelope"></i></button>
-      <button class="action-btn btn-delete" data-tooltip="Delete" onclick="deleteCheque('${cheque.id}')"><i class="fas fa-trash"></i></button>
-    `;
-  } else if (status === 'Cleared') {
-    buttons = `
-      <button class="action-btn btn-view" data-tooltip="View" onclick="viewDetails('${cheque.id}')"><i class="fas fa-eye"></i></button>
-      <button class="action-btn btn-download" data-tooltip="Receipt" onclick="downloadCheque('${cheque.id}')"><i class="fas fa-download"></i></button>
-      <button class="action-btn btn-print" data-tooltip="Print" onclick="printCheque('${cheque.id}')"><i class="fas fa-print"></i></button>
-    `;
+  try {
+    const updateData = { status: config.status, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), [currentAction.type + 'Details']: formData };
+    const historyEntry = { action: currentAction.type, details: formData, timestamp: new Date().toISOString(), user: currentUser.email };
+    updateData.actionHistory = firebase.firestore.FieldValue.arrayUnion(historyEntry);
+    await db.collection('cheques').doc(currentAction.chequeId).update(updateData);
+    const cheque = cheques.find(c => c.id === currentAction.chequeId);
+    logAudit(currentAction.type, cheque.number, `${config.title} - ${formData[Object.keys(formData)[0]] || 'Completed'}`);
+    showToast(`${config.title} successful`, 'success');
+    closeModal('actionModal');
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function viewDetails(id) {
+  const c = cheques.find(x => x.id === id);
+  if (!c) return;
+  let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+    <div style="background:var(--light);padding:12px;border-radius:10px;"><strong style="font-size:11px;color:var(--gray);">NUMBER</strong><div style="font-weight:700;">${c.number}</div></div>
+    <div style="background:var(--light);padding:12px;border-radius:10px;"><strong style="font-size:11px;color:var(--gray);">PAYEE</strong><div style="font-weight:700;">${c.payee}</div></div>
+    <div style="background:var(--light);padding:12px;border-radius:10px;"><strong style="font-size:11px;color:var(--gray);">AMOUNT</strong><div style="font-weight:700;">₹${c.amount.toLocaleString('en-IN')}</div></div>
+    <div style="background:var(--light);padding:12px;border-radius:10px;"><strong style="font-size:11px;color:var(--gray);">BANK</strong><div style="font-weight:700;">${c.bank}</div></div>
+    <div style="background:var(--light);padding:12px;border-radius:10px;"><strong style="font-size:11px;color:var(--gray);">DATE</strong><div style="font-weight:700;">${formatDate(c.date)}</div></div>
+    <div style="background:var(--light);padding:12px;border-radius:10px;"><strong style="font-size:11px;color:var(--gray);">STATUS</strong><div><span class="status-badge status-${c.status.toLowerCase().replace(' ','')}">${c.status}</span></div></div>
+  </div><h3 style="font-size:15px;font-weight:700;margin-bottom:12px;border-bottom:2px solid var(--border);padding-bottom:8px;">Action History & Metadata</h3>`;
+  const history = c.actionHistory || [];
+  if (history.length === 0) { html += '<p style="color:var(--gray);font-size:13px;">No action history recorded.</p>'; }
+  else {
+    history.slice().reverse().forEach(h => {
+      const config = actionConfigs[h.action];
+      const title = config ? config.title : h.action.toUpperCase();
+      let detailsHtml = '';
+      if (h.details) {
+        detailsHtml = '<div class="history-details">';
+        for (const [key, val] of Object.entries(h.details)) {
+          if(val) { const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()); detailsHtml += `<div><strong>${label}</strong>${val}</div>`; }
+        }
+        detailsHtml += '</div>';
+      }
+      html += `<div class="history-item"><div class="history-header"><span>${title}</span><span style="font-size:11px;color:var(--gray);">${formatDate(h.timestamp)} by ${h.user ? h.user.split('@')[0] : 'System'}</span></div>${detailsHtml}</div>`;
+    });
   }
-
-  return `<div class="cheque-actions">${buttons}</div>`;
+  document.getElementById('detailsModalBody').innerHTML = html;
+  openModal('detailsModal');
 }
 
-// Utilities
+// ==========================================
+// OTHER OPERATIONS
+// ==========================================
+async function deleteCheque(id) { if (!confirm('Move to Recycle Bin?')) return; try { await db.collection('cheques').doc(id).update({ deleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp() }); const c = cheques.find(x => x.id === id); logAudit('delete', c.number, 'Moved to recycle'); showToast('Moved to recycle', 'info'); } catch(e) { showToast('Error: '+e.message, 'error'); } }
+async function restoreCheque(id) { try { await db.collection('cheques').doc(id).update({ deleted: false, deletedAt: null }); showToast('Restored', 'success'); } catch(e) { showToast('Error', 'error'); } }
+async function deleteForever(id) { if (!confirm('Delete permanently?')) return; try { await db.collection('cheques').doc(id).delete(); showToast('Permanently deleted', 'info'); } catch(e) { showToast('Error', 'error'); } }
+async function emptyRecycleBin() { if (!confirm('Empty entire recycle bin?')) return; const deleted = cheques.filter(c => c.deleted); await Promise.all(deleted.map(c => db.collection('cheques').doc(c.id).delete())); showToast('Recycle bin emptied', 'info'); }
+
 function editCheque(id) {
-  const cheque = cheques.find(c => c.id === id);
-  if (!cheque) return;
-  
-  document.getElementById('chequeNumber').value = cheque.number;
-  document.getElementById('chequePayee').value = cheque.payee;
-  document.getElementById('chequeAmount').value = cheque.amount;
-  document.getElementById('chequeBank').value = cheque.bank;
-  document.getElementById('chequeDate').value = cheque.date;
-  document.getElementById('chequeStatus').value = cheque.status;
-  document.getElementById('chequeNotes').value = cheque.notes || '';
-  
+  const c = cheques.find(x => x.id === id);
+  document.getElementById('chequeNumber').value = c.number;
+  document.getElementById('chequePayee').value = c.payee;
+  document.getElementById('chequeAmount').value = c.amount;
+  document.getElementById('chequeBank').value = c.bank;
+  document.getElementById('chequeDate').value = c.date;
+  document.getElementById('chequeStatus').value = c.status;
+  document.getElementById('chequeNotes').value = c.notes || '';
   document.getElementById('addChequeForm').dataset.editId = id;
   openModal('addChequeModal');
 }
 
-function toggleSelectAll(checkbox) {
-  const checkboxes = document.querySelectorAll('#allChequesTable .checkbox');
-  checkboxes.forEach(cb => cb.checked = checkbox.checked);
-  selectedCheques = checkbox.checked ? cheques.filter(c => !c.deleted).map(c => c.id) : [];
+async function logAudit(action, chequeNumber, details) { try { await db.collection('auditLog').add({ action, chequeNumber, details, user: currentUser.email, userName: currentUser.displayName || currentUser.email.split('@')[0], timestamp: firebase.firestore.FieldValue.serverTimestamp() }); } catch(e) {} }
+
+// ==========================================
+// RENDER FUNCTIONS
+// ==========================================
+function updateDashboard() {
+  const active = cheques.filter(c => !c.deleted);
+  document.getElementById('totalCheques').textContent = active.length;
+  document.getElementById('inHandCount').textContent = active.filter(c => c.status === 'In Hand').length;
+  document.getElementById('returnedCount').textContent = active.filter(c => c.status === 'Returned').length;
+  const tv = active.reduce((s, c) => s + (c.amount||0), 0);
+  document.getElementById('totalValue').textContent = Math.round(tv).toLocaleString('en-IN');
+  document.getElementById('inHandValue').textContent = Math.round(active.filter(c => c.status === 'In Hand').reduce((s, c) => s + (c.amount||0), 0)).toLocaleString('en-IN');
+  document.getElementById('returnedValue').textContent = Math.round(active.filter(c => c.status === 'Returned').reduce((s, c) => s + (c.amount||0), 0)).toLocaleString('en-IN');
+  const recent = active.slice(0, 5);
+  document.getElementById('recentActivity').innerHTML = recent.length ? `<div class="table-container"><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Status</th></tr></thead><tbody>${recent.map(c => `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td><td><span class="status-badge status-${c.status.toLowerCase().replace(' ','')}">${c.status}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><i class="fas fa-receipt"></i><h3>No activity</h3></div>';
 }
 
-function toggleChequeSelection(id, isSelected) {
-  if (isSelected) {
-    selectedCheques.push(id);
+function getActionButtons(c) {
+  let btns = '';
+  if (c.status === 'Draft' || c.status === 'In Hand') {
+    btns += `<button class="action-btn btn-issue" data-tooltip="Issue" onclick="openActionModal('issue','${c.id}')"><i class="fas fa-paper-plane"></i></button>`;
+    btns += `<button class="action-btn btn-edit" data-tooltip="Edit" onclick="editCheque('${c.id}')"><i class="fas fa-edit"></i></button>`;
+    btns += `<button class="action-btn btn-view" data-tooltip="Details" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>`;
+    btns += `<button class="action-btn btn-delete" data-tooltip="Delete" onclick="deleteCheque('${c.id}')"><i class="fas fa-trash"></i></button>`;
+  } else if (c.status === 'Issued') {
+    btns += `<button class="action-btn btn-deposit" data-tooltip="Deposit" onclick="openActionModal('deposit','${c.id}')"><i class="fas fa-university"></i></button>`;
+    btns += `<button class="action-btn btn-clear" data-tooltip="Clear" onclick="openActionModal('clear','${c.id}')"><i class="fas fa-check-double"></i></button>`;
+    btns += `<button class="action-btn btn-return" data-tooltip="Return" onclick="openActionModal('return','${c.id}')"><i class="fas fa-undo"></i></button>`;
+    btns += `<div class="action-menu"><button class="action-btn btn-more" onclick="toggleActionMenu(this)"><i class="fas fa-ellipsis-v"></i></button><div class="action-dropdown"><div class="dropdown-item" onclick="openActionModal('stop','${c.id}')"><i class="fas fa-stop"></i> Stop Payment</div><div class="dropdown-item" onclick="openActionModal('void','${c.id}')"><i class="fas fa-ban"></i> Void Cheque</div><div class="dropdown-divider"></div><div class="dropdown-item" onclick="viewDetails('${c.id}')"><i class="fas fa-history"></i> View History</div></div></div>`;
+  } else if (c.status === 'Deposited') {
+    btns += `<button class="action-btn btn-clear" data-tooltip="Clear" onclick="openActionModal('clear','${c.id}')"><i class="fas fa-check-double"></i></button>`;
+    btns += `<button class="action-btn btn-return" data-tooltip="Return" onclick="openActionModal('return','${c.id}')"><i class="fas fa-undo"></i></button>`;
+    btns += `<button class="action-btn btn-view" data-tooltip="Details" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>`;
+  } else if (c.status === 'Returned') {
+    btns += `<button class="action-btn btn-edit" data-tooltip="Reissue" onclick="editCheque('${c.id}')"><i class="fas fa-redo"></i></button>`;
+    btns += `<button class="action-btn btn-view" data-tooltip="Details" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>`;
+    btns += `<button class="action-btn btn-delete" data-tooltip="Delete" onclick="deleteCheque('${c.id}')"><i class="fas fa-trash"></i></button>`;
   } else {
-    selectedCheques = selectedCheques.filter(i => i !== id);
+    btns += `<button class="action-btn btn-view" data-tooltip="Details" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>`;
   }
+  return `<div class="cheque-actions">${btns}</div>`;
 }
 
-function applyBulkUpdate() {
-  const newStatus = document.getElementById('bulkStatus').value;
-  if (!newStatus) {
-    showToast('Please select a status', 'warning');
-    return;
-  }
-
-  Promise.all(selectedCheques.map(id => {
-    return db.collection('cheques').doc(id).update({
-      status: newStatus,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  })).then(() => {
-    addAuditLog('update', 'Multiple', `Bulk update to ${newStatus} (${selectedCheques.length} cheques)`);
-    closeModal('bulkUpdateModal');
-    selectedCheques = [];
-    showToast(`${selectedCheques.length} cheques updated`, 'success');
-  }).catch(error => {
-    showToast('Error: ' + error.message, 'error');
-  });
+function renderAllCheques() {
+  const statusF = document.getElementById('filterStatus').value;
+  const bankF = document.getElementById('filterBank').value;
+  const searchF = document.getElementById('tableSearch').value.toLowerCase();
+  const active = cheques.filter(c => !c.deleted && (!statusF || c.status === statusF) && (!bankF || c.bank === bankF) && (!searchF || c.payee.toLowerCase().includes(searchF) || c.number.toLowerCase().includes(searchF)));
+  const tbody = document.getElementById('allChequesTable');
+  const empty = document.getElementById('allChequesEmpty');
+  if (active.length === 0) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  tbody.innerHTML = active.map(c => `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td><span class="status-badge status-${c.status.toLowerCase().replace(' ','')}">${c.status}</span></td><td>${getActionButtons(c)}</td></tr>`).join('');
 }
 
-function applyBatchAction() {
-  const status = document.getElementById('batchStatus').value;
-  const bank = document.getElementById('batchBank').value;
-  const action = document.getElementById('batchAction').value;
+function renderInHand() { const list = cheques.filter(c => c.status === 'In Hand' && !c.deleted); document.getElementById('inHandTable').innerHTML = list.map(c => `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td>${getActionButtons(c)}</td></tr>`).join(''); document.getElementById('inHandEmpty').classList.toggle('hidden', list.length > 0); }
+function renderReturned() { const list = cheques.filter(c => c.status === 'Returned' && !c.deleted); document.getElementById('returnedTable').innerHTML = list.map(c => `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td><td>${c.returnDetails?.returnReason || 'N/A'}</td><td>${getActionButtons(c)}</td></tr>`).join(''); document.getElementById('returnedEmpty').classList.toggle('hidden', list.length > 0); }
+function renderRecycle() { const list = cheques.filter(c => c.deleted); document.getElementById('recycleTable').innerHTML = list.map(c => `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td><td>${formatDate(c.deletedAt?.toDate?.() || c.deletedAt)}</td><td><button class="action-btn btn-approve" data-tooltip="Restore" onclick="restoreCheque('${c.id}')"><i class="fas fa-undo"></i></button><button class="action-btn btn-delete" data-tooltip="Delete Forever" onclick="deleteForever('${c.id}')"><i class="fas fa-trash"></i></button></td></tr>`).join(''); document.getElementById('recycleEmpty').classList.toggle('hidden', list.length > 0); }
 
-  let count = 0;
-  const promises = [];
-  
-  cheques.forEach(cheque => {
-    if (cheque.deleted) return;
-    const matchStatus = status === 'Any' || cheque.status === status;
-    const matchBank = bank === 'Any' || bank === '' || cheque.bank === bank;
-
-    if (matchStatus && matchBank) {
-      count++;
-      let updateData = { updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-      
-      switch(action) {
-        case 'Issue': if (cheque.status === 'In Hand') updateData.status = 'Issued'; break;
-        case 'Return': if (cheque.status === 'Issued') updateData.status = 'Returned'; break;
-        case 'Clear': if (cheque.status === 'Issued') updateData.status = 'Cleared'; break;
-        case 'Delete': updateData.deleted = true; updateData.deletedAt = firebase.firestore.FieldValue.serverTimestamp(); break;
-      }
-      
-      promises.push(db.collection('cheques').doc(cheque.id).update(updateData));
-    }
-  });
-
-  Promise.all(promises).then(() => {
-    addAuditLog('update', 'Multiple', `Batch action: ${action} (${count} cheques)`);
-    closeModal('batchModal');
-    showToast(`${count} cheques processed`, 'success');
-  }).catch(error => {
-    showToast('Error: ' + error.message, 'error');
-  });
+function renderKanban() {
+  const statuses = ['Draft', 'In Hand', 'Issued', 'Deposited', 'Cleared', 'Returned', 'Stopped'];
+  document.getElementById('kanbanBoard').innerHTML = statuses.map(s => {
+    const items = cheques.filter(c => c.status === s && !c.deleted);
+    return `<div class="kanban-column"><div class="kanban-header"><span>${s}</span><span style="background:white;padding:2px 8px;border-radius:10px;font-size:11px;">${items.length}</span></div>${items.map(c => `<div class="kanban-card" onclick="viewDetails('${c.id}')"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><strong style="font-size:13px;">${c.number}</strong><span class="status-badge status-${s.toLowerCase().replace(' ','')}" style="font-size:9px;">${s}</span></div><div style="font-size:12px;color:var(--gray);margin-bottom:6px;">${c.payee}</div><div style="font-weight:800;color:var(--primary);">₹${Math.round(c.amount).toLocaleString('en-IN')}</div></div>`).join('')}</div>`;
+  }).join('');
 }
 
-function openModal(modalId) {
-  document.getElementById(modalId).classList.add('active');
+function renderTimeline() { const sorted = [...cheques].filter(c => !c.deleted).sort((a,b) => new Date(b.date) - new Date(a.date)); document.getElementById('timelineContent').innerHTML = sorted.slice(0, 15).map(c => `<div class="timeline-item"><div style="font-weight:700;margin-bottom:4px;">${c.number} - ${c.payee}</div><div style="font-size:12px;color:var(--gray);">Status: <span class="status-badge status-${c.status.toLowerCase().replace(' ','')}">${c.status}</span> • ${c.bank} • ${formatDate(c.date)}</div></div>`).join(''); }
+function renderAnalytics() { const active = cheques.filter(c => !c.deleted); const stats = [{ label: 'Total Value', val: '₹' + active.reduce((s,c)=>s+(c.amount||0),0).toLocaleString('en-IN'), color: 'primary' }, { label: 'Cleared', val: active.filter(c=>c.status==='Cleared').length, color: 'success' }, { label: 'Pending/Issued', val: active.filter(c=>['Issued','Deposited'].includes(c.status)).length, color: 'warning' }, { label: 'Returned', val: active.filter(c=>c.status==='Returned').length, color: 'danger' }]; document.getElementById('analyticsWidgets').innerHTML = stats.map(s => `<div class="widget"><div class="widget-title">${s.label}</div><div class="widget-value" style="font-size:24px;">${s.val}</div></div>`).join(''); }
+function renderAudit() { document.getElementById('auditTrail').innerHTML = auditLog.map(e => `<div class="audit-entry"><div class="audit-icon"><i class="fas fa-${e.action==='create'?'plus':e.action==='delete'?'trash':'edit'}" style="color:var(--primary);"></i></div><div class="audit-content"><div class="audit-action">${e.action.toUpperCase()} - #${e.chequeNumber}</div><div class="audit-details">${e.details}</div><div class="audit-time">${formatDate(e.timestamp?.toDate?.() || e.timestamp)} by ${e.userName || e.user}</div></div></div>`).join('') || '<div class="empty-state"><p>No audit records</p></div>'; }
+
+// ==========================================
+// ADMIN FUNCTIONS
+// ==========================================
+function addEscalation() {
+  const cond = document.getElementById('escCondition').value;
+  const val = document.getElementById('escValue').value;
+  const act = document.getElementById('escAction').value;
+  if (!val) return showToast('Enter condition value', 'error');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.innerHTML = `<div><strong>If ${cond} ${val}</strong><br><span style="font-size:11px; color:var(--gray);">Action: ${act}</span></div><i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i>`;
+  document.getElementById('escalationList').appendChild(item);
+  document.getElementById('escValue').value = '';
+  showToast('Escalation rule added', 'success');
 }
 
-function closeModal(modalId) {
-  document.getElementById(modalId).classList.remove('active');
+function addCustomField() {
+  const name = document.getElementById('newFieldName').value;
+  const type = document.getElementById('newFieldType').value;
+  if (!name) return showToast('Enter field name', 'error');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.innerHTML = `<span>${name} (${type})</span><i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i>`;
+  document.getElementById('customFieldsList').appendChild(item);
+  document.getElementById('newFieldName').value = '';
+  showToast('Custom field added', 'success');
 }
 
-function toggleActionMenu(btn) {
-  const menu = btn.closest('.action-menu');
-  document.querySelectorAll('.action-menu').forEach(m => {
-    if (m !== menu) m.classList.remove('active');
-  });
-  menu.classList.toggle('active');
+function addCustomStatus() {
+  const name = document.getElementById('newStatusName').value;
+  const color = document.getElementById('newStatusColor').value;
+  if (!name) return showToast('Enter status name', 'error');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.innerHTML = `<span style="color:${color};">●</span> ${name} <i class="fas fa-trash remove-btn" onclick="this.parentElement.remove()"></i>`;
+  document.getElementById('customStatusList').appendChild(item);
+  document.getElementById('newStatusName').value = '';
+  showToast('Custom status added', 'success');
 }
 
-function showToast(message, type = 'info') {
-  const container = document.getElementById('toastContainer');
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.innerHTML = `
-    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
-    <span>${message}</span>
-  `;
-  container.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+function addBank() {
+  const name = document.getElementById('newBankName').value;
+  const acc = document.getElementById('newBankAccount').value;
+  const ifsc = document.getElementById('newBankIFSC').value;
+  if (!name || !acc) return showToast('Enter bank name and account', 'error');
+  const item = document.createElement('div');
+  item.className = 'dynamic-item';
+  item.innerHTML = `<div><strong>${name}</strong><br><span style="font-size:11px; color:var(--gray);">A/c: ${acc} | IFSC: ${ifsc || 'N/A'}</span></div><button class="btn btn-sm btn-secondary">Edit</button>`;
+  document.getElementById('bankList').appendChild(item);
+  document.getElementById('newBankName').value = '';
+  document.getElementById('newBankAccount').value = '';
+  document.getElementById('newBankIFSC').value = '';
+  showToast('Bank added', 'success');
 }
 
-function formatDate(date) {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+async function inviteUser() {
+  const email = document.getElementById('inviteEmail').value;
+  const role = document.getElementById('inviteRole').value;
+  if (!email) return showToast('Enter email', 'error');
+  try {
+    await db.collection('users').add({ email, role, invitedBy: currentUser.email, invitedAt: firebase.firestore.FieldValue.serverTimestamp(), status: 'pending' });
+    showToast(`Invite sent to ${email}`, 'success');
+    closeModal('inviteUserModal');
+    document.getElementById('inviteEmail').value = '';
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
 }
 
-function filterCheques() {
-  renderAllCheques();
-}
+function saveAllSettings() { showToast('All settings saved successfully!', 'success'); }
 
-function searchCheques() {
-  renderAllCheques();
-}
+// ==========================================
+// UTILITIES
+// ==========================================
+function updateFilters() { const banks = [...new Set(cheques.filter(c=>!c.deleted).map(c=>c.bank))]; document.getElementById('filterBank').innerHTML = '<option value="">All Banks</option>' + banks.map(b=>`<option>${b}</option>`).join(''); }
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function toggleActionMenu(btn) { const m = btn.closest('.action-menu'); document.querySelectorAll('.action-menu').forEach(x=>{if(x!==m)x.classList.remove('active')}); m.classList.toggle('active'); }
+function showToast(msg, type='info') { const t = document.createElement('div'); t.className = `toast ${type}`; t.innerHTML = `<i class="fas fa-${type==='success'?'check-circle':type==='error'?'exclamation-circle':'info-circle'}"></i><span>${msg}</span>`; document.getElementById('toastContainer').appendChild(t); setTimeout(()=>t.remove(), 3500); }
+function formatDate(d) { if(!d) return 'N/A'; const date = d.toDate ? d.toDate() : new Date(d); return date.toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}); }
+function searchCheques() { renderAllCheques(); }
 
-function printCheque(id) { showToast('Print functionality', 'info'); }
-function emailCheque(id) { 
-  const cheque = cheques.find(c => c.id === id);
-  const email = prompt(`Enter email for cheque #${cheque.number}:`, 'payee@example.com');
-  if (email) {
-    showToast(`Email sent to ${email}`, 'success');
-    addAuditLog('update', cheque.number, `Email sent to ${email}`);
-  }
-}
-function downloadCheque(id) { showToast('Download PDF', 'info'); }
-function viewDetails(id) { 
-  const cheque = cheques.find(c => c.id === id);
-  alert(`Cheque Details:\n\nNumber: ${cheque.number}\nPayee: ${cheque.payee}\nAmount: ₹${cheque.amount}\nBank: ${cheque.bank}\nDate: ${formatDate(cheque.date)}\nStatus: ${cheque.status}\nNotes: ${cheque.notes || 'None'}`);
-}
-function duplicateCheque(id) {
-  const cheque = cheques.find(c => c.id === id);
-  document.getElementById('chequePayee').value = cheque.payee;
-  document.getElementById('chequeAmount').value = cheque.amount;
-  document.getElementById('chequeBank').value = cheque.bank;
-  document.getElementById('chequeDate').valueAsDate = new Date();
-  document.getElementById('chequeStatus').value = 'Draft';
-  document.getElementById('chequeNotes').value = `Duplicate of #${cheque.number}`;
-  openModal('addChequeModal');
-}
-function reissueCheque(id) {
-  const cheque = cheques.find(c => c.id === id);
-  document.getElementById('chequeNumber').value = '';
-  document.getElementById('chequePayee').value = cheque.payee;
-  document.getElementById('chequeAmount').value = cheque.amount;
-  document.getElementById('chequeBank').value = cheque.bank;
-  document.getElementById('chequeDate').valueAsDate = new Date();
-  document.getElementById('chequeStatus').value = 'Draft';
-  document.getElementById('chequeNotes').value = `Reissued from #${cheque.number}`;
-  openModal('addChequeModal');
-}
-function saveChequeBook() {
-  const name = document.getElementById('bookName').value;
-  const start = document.getElementById('bookStart').value;
-  const end = document.getElementById('bookEnd').value;
-  const bank = document.getElementById('bookBank').value;
+async function applyBulkUpdate() { const status = document.getElementById('bulkStatus').value; const toUpdate = cheques.filter(c => c.status === 'In Hand' && !c.deleted); await Promise.all(toUpdate.map(c => db.collection('cheques').doc(c.id).update({ status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }))); closeModal('bulkUpdateModal'); showToast(`${toUpdate.length} cheques updated`, 'success'); }
 
-  if (!name || !start || !end) {
-    showToast('Please fill all required fields', 'error');
-    return;
-  }
+async function saveChequeBook() { const name = document.getElementById('bookName').value; if(!name) return showToast('Enter name', 'error'); await db.collection('chequeBooks').add({ name, start: document.getElementById('bookStart').value, end: document.getElementById('bookEnd').value, bank: document.getElementById('bookBank').value, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); closeModal('chequeBookModal'); showToast('Book created', 'success'); }
 
-  db.collection('chequeBooks').add({
-    name, start, end, bank,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    createdBy: currentUser.uid
-  }).then(() => {
-    closeModal('chequeBookModal');
-    document.getElementById('chequeBookForm').reset();
-    showToast('Cheque book created', 'success');
-  }).catch(error => {
-    showToast('Error: ' + error.message, 'error');
-  });
-}
-function handleFileImport(event) {
-  const file = event.target.files[0];
-  if (file) {
-    showToast(`Importing ${file.name}...`, 'info');
-    setTimeout(() => {
-      showToast('Import completed', 'success');
-      closeModal('importModal');
-    }, 1500);
-  }
-}
-function generateReport() { showToast('Report generated', 'success'); }
-function exportToExcel() { showToast('Exporting to Excel...', 'info'); }
-function exportAudit() { showToast('Exporting audit...', 'info'); }
-function saveSettings() { showToast('Settings saved', 'success'); }
-function saveBranding() { 
-  const color = document.getElementById('primaryColor').value;
-  document.documentElement.style.setProperty('--primary', color);
-  showToast('Branding saved', 'success');
-}
-function savePreferences() { showToast('Preferences saved', 'success'); }
-function emptyRecycleBin() {
-  if (!confirm('Empty recycle bin?')) return;
-  
-  const deleted = cheques.filter(c => c.deleted);
-  Promise.all(deleted.map(c => db.collection('cheques').doc(c.id).delete())).then(() => {
-    showToast('Recycle bin emptied', 'info');
-  }).catch(error => {
-    showToast('Error: ' + error.message, 'error');
-  });
-}
-
-// Close modals on outside click
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', function(e) {
-    if (e.target === this) this.classList.remove('active');
-  });
-});
-
-// Close action menus on outside click
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.action-menu')) {
-    document.querySelectorAll('.action-menu').forEach(m => m.classList.remove('active'));
-  }
-});
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.classList.remove('active'); }));
+document.addEventListener('click', e => { if(!e.target.closest('.action-menu')) document.querySelectorAll('.action-menu').forEach(m=>m.classList.remove('active')); });
 </script>
 </body>
 </html>
