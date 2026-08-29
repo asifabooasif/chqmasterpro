@@ -22,6 +22,9 @@
     --light: #f8fafc;
     --gray: #64748b;
     --border: #e2e8f0;
+    --accent-pink: #ec4899;
+    --skin: #f4b783;
+    --hair: #2d1b4e;
 }
 
 * {
@@ -68,6 +71,193 @@ body {
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+}
+
+/* ===== Illustration scene (login) ===== */
+.login-scene {
+    position: relative;
+    width: 100%;
+    max-width: 920px;
+    min-height: 600px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.scene-heading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    z-index: 4;
+}
+
+.scene-heading h1 {
+    font-size: 26px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 0.5px;
+}
+
+.scene-heading p {
+    color: rgba(255,255,255,0.75);
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+.scene-blobs {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.scene-backdrop {
+    position: absolute;
+    width: 480px;
+    height: 480px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+    z-index: 0;
+}
+
+.illus-figure {
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+    filter: drop-shadow(0 14px 18px rgba(0,0,0,0.18));
+}
+
+.illus-woman {
+    left: 2%;
+    top: 26%;
+    width: 190px;
+    animation: figureBob 4.2s ease-in-out infinite;
+}
+
+.illus-man {
+    right: 3%;
+    bottom: 6%;
+    width: 250px;
+    animation: figureBob 3.6s ease-in-out infinite -1.4s;
+}
+
+@keyframes figureBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.laptop-glow {
+    animation: laptopGlow 2.6s ease-in-out infinite;
+    transform-origin: center;
+}
+@keyframes laptopGlow {
+    0%, 100% { opacity: 0.85; }
+    50% { opacity: 1; }
+}
+
+/* ---- phone mockup that IS the real login card ---- */
+.phone-card {
+    position: relative;
+    z-index: 3;
+    width: 310px;
+    max-width: 90vw;
+    background: var(--dark);
+    border-radius: 42px;
+    padding: 16px 14px 20px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.35);
+}
+
+.phone-notch {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    margin: 0 auto 12px;
+}
+
+.phone-screen {
+    background: linear-gradient(160deg, var(--primary) 0%, var(--accent-pink) 100%);
+    border-radius: 30px;
+    padding: 30px 22px 22px;
+}
+
+.profile-icon {
+    width: 82px;
+    height: 82px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 22px;
+}
+
+.phone-screen .form-group label {
+    color: rgba(255,255,255,0.85);
+    font-size: 12px;
+}
+
+.phone-screen .form-group input {
+    background: rgba(255,255,255,0.96);
+    border: none;
+    border-radius: 999px;
+    padding: 13px 18px;
+}
+
+.phone-screen .form-group input:focus {
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.35);
+}
+
+.phone-screen .btn-primary {
+    background: #fff;
+    color: var(--primary-dark);
+    border-radius: 999px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.2);
+}
+
+.phone-screen .btn-primary:hover {
+    background: #fff;
+    color: var(--primary-dark);
+}
+
+.phone-footer {
+    padding: 16px 10px 4px;
+    text-align: center;
+}
+
+.phone-footer p {
+    color: rgba(255,255,255,0.6);
+    font-size: 12px;
+}
+
+.phone-footer a {
+    color: #fff;
+    font-weight: 600;
+}
+
+.phone-footer .btn-secondary {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.25);
+    margin-top: 14px;
+}
+
+.phone-footer .btn-secondary:hover {
+    background: rgba(255,255,255,0.16);
+}
+
+@media (max-width: 760px) {
+    .illus-woman, .illus-man { display: none; }
+    .login-scene { min-height: auto; padding-top: 56px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .illus-woman, .illus-man, .laptop-glow { animation: none; }
 }
 
 .form-group {
@@ -938,31 +1128,101 @@ tr:hover {
 
 <!-- Login Screen -->
 <div class="login-container" id="loginScreen">
-    <div class="login-box">
-        <div class="login-header">
+    <div class="login-scene">
+        <div class="scene-heading">
             <h1>NeonCheque</h1>
-            <p style="color: var(--gray); font-size: 14px; margin-top: 8px;">Secure • Real-time • Team-ready</p>
+            <p>Secure • Real-time • Team-ready</p>
         </div>
-        <form id="loginForm">
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" id="loginEmail" placeholder="you@company.com" required>
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="loginPassword" placeholder="••••••••" required>
-            </div>
-            <button type="submit" class="btn btn-primary btn-block">
-                <i class="fas fa-sign-in-alt"></i> Sign In
-            </button>
-        </form>
-        <div style="text-align: center; margin-top: 20px; color: var(--gray); font-size: 13px;">
-            <p>Don't have an account? <a href="#" onclick="showSignup()" style="color: var(--primary); font-weight: 600;">Sign Up</a></p>
-            <p style="margin-top: 8px;"><a href="#" style="color: var(--primary); font-weight: 600;">Forgot password?</a></p>
+
+        <div class="scene-backdrop" aria-hidden="true"></div>
+
+        <svg class="scene-blobs" viewBox="0 0 900 640" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <g transform="translate(90,190) rotate(-18)">
+                <path d="M0,0 C34,-8 52,-40 38,-82 C16,-46 -4,-12 0,0 Z" fill="var(--warning)" opacity="0.85"/>
+            </g>
+            <g transform="translate(120,225) rotate(34)">
+                <path d="M0,0 C30,-6 44,-34 32,-70 C14,-40 -3,-10 0,0 Z" fill="#f4a6a6" opacity="0.85"/>
+            </g>
+            <g transform="translate(790,150) rotate(150)">
+                <path d="M0,0 C34,-8 52,-40 38,-82 C16,-46 -4,-12 0,0 Z" fill="var(--success)" opacity="0.85"/>
+            </g>
+            <g transform="translate(760,190) rotate(96)">
+                <path d="M0,0 C30,-6 44,-34 32,-70 C14,-40 -3,-10 0,0 Z" fill="#c4b5fd" opacity="0.85"/>
+            </g>
+            <g transform="translate(800,430) rotate(210) scale(0.8)">
+                <path d="M0,0 C30,-6 44,-34 32,-70 C14,-40 -3,-10 0,0 Z" fill="var(--warning)" opacity="0.7"/>
+            </g>
+        </svg>
+
+        <!-- standing woman, decorative -->
+        <div class="illus-figure illus-woman" aria-hidden="true">
+            <svg viewBox="0 0 200 340" width="100%" height="100%">
+                <ellipse cx="118" cy="150" rx="42" ry="90" fill="var(--hair)"/>
+                <rect x="78" y="230" width="22" height="100" rx="11" fill="var(--dark)"/>
+                <rect x="104" y="230" width="22" height="100" rx="11" fill="var(--dark)"/>
+                <rect x="76" y="322" width="26" height="14" rx="7" fill="#c4b5fd"/>
+                <rect x="102" y="322" width="26" height="14" rx="7" fill="#c4b5fd"/>
+                <rect x="58" y="145" width="88" height="105" rx="44" fill="var(--primary)"/>
+                <ellipse cx="52" cy="210" rx="26" ry="22" fill="var(--primary-dark)"/>
+                <rect x="26" y="185" width="32" height="44" rx="6" fill="#f4a6a6" transform="rotate(-10 42 207)"/>
+                <rect x="92" y="115" width="22" height="28" fill="var(--skin)"/>
+                <circle cx="103" cy="92" r="36" fill="var(--skin)"/>
+                <ellipse cx="95" cy="68" rx="34" ry="22" fill="var(--hair)"/>
+                <ellipse cx="140" cy="110" rx="16" ry="40" fill="var(--hair)"/>
+            </svg>
         </div>
-        <button class="btn btn-secondary btn-block" onclick="signInWithGoogle()" style="margin-top:16px;">
-            <i class="fab fa-google"></i> Sign in with Google
-        </button>
+
+        <!-- seated man with laptop, decorative -->
+        <div class="illus-figure illus-man" aria-hidden="true">
+            <svg viewBox="0 0 260 220" width="100%" height="100%">
+                <ellipse cx="90" cy="178" rx="72" ry="34" fill="var(--dark)" transform="rotate(-8 90 178)"/>
+                <ellipse cx="172" cy="182" rx="72" ry="34" fill="var(--dark)" transform="rotate(10 172 182)"/>
+                <rect x="60" y="170" width="24" height="16" rx="8" fill="#c4b5fd"/>
+                <rect x="196" y="176" width="24" height="16" rx="8" fill="#c4b5fd"/>
+                <rect x="55" y="55" width="110" height="95" rx="45" fill="var(--secondary)"/>
+                <rect x="95" y="35" width="22" height="26" fill="var(--skin)"/>
+                <circle cx="106" cy="28" r="30" fill="var(--skin)"/>
+                <ellipse cx="106" cy="10" rx="30" ry="16" fill="#1e293b"/>
+                <ellipse cx="106" cy="40" rx="20" ry="12" fill="#1e293b" opacity="0.85"/>
+                <g class="laptop-glow">
+                    <rect x="150" y="120" width="90" height="14" rx="4" fill="var(--dark)"/>
+                    <rect x="150" y="60" width="80" height="64" rx="6" fill="var(--dark)"/>
+                    <rect x="156" y="66" width="68" height="50" rx="3" fill="var(--primary-dark)"/>
+                </g>
+            </svg>
+        </div>
+
+        <div class="login-box phone-card">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+                <div class="profile-icon">
+                    <svg width="44" height="44" viewBox="0 0 44 44">
+                        <circle cx="22" cy="15" r="9" fill="var(--primary)"/>
+                        <path d="M4,42 C4,28 10,22 22,22 C34,22 40,28 40,42 Z" fill="var(--primary)"/>
+                    </svg>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" placeholder="you@company.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-sign-in-alt"></i> Sign In
+                    </button>
+                </form>
+            </div>
+            <div class="phone-footer">
+                <p>Don't have an account? <a href="#" onclick="showSignup()">Sign Up</a></p>
+                <p style="margin-top: 6px;"><a href="#">Forgot password?</a></p>
+                <button class="btn btn-secondary btn-block" onclick="signInWithGoogle()">
+                    <i class="fab fa-google"></i> Sign in with Google
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
