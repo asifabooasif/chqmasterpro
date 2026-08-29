@@ -317,6 +317,22 @@ tr:hover{background:var(--light)}
 .illo-pulse{animation:illoPulse 1.8s ease-in-out infinite}
 .illo-glow{animation:illoGlow 2.2s ease-in-out infinite}
 }
+
+/* ===== Cartoon notifier (added) — pops up beside the toast stack on every notification ===== */
+.toon-notifier{position:fixed;right:24px;bottom:14px;width:84px;z-index:2999;pointer-events:none;opacity:0;transform:translateY(150px) scale(.85);transition:transform .55s cubic-bezier(.34,1.56,.64,1),opacity .3s ease}
+.toon-notifier.toon-active{opacity:1;transform:translateY(0) scale(1)}
+@keyframes toonNotifierBob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(-1.5deg)}}
+@keyframes toonWaveArm{0%,100%{transform:rotate(0)}50%{transform:rotate(-45deg)}}
+@keyframes toonBellRing{0%,100%{transform:rotate(0)}25%{transform:rotate(14deg)}75%{transform:rotate(-14deg)}}
+@keyframes toonLegStep{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@media (prefers-reduced-motion: no-preference){
+.toon-notifier.toon-active svg{animation:toonNotifierBob 1s ease-in-out .55s infinite}
+.toon-notifier.toon-active .toon-arm{animation:toonWaveArm .55s ease-in-out .55s infinite}
+.toon-notifier.toon-active .toon-bell{animation:toonBellRing .5s ease-in-out .55s infinite}
+.toon-notifier.toon-active .toon-leg-l{animation:toonLegStep .4s ease-in-out .1s infinite}
+.toon-notifier.toon-active .toon-leg-r{animation:toonLegStep .4s ease-in-out .3s infinite}
+}
+@media (max-width:600px){.toon-notifier{width:64px;right:12px;bottom:10px}}
 </style>
 </head>
 <body>
@@ -1582,6 +1598,39 @@ tr:hover{background:var(--light)}
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- Cartoon notifier: pops up and waves whenever a toast fires -->
+<div class="toon-notifier" id="toonNotifier" aria-hidden="true">
+    <svg viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="60" cy="142" rx="30" ry="6" fill="#1e293b" opacity="0.12"/>
+        <!-- legs -->
+        <rect class="toon-leg toon-leg-l" x="42" y="104" width="13" height="34" rx="6" fill="#1e293b"/>
+        <rect class="toon-leg toon-leg-r" x="65" y="104" width="13" height="34" rx="6" fill="#1e293b"/>
+        <ellipse cx="48" cy="140" rx="10" ry="5" fill="#312e81"/>
+        <ellipse cx="72" cy="140" rx="10" ry="5" fill="#312e81"/>
+        <!-- body -->
+        <path d="M32,64 a28,34 0 0 1 56,0 v38 a28,12 0 0 1 -56,0 z" fill="#6366f1"/>
+        <!-- static arm -->
+        <rect x="26" y="70" width="12" height="34" rx="6" fill="#6366f1"/>
+        <!-- waving arm -->
+        <g class="toon-arm" style="transform-box:fill-box;transform-origin:top center">
+            <rect x="82" y="66" width="12" height="34" rx="6" fill="#6366f1"/>
+            <circle cx="88" cy="64" r="8" fill="#fbbf24"/>
+        </g>
+        <!-- head -->
+        <circle cx="60" cy="40" r="22" fill="#fbbf24"/>
+        <path d="M39,36 q4,-26 42,-14 q10,4 6,18 q-10,-10 -24,-10 q-16,0 -24,10 z" fill="#1e293b"/>
+        <circle cx="52" cy="42" r="2.4" fill="#1e293b"/>
+        <circle cx="68" cy="42" r="2.4" fill="#1e293b"/>
+        <path d="M52,50 q8,7 16,0" stroke="#1e293b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <!-- notification bell held up -->
+        <g class="toon-bell" style="transform-box:fill-box;transform-origin:bottom center">
+            <circle cx="88" cy="46" r="13" fill="#ffffff"/>
+            <path d="M88,38 a8,8 0 0 1 8,8 v3 a3,3 0 0 0 2,3 h-20 a3,3 0 0 0 2,-3 v-3 a8,8 0 0 1 8,-8 z" fill="#06b6d4"/>
+            <circle cx="88" cy="53" r="1.6" fill="#06b6d4"/>
+        </g>
+    </svg>
+</div>
 
 <script>
 // Firebase Configuration
@@ -2981,6 +3030,18 @@ function showToast(message, type='info') {
     toast.innerHTML = `<i class="fas fa-${type==='success'?'check-circle':'exclamation-circle'}"></i><span>${message}</span>`;
     container.appendChild(toast);
     setTimeout(() => toast.remove(),3500);
+    triggerNotifierCharacter();
+}
+
+let toonNotifierTimeout;
+function triggerNotifierCharacter() {
+    const el = document.getElementById('toonNotifier');
+    if (!el) return;
+    el.classList.remove('toon-active');
+    void el.offsetWidth; // restart the animation even on back-to-back toasts
+    el.classList.add('toon-active');
+    clearTimeout(toonNotifierTimeout);
+    toonNotifierTimeout = setTimeout(() => el.classList.remove('toon-active'), 2800);
 }
 
 function formatDate(d) {
