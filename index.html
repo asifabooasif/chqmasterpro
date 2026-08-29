@@ -375,7 +375,7 @@ tr:hover {
 }
 
 .status-draft { background: #f1f5f9; color: #475569; }
-.status-inhand { background: #dbeafe; color: #1e40af; }
+.status-in-hand { background: #dbeafe; color: #1e40af; }
 .status-issued { background: #fef3c7; color: #b45309; }
 .status-deposited { background: #e0e7ff; color: #4338ca; }
 .status-returned { background: #fee2e2; color: #b91c1c; }
@@ -521,6 +521,9 @@ tr:hover {
     animation: slideIn 0.3s ease;
     min-width: 300px;
     border-left: 4px solid var(--info);
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 @keyframes slideIn {
@@ -634,6 +637,7 @@ tr:hover {
     justify-content: center;
     font-size: 13px;
     color: white;
+    position: relative;
 }
 
 .action-btn:hover {
@@ -641,13 +645,82 @@ tr:hover {
     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
 }
 
-.btn-issue { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+.action-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: 0.2s;
+    z-index: 100;
+}
+
+.action-btn:hover::after {
+    opacity: 1;
+}
+
+.btn-change { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.btn-history { background: linear-gradient(135deg, #06b6d4, #0891b2); }
 .btn-edit { background: linear-gradient(135deg, #3b82f6, #2563eb); }
 .btn-delete { background: linear-gradient(135deg, #ef4444, #dc2626); }
-.btn-view { background: linear-gradient(135deg, #6366f1, #4f46e5); }
-.btn-approve { background: linear-gradient(135deg, #22c55e, #16a34a); }
-.btn-return { background: linear-gradient(135deg, #f43f5e, #e11d48); }
-.btn-clear { background: linear-gradient(135deg, #10b981, #059669); }
+
+.history-timeline {
+    position: relative;
+    padding-left: 20px;
+    border-left: 2px solid var(--border);
+    margin-left: 10px;
+}
+
+.history-item {
+    position: relative;
+    margin-bottom: 20px;
+    padding-left: 20px;
+}
+
+.history-item::before {
+    content: '';
+    position: absolute;
+    left: -26px;
+    top: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid white;
+    box-shadow: 0 0 0 2px var(--primary);
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.history-action {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--dark);
+}
+
+.history-time {
+    font-size: 12px;
+    color: var(--gray);
+}
+
+.history-details {
+    background: var(--light);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+}
 
 @media (max-width: 768px) {
     .sidebar { transform: translateX(-100%); }
@@ -833,7 +906,7 @@ tr:hover {
                 <div class="card-header">
                     <h2 class="card-title">Recent Activity</h2>
                     <button class="btn btn-primary btn-sm" onclick="openModal('addChequeModal')">
-                        <i class="fas fa-plus"></i> Issue
+                        <i class="fas fa-plus"></i> Add Cheque
                     </button>
                 </div>
                 <div id="recentActivity"></div>
@@ -846,7 +919,7 @@ tr:hover {
                 <div class="card-header">
                     <h2 class="card-title">All Cheques</h2>
                     <button class="btn btn-primary btn-sm" onclick="openModal('addChequeModal')">
-                        <i class="fas fa-plus"></i> Add
+                        <i class="fas fa-plus"></i> Add Cheque
                     </button>
                 </div>
                 <div class="filters">
@@ -978,27 +1051,21 @@ tr:hover {
         <!-- Other Views -->
         <div id="kanbanView" class="view-content">
             <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">Kanban Board</h2>
-                </div>
+                <div class="card-header"><h2 class="card-title">Kanban Board</h2></div>
                 <div style="padding:40px; text-align:center; color:var(--gray);">Kanban view</div>
             </div>
         </div>
 
         <div id="timelineView" class="view-content">
             <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">Timeline</h2>
-                </div>
+                <div class="card-header"><h2 class="card-title">Timeline</h2></div>
                 <div style="padding:40px; text-align:center; color:var(--gray);">Timeline view</div>
             </div>
         </div>
 
         <div id="analyticsView" class="view-content">
             <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">Analytics</h2>
-                </div>
+                <div class="card-header"><h2 class="card-title">Analytics</h2></div>
                 <div class="widgets-grid" id="analyticsWidgets"></div>
             </div>
         </div>
@@ -1017,27 +1084,21 @@ tr:hover {
 
         <div id="reportsView" class="view-content">
             <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">Custom Report Builder</h2>
-                </div>
+                <div class="card-header"><h2 class="card-title">Custom Report Builder</h2></div>
                 <div style="padding:40px; text-align:center; color:var(--gray);">Report builder</div>
             </div>
         </div>
 
         <div id="agingView" class="view-content">
             <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">Aging Report (30/60/90)</h2>
-                </div>
+                <div class="card-header"><h2 class="card-title">Aging Report (30/60/90)</h2></div>
                 <div class="widgets-grid" id="agingWidgets"></div>
             </div>
         </div>
 
         <div id="auditView" class="view-content">
             <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">Audit Trail</h2>
-                </div>
+                <div class="card-header"><h2 class="card-title">Audit Trail</h2></div>
                 <div id="auditTrail"></div>
             </div>
         </div>
@@ -1335,40 +1396,73 @@ tr:hover {
     </div>
 </div>
 
-<!-- Other Modals (Cheque Book, Invite User, Edit Bank, Edit User, Edit Escalation, Edit Custom Field, Edit Custom Status) -->
+<!-- Status Change Modal -->
+<div class="modal-overlay" id="statusChangeModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title"><i class="fas fa-exchange-alt" style="margin-right: 8px; color: var(--primary);"></i>Change Cheque Status</h2>
+            <button class="modal-close" onclick="closeModal('statusChangeModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="statusChequeId">
+            <div class="form-group">
+                <label>Select New Status *</label>
+                <select id="newStatusSelect" onchange="renderStatusFields()">
+                    <option value="">-- Select Action --</option>
+                    <option value="in-hand">Move to In Hand</option>
+                    <option value="issued">Issue Cheque</option>
+                    <option value="deposited">Deposit Cheque</option>
+                    <option value="cleared">Mark as Cleared</option>
+                    <option value="returned">Mark as Returned (Bounced)</option>
+                    <option value="stopped">Stop Payment</option>
+                    <option value="draft">Revert to Draft</option>
+                </select>
+            </div>
+            <div id="dynamicStatusFields"></div>
+            <div class="form-group">
+                <label>General Remarks / Notes</label>
+                <textarea id="statusRemarks" rows="2" placeholder="Any additional notes..."></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('statusChangeModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveStatusChange()"><i class="fas fa-check"></i> Confirm Change</button>
+        </div>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div class="modal-overlay" id="historyModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title"><i class="fas fa-history" style="margin-right: 8px; color: var(--info);"></i>Cheque History & Tracking</h2>
+            <button class="modal-close" onclick="closeModal('historyModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" id="historyModalBody"></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('historyModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Other Modals -->
 <div class="modal-overlay" id="chequeBookModal">
     <div class="modal">
         <div class="modal-header">
             <h2 class="modal-title">New Cheque Book</h2>
-            <button class="modal-close" onclick="closeModal('chequeBookModal')">
-                <i class="fas fa-times"></i>
-            </button>
+            <button class="modal-close" onclick="closeModal('chequeBookModal')"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
-            <div class="form-group">
-                <label>Book Name *</label>
-                <input type="text" id="bookName" required>
-            </div>
+            <div class="form-group"><label>Book Name *</label><input type="text" id="bookName" required></div>
             <div class="form-row">
-                <div class="form-group">
-                    <label>Start Number *</label>
-                    <input type="number" id="bookStart" required>
-                </div>
-                <div class="form-group">
-                    <label>End Number *</label>
-                    <input type="number" id="bookEnd" required>
-                </div>
+                <div class="form-group"><label>Start Number *</label><input type="number" id="bookStart" required></div>
+                <div class="form-group"><label>End Number *</label><input type="number" id="bookEnd" required></div>
             </div>
-            <div class="form-group">
-                <label>Bank</label>
-                <input type="text" id="bookBank">
-            </div>
+            <div class="form-group"><label>Bank</label><input type="text" id="bookBank"></div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('chequeBookModal')">Cancel</button>
-            <button class="btn btn-primary" onclick="saveChequeBook()">
-                <i class="fas fa-save"></i> Create
-            </button>
+            <button class="btn btn-primary" onclick="saveChequeBook()"><i class="fas fa-save"></i> Create</button>
         </div>
     </div>
 </div>
@@ -1377,29 +1471,15 @@ tr:hover {
     <div class="modal">
         <div class="modal-header">
             <h2 class="modal-title">Invite New User</h2>
-            <button class="modal-close" onclick="closeModal('inviteUserModal')">
-                <i class="fas fa-times"></i>
-            </button>
+            <button class="modal-close" onclick="closeModal('inviteUserModal')"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
-            <div class="form-group">
-                <label>Email *</label>
-                <input type="email" id="inviteEmail" required>
-            </div>
-            <div class="form-group">
-                <label>Role</label>
-                <select id="inviteRole">
-                    <option value="maker">Maker</option>
-                    <option value="checker">Checker</option>
-                    <option value="admin">Admin</option>
-                </select>
-            </div>
+            <div class="form-group"><label>Email *</label><input type="email" id="inviteEmail" required></div>
+            <div class="form-group"><label>Role</label><select id="inviteRole"><option value="maker">Maker</option><option value="checker">Checker</option><option value="admin">Admin</option></select></div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('inviteUserModal')">Cancel</button>
-            <button class="btn btn-primary" onclick="inviteUser()">
-                <i class="fas fa-paper-plane"></i> Send
-            </button>
+            <button class="btn btn-primary" onclick="inviteUser()"><i class="fas fa-paper-plane"></i> Send</button>
         </div>
     </div>
 </div>
@@ -1407,42 +1487,21 @@ tr:hover {
 <div class="modal-overlay" id="editBankModal">
     <div class="modal">
         <div class="modal-header">
-            <h2 class="modal-title">
-                <i class="fas fa-university" style="margin-right: 8px;"></i>Edit Bank Account
-            </h2>
-            <button class="modal-close" onclick="closeModal('editBankModal')">
-                <i class="fas fa-times"></i>
-            </button>
+            <h2 class="modal-title"><i class="fas fa-university" style="margin-right: 8px;"></i>Edit Bank Account</h2>
+            <button class="modal-close" onclick="closeModal('editBankModal')"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <input type="hidden" id="editBankId">
-            <div class="form-group">
-                <label>Bank Name *</label>
-                <input type="text" id="editBankName" required>
-            </div>
-            <div class="form-group">
-                <label>Account Type</label>
-                <select id="editBankType">
-                    <option>Current A/c</option>
-                    <option>Savings A/c</option>
-                </select>
-            </div>
+            <div class="form-group"><label>Bank Name *</label><input type="text" id="editBankName" required></div>
+            <div class="form-group"><label>Account Type</label><select id="editBankType"><option>Current A/c</option><option>Savings A/c</option></select></div>
             <div class="form-row">
-                <div class="form-group">
-                    <label>Account Number *</label>
-                    <input type="text" id="editBankAccount" required>
-                </div>
-                <div class="form-group">
-                    <label>IFSC Code *</label>
-                    <input type="text" id="editBankIFSC" required>
-                </div>
+                <div class="form-group"><label>Account Number *</label><input type="text" id="editBankAccount" required></div>
+                <div class="form-group"><label>IFSC Code *</label><input type="text" id="editBankIFSC" required></div>
             </div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('editBankModal')">Cancel</button>
-            <button class="btn btn-primary" onclick="saveBankEdit()">
-                <i class="fas fa-save"></i> Save Changes
-            </button>
+            <button class="btn btn-primary" onclick="saveBankEdit()"><i class="fas fa-save"></i> Save Changes</button>
         </div>
     </div>
 </div>
@@ -1450,37 +1509,18 @@ tr:hover {
 <div class="modal-overlay" id="editUserModal">
     <div class="modal">
         <div class="modal-header">
-            <h2 class="modal-title">
-                <i class="fas fa-user-edit" style="margin-right: 8px;"></i>Edit User
-            </h2>
-            <button class="modal-close" onclick="closeModal('editUserModal')">
-                <i class="fas fa-times"></i>
-            </button>
+            <h2 class="modal-title"><i class="fas fa-user-edit" style="margin-right: 8px;"></i>Edit User</h2>
+            <button class="modal-close" onclick="closeModal('editUserModal')"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <input type="hidden" id="editUserId">
-            <div class="form-group">
-                <label>Full Name *</label>
-                <input type="text" id="editUserName" required>
-            </div>
-            <div class="form-group">
-                <label>Email *</label>
-                <input type="email" id="editUserEmail" required>
-            </div>
-            <div class="form-group">
-                <label>Role *</label>
-                <select id="editUserRole">
-                    <option value="admin">Admin</option>
-                    <option value="maker">Maker</option>
-                    <option value="checker">Checker</option>
-                </select>
-            </div>
+            <div class="form-group"><label>Full Name *</label><input type="text" id="editUserName" required></div>
+            <div class="form-group"><label>Email *</label><input type="email" id="editUserEmail" required></div>
+            <div class="form-group"><label>Role *</label><select id="editUserRole"><option value="admin">Admin</option><option value="maker">Maker</option><option value="checker">Checker</option></select></div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('editUserModal')">Cancel</button>
-            <button class="btn btn-primary" onclick="saveUserEdit()">
-                <i class="fas fa-save"></i> Save Changes
-            </button>
+            <button class="btn btn-primary" onclick="saveUserEdit()"><i class="fas fa-save"></i> Save Changes</button>
         </div>
     </div>
 </div>
@@ -1488,40 +1528,18 @@ tr:hover {
 <div class="modal-overlay" id="editEscalationModal">
     <div class="modal">
         <div class="modal-header">
-            <h2 class="modal-title">
-                <i class="fas fa-route" style="margin-right: 8px;"></i>Edit Escalation Rule
-            </h2>
-            <button class="modal-close" onclick="closeModal('editEscalationModal')">
-                <i class="fas fa-times"></i>
-            </button>
+            <h2 class="modal-title"><i class="fas fa-route" style="margin-right: 8px;"></i>Edit Escalation Rule</h2>
+            <button class="modal-close" onclick="closeModal('editEscalationModal')"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <input type="hidden" id="editEscId">
-            <div class="form-group">
-                <label>Condition</label>
-                <select id="editEscCondition">
-                    <option>Status is</option>
-                    <option>Amount > </option>
-                    <option>Days pending > </option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Value</label>
-                <input type="text" id="editEscValue">
-            </div>
-            <div class="form-group">
-                <label>Action</label>
-                <select id="editEscAction">
-                    <option>Notify Manager</option>
-                    <option>Require Approval</option>
-                </select>
-            </div>
+            <div class="form-group"><label>Condition</label><select id="editEscCondition"><option>Status is</option><option>Amount > </option><option>Days pending > </option></select></div>
+            <div class="form-group"><label>Value</label><input type="text" id="editEscValue"></div>
+            <div class="form-group"><label>Action</label><select id="editEscAction"><option>Notify Manager</option><option>Require Approval</option></select></div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('editEscalationModal')">Cancel</button>
-            <button class="btn btn-primary" onclick="saveEscalationEdit()">
-                <i class="fas fa-save"></i> Save
-            </button>
+            <button class="btn btn-primary" onclick="saveEscalationEdit()"><i class="fas fa-save"></i> Save</button>
         </div>
     </div>
 </div>
@@ -1529,33 +1547,17 @@ tr:hover {
 <div class="modal-overlay" id="editCustomFieldModal">
     <div class="modal">
         <div class="modal-header">
-            <h2 class="modal-title">
-                <i class="fas fa-edit" style="margin-right: 8px;"></i>Edit Custom Field
-            </h2>
-            <button class="modal-close" onclick="closeModal('editCustomFieldModal')">
-                <i class="fas fa-times"></i>
-            </button>
+            <h2 class="modal-title"><i class="fas fa-edit" style="margin-right: 8px;"></i>Edit Custom Field</h2>
+            <button class="modal-close" onclick="closeModal('editCustomFieldModal')"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <input type="hidden" id="editFieldId">
-            <div class="form-group">
-                <label>Field Name *</label>
-                <input type="text" id="editFieldName" required>
-            </div>
-            <div class="form-group">
-                <label>Field Type *</label>
-                <select id="editFieldType">
-                    <option>Text</option>
-                    <option>Number</option>
-                    <option>Date</option>
-                </select>
-            </div>
+            <div class="form-group"><label>Field Name *</label><input type="text" id="editFieldName" required></div>
+            <div class="form-group"><label>Field Type *</label><select id="editFieldType"><option>Text</option><option>Number</option><option>Date</option></select></div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('editCustomFieldModal')">Cancel</button>
-            <button class="btn btn-primary" onclick="saveCustomFieldEdit()">
-                <i class="fas fa-save"></i> Save
-            </button>
+            <button class="btn btn-primary" onclick="saveCustomFieldEdit()"><i class="fas fa-save"></i> Save</button>
         </div>
     </div>
 </div>
@@ -1563,29 +1565,17 @@ tr:hover {
 <div class="modal-overlay" id="editCustomStatusModal">
     <div class="modal">
         <div class="modal-header">
-            <h2 class="modal-title">
-                <i class="fas fa-tag" style="margin-right: 8px;"></i>Edit Custom Status
-            </h2>
-            <button class="modal-close" onclick="closeModal('editCustomStatusModal')">
-                <i class="fas fa-times"></i>
-            </button>
+            <h2 class="modal-title"><i class="fas fa-tag" style="margin-right: 8px;"></i>Edit Custom Status</h2>
+            <button class="modal-close" onclick="closeModal('editCustomStatusModal')"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <input type="hidden" id="editStatusId">
-            <div class="form-group">
-                <label>Status Name *</label>
-                <input type="text" id="editStatusName" required>
-            </div>
-            <div class="form-group">
-                <label>Color</label>
-                <input type="color" id="editStatusColor" style="height:40px; width:100%;">
-            </div>
+            <div class="form-group"><label>Status Name *</label><input type="text" id="editStatusName" required></div>
+            <div class="form-group"><label>Color</label><input type="color" id="editStatusColor" style="height:40px; width:100%;"></div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('editCustomStatusModal')">Cancel</button>
-            <button class="btn btn-primary" onclick="saveCustomStatusEdit()">
-                <i class="fas fa-save"></i> Save
-            </button>
+            <button class="btn btn-primary" onclick="saveCustomStatusEdit()"><i class="fas fa-save"></i> Save</button>
         </div>
     </div>
 </div>
@@ -1611,21 +1601,39 @@ const auth = firebase.auth();
 let allCheques = [];
 let currentUser = null;
 
-// Helper function to normalize status
-function normalizeStatus(status) {
-    if (!status) return 'draft';
-    // Convert to lowercase and replace spaces with hyphens
-    return status.toLowerCase().replace(/\s+/g, '-');
-}
-
-// Helper function to display status nicely
-function displayStatus(status) {
-    const normalized = normalizeStatus(status);
-    // Convert back to title case with spaces
-    return normalized.split('-').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-}
+// Status Field Configurations
+const statusFieldConfigs = {
+    'in-hand': [
+        { id: 'receivedDate', label: 'Received Date', type: 'date', required: true },
+        { id: 'receivedFrom', label: 'Received From (Person/Dept)', type: 'text', required: true }
+    ],
+    'issued': [
+        { id: 'issuedDate', label: 'Issue Date', type: 'date', required: true },
+        { id: 'issuedTo', label: 'Issued To (Payee/Person)', type: 'text', required: true },
+        { id: 'deliveryMode', label: 'Delivery Mode', type: 'select', options: ['Hand Delivered', 'Courier', 'Registered Post', 'Email/Scan'], required: true },
+        { id: 'trackingNo', label: 'Tracking / AWB Number', type: 'text', required: false }
+    ],
+    'deposited': [
+        { id: 'depositDate', label: 'Deposit Date', type: 'date', required: true },
+        { id: 'depositBranch', label: 'Bank Branch Name', type: 'text', required: true },
+        { id: 'slipNumber', label: 'Deposit Slip / Challan No.', type: 'text', required: true }
+    ],
+    'cleared': [
+        { id: 'clearDate', label: 'Clearance Date', type: 'date', required: true },
+        { id: 'utrNumber', label: 'Bank UTR / Reference No.', type: 'text', required: true },
+        { id: 'clearedAmount', label: 'Cleared Amount (if partial)', type: 'number', required: false }
+    ],
+    'returned': [
+        { id: 'returnDate', label: 'Return Date', type: 'date', required: true },
+        { id: 'returnReason', label: 'Bank Reason Code', type: 'select', options: ['Insufficient Funds (NSF)', 'Signature Mismatch', 'Account Closed', 'Stop Payment', 'Stale Dated', 'Other'], required: true },
+        { id: 'bankCharges', label: 'Bank Penalty Charges (₹)', type: 'number', required: false }
+    ],
+    'stopped': [
+        { id: 'stopDate', label: 'Stop Request Date', type: 'date', required: true },
+        { id: 'stopReason', label: 'Reason for Stopping', type: 'select', options: ['Lost Cheque', 'Stolen Cheque', 'Dispute with Payee', 'Duplicate Issued', 'Other'], required: true },
+        { id: 'complaintRef', label: 'Police/FIR Reference (if applicable)', type: 'text', required: false }
+    ]
+};
 
 // Authentication
 document.addEventListener('DOMContentLoaded', () => {
@@ -1641,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('appContainer').classList.add('active');
             loadAllChequesData();
-            showToast('Welcome!', 'success');
+            showToast('Welcome back!', 'success');
         } else {
             document.getElementById('appContainer').classList.remove('active');
             document.getElementById('loginScreen').classList.remove('hidden');
@@ -1651,57 +1659,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function handleLogin(e) {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    
-    auth.signInWithEmailAndPassword(email, password)
+    auth.signInWithEmailAndPassword(document.getElementById('loginEmail').value, document.getElementById('loginPassword').value)
         .catch(err => showToast('Login failed: ' + err.message, 'error'));
 }
 
 function handleSignup(e) {
     e.preventDefault();
-    const name = document.getElementById('signupName').value;
-    const email = document.getElementById('signupEmail').value;
-    const password = document.getElementById('signupPassword').value;
-    
-    auth.createUserWithEmailAndPassword(email, password)
-        .then(cred => cred.user.updateProfile({ displayName: name }))
+    auth.createUserWithEmailAndPassword(document.getElementById('signupEmail').value, document.getElementById('signupPassword').value)
+        .then(cred => cred.user.updateProfile({ displayName: document.getElementById('signupName').value }))
         .catch(err => showToast('Signup failed: ' + err.message, 'error'));
 }
 
 function signInWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider)
-        .catch(err => showToast('Google sign-in failed: ' + err.message, 'error'));
+    auth.signInWithPopup(provider).catch(err => showToast('Google sign-in failed: ' + err.message, 'error'));
 }
 
-function logout() {
-    auth.signOut();
-}
-
-function showSignup() {
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('signupScreen').classList.remove('hidden');
-}
-
-function showLogin() {
-    document.getElementById('signupScreen').classList.add('hidden');
-    document.getElementById('loginScreen').classList.remove('hidden');
-}
+function logout() { auth.signOut(); }
+function showSignup() { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('signupScreen').classList.remove('hidden'); }
+function showLogin() { document.getElementById('signupScreen').classList.add('hidden'); document.getElementById('loginScreen').classList.remove('hidden'); }
 
 // Navigation
 function showView(viewName, navElement) {
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    if (navElement) navElement.classList.add('active');
     
-    if (navElement) {
-        navElement.classList.add('active');
-    }
-    
-    document.querySelectorAll('.view-content').forEach(view => {
-        view.classList.remove('active');
-    });
+    document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
     
     const viewMap = {
         'dashboard': 'dashboardView',
@@ -1721,223 +1704,259 @@ function showView(viewName, navElement) {
     
     const viewId = viewMap[viewName];
     if (viewId) {
-        const selectedView = document.getElementById(viewId);
-        if (selectedView) {
-            selectedView.classList.add('active');
-            
-            const titles = {
-                'dashboard': 'Dashboard',
-                'all-cheques': 'All Cheques',
-                'in-hand': 'In Hand',
-                'returned': 'Returned',
-                'recycle': 'Recycle Bin',
-                'kanban': 'Kanban Board',
-                'timeline': 'Timeline',
-                'analytics': 'Analytics',
-                'books': 'Cheque Books',
-                'reports': 'Reports',
-                'aging': 'Aging Report',
-                'audit': 'Audit Trail',
-                'settings': 'Settings'
-            };
-            
-            document.getElementById('pageTitle').textContent = titles[viewName] || viewName;
-            
-            setTimeout(() => {
-                if (viewName === 'dashboard') updateDashboard();
-                if (viewName === 'all-cheques') renderAllCheques();
-                if (viewName === 'in-hand') renderInHand();
-                if (viewName === 'returned') renderReturned();
-                if (viewName === 'recycle') renderRecycle();
-                if (viewName === 'analytics') renderAnalytics();
-                if (viewName === 'audit') renderAudit();
-            }, 100);
-        }
+        document.getElementById(viewId).classList.add('active');
+        document.getElementById('pageTitle').textContent = viewName.charAt(0).toUpperCase() + viewName.slice(1).replace('-', ' ');
+        
+        setTimeout(() => {
+            if (viewName === 'dashboard') updateDashboard();
+            if (viewName === 'all-cheques') renderAllCheques();
+            if (viewName === 'in-hand') renderInHand();
+            if (viewName === 'returned') renderReturned();
+            if (viewName === 'recycle') renderRecycle();
+            if (viewName === 'analytics') renderAnalytics();
+            if (viewName === 'audit') renderAudit();
+        }, 100);
     }
 }
 
 function switchAdminTab(tabName, btn) {
-    document.querySelectorAll('.admin-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    if (btn) {
-        btn.classList.add('active');
-    }
-    
-    document.querySelectorAll('.admin-panel').forEach(panel => {
-        panel.classList.remove('active');
-    });
-    
-    const selectedPanel = document.getElementById('tab-' + tabName);
-    if (selectedPanel) {
-        selectedPanel.classList.add('active');
-    }
+    document.querySelectorAll('.admin-tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.admin-panel').forEach(panel => panel.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + tabName).classList.add('active');
 }
 
-// Firebase Data Loading
+// Data Loading
 async function loadAllChequesData() {
     try {
         const snapshot = await db.collection('cheques').orderBy('createdAt', 'desc').get();
-        
         allCheques = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            // Normalize status to lowercase with hyphens
-            const rawStatus = data.status || 'draft';
-            const normalizedStatus = normalizeStatus(rawStatus);
-            
-            allCheques.push({
-                id: doc.id,
-                number: data.number || '',
-                payee: data.payee || '',
-                amount: data.amount || 0,
-                bank: data.bank || '',
-                date: data.date || '',
-                status: normalizedStatus, // Always store normalized
-                notes: data.notes || '',
-                returnDetails: data.returnDetails || {},
-                deletedAt: data.deletedAt || null,
-                displayStatus: displayStatus(normalizedStatus), // For display
-                returnReason: (data.returnDetails && (data.returnDetails.returnReason || data.returnDetails.reason)) 
-                    ? (data.returnDetails.returnReason || data.returnDetails.reason) 
-                    : 'N/A'
-            });
+            allCheques.push({ id: doc.id, ...data });
         });
-        
-        console.log('Loaded cheques:', allCheques);
         updateDashboard();
         renderAllCheques();
         renderInHand();
         renderReturned();
         renderRecycle();
-        renderAnalytics();
         updateFilterBanks();
-        
     } catch (error) {
         console.error('Error loading data:', error);
-        showToast('Error loading data: ' + error.message, 'error');
+        showToast('Error loading data', 'error');
     }
 }
 
-// Cheque Operations
+// Save Cheque
 async function saveCheque() {
     const number = document.getElementById('chequeNumber').value.trim();
     const payee = document.getElementById('chequePayee').value.trim();
     const amount = parseFloat(document.getElementById('chequeAmount').value);
     const bank = document.getElementById('chequeBank').value.trim();
     const date = document.getElementById('chequeDate').value;
-    const status = document.getElementById('chequeStatus').value; // Already normalized from select
+    const status = document.getElementById('chequeStatus').value;
     const notes = document.getElementById('chequeNotes').value.trim();
 
     if (!number || !payee || !amount || !bank || !date) {
-        showToast('Please fill all required fields', 'error');
-        return;
+        return showToast('Fill all required fields', 'error');
     }
 
     try {
+        const historyEntry = {
+            action: 'Created',
+            details: `Cheque #${number} created for ${payee}`,
+            timestamp: new Date().toISOString(),
+            user: currentUser ? currentUser.email : 'system'
+        };
+        
         await db.collection('cheques').add({
-            number: number,
-            payee: payee,
-            amount: amount,
-            bank: bank,
-            date: date,
-            status: status, // Already normalized
-            notes: notes,
+            number, payee, amount, bank, date, status, notes,
+            history: [historyEntry],
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            createdBy: currentUser ? currentUser.email : 'anonymous',
-            returnDetails: {},
-            deletedAt: null
+            createdBy: currentUser ? currentUser.email : 'anonymous'
         });
         
         closeModal('addChequeModal');
         document.getElementById('addChequeForm').reset();
         document.getElementById('chequeDate').valueAsDate = new Date();
-        
         await loadAllChequesData();
         showToast('Cheque saved successfully', 'success');
-        
     } catch (error) {
-        console.error('Error saving cheque:', error);
-        showToast('Error saving cheque: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
     }
 }
 
-async function deleteCheque(id) {
-    if (!confirm('Are you sure you want to move this cheque to Recycle Bin?')) {
+// Status Change System
+function openStatusModal(chequeId, currentStatus) {
+    document.getElementById('statusChequeId').value = chequeId;
+    document.getElementById('newStatusSelect').value = '';
+    document.getElementById('statusRemarks').value = '';
+    document.getElementById('dynamicStatusFields').innerHTML = '';
+    openModal('statusChangeModal');
+}
+
+function renderStatusFields() {
+    const status = document.getElementById('newStatusSelect').value;
+    const container = document.getElementById('dynamicStatusFields');
+    const config = statusFieldConfigs[status];
+    
+    if (!config) {
+        container.innerHTML = '';
         return;
     }
     
+    container.innerHTML = config.map(field => {
+        let inputHtml = '';
+        if (field.type === 'select') {
+            inputHtml = `<select id="field_${field.id}" ${field.required ? 'required' : ''}><option value="">Select...</option>${field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}</select>`;
+        } else if (field.type === 'textarea') {
+            inputHtml = `<textarea id="field_${field.id}" rows="2" ${field.required ? 'required' : ''}></textarea>`;
+        } else {
+            inputHtml = `<input type="${field.type}" id="field_${field.id}" ${field.required ? 'required' : ''}>`;
+        }
+        return `<div class="form-group"><label>${field.label} ${field.required ? '*' : ''}</label>${inputHtml}</div>`;
+    }).join('');
+}
+
+async function saveStatusChange() {
+    const chequeId = document.getElementById('statusChequeId').value;
+    const newStatus = document.getElementById('newStatusSelect').value;
+    const remarks = document.getElementById('statusRemarks').value.trim();
+    
+    if (!newStatus) return showToast('Please select a new status', 'error');
+    
+    const config = statusFieldConfigs[newStatus];
+    const fieldData = {};
+    let isValid = true;
+    
+    if (config) {
+        config.forEach(field => {
+            const el = document.getElementById(`field_${field.id}`);
+            if (field.required && !el.value) isValid = false;
+            if (el.value) fieldData[field.id] = el.value;
+        });
+    }
+    
+    if (!isValid) return showToast('Please fill all required fields for this status', 'error');
+    
     try {
-        await db.collection('cheques').doc(id).update({
-            deletedAt: firebase.firestore.FieldValue.serverTimestamp()
+        const cheque = allCheques.find(c => c.id === chequeId);
+        if (!cheque) return showToast('Cheque not found', 'error');
+        
+        const updateData = {
+            status: newStatus,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        Object.keys(fieldData).forEach(key => {
+            updateData[key] = fieldData[key];
         });
         
-        await loadAllChequesData();
-        showToast('Cheque moved to Recycle Bin', 'info');
+        if (newStatus === 'returned') {
+            updateData.returnDetails = {
+                status: 'returned',
+                reason: fieldData.returnReason,
+                date: fieldData.returnDate,
+                charges: parseFloat(fieldData.bankCharges) || 0,
+                notes: remarks
+            };
+        }
         
+        const historyEntry = {
+            action: newStatus.charAt(0).toUpperCase() + newStatus.slice(1).replace('-', ' '),
+            details: `Changed status to ${newStatus}. ${Object.entries(fieldData).map(([k,v]) => `${k}: ${v}`).join(', ')} ${remarks ? '| Remarks: ' + remarks : ''}`,
+            timestamp: new Date().toISOString(),
+            user: currentUser ? currentUser.email : 'system',
+            previousStatus: cheque.status
+        };
+        
+        updateData.history = firebase.firestore.FieldValue.arrayUnion(historyEntry);
+        
+        await db.collection('cheques').doc(chequeId).update(updateData);
+        
+        await db.collection('auditLog').add({
+            action: 'status_change',
+            chequeNumber: cheque.number,
+            details: historyEntry.details,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            user: currentUser ? currentUser.email : 'system'
+        });
+        
+        showToast(`Status changed to ${newStatus} successfully!`, 'success');
+        closeModal('statusChangeModal');
+        await loadAllChequesData();
     } catch (error) {
-        console.error('Error deleting cheque:', error);
+        console.error('Error updating status:', error);
         showToast('Error: ' + error.message, 'error');
+    }
+}
+
+// View History
+function viewHistory(chequeId) {
+    const cheque = allCheques.find(c => c.id === chequeId);
+    if (!cheque) return;
+    
+    const history = cheque.history || [];
+    let html = `<div style="margin-bottom: 20px; padding: 15px; background: var(--light); border-radius: 10px;">
+        <h3 style="margin-bottom: 10px;">Cheque #${cheque.number}</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+            <div><strong>Payee:</strong> ${cheque.payee}</div>
+            <div><strong>Amount:</strong> ₹${(cheque.amount || 0).toLocaleString('en-IN')}</div>
+            <div><strong>Bank:</strong> ${cheque.bank}</div>
+            <div><strong>Current Status:</strong> <span class="status-badge status-${cheque.status}">${cheque.status}</span></div>
+        </div>
+    </div>
+    <h4 style="margin-bottom: 15px; color: var(--gray); font-size: 14px; text-transform: uppercase;">Action Timeline</h4>
+    <div class="history-timeline">`;
+    
+    if (history.length === 0) {
+        html += '<p style="color: var(--gray);">No history recorded yet.</p>';
+    } else {
+        history.slice().reverse().forEach(h => {
+            html += `
+                <div class="history-item">
+                    <div class="history-header">
+                        <span class="history-action">${h.action}</span>
+                        <span class="history-time">${formatDate(h.timestamp)} by ${h.user ? h.user.split('@')[0] : 'System'}</span>
+                    </div>
+                    <div class="history-details">${h.details || 'No details provided.'}</div>
+                </div>`;
+        });
+    }
+    html += '</div>';
+    
+    document.getElementById('historyModalBody').innerHTML = html;
+    openModal('historyModal');
+}
+
+// Delete / Restore
+async function deleteCheque(id) {
+    if (confirm('Move to Recycle Bin?')) {
+        await db.collection('cheques').doc(id).update({ deletedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        await loadAllChequesData();
+        showToast('Moved to Recycle Bin', 'info');
     }
 }
 
 async function restoreCheque(id) {
-    try {
-        await db.collection('cheques').doc(id).update({
-            deletedAt: null
-        });
-        
-        await loadAllChequesData();
-        showToast('Cheque restored', 'success');
-        
-    } catch (error) {
-        console.error('Error restoring cheque:', error);
-        showToast('Error: ' + error.message, 'error');
-    }
+    await db.collection('cheques').doc(id).update({ deletedAt: null });
+    await loadAllChequesData();
+    showToast('Cheque restored', 'success');
 }
 
 // Render Functions
 function updateDashboard() {
     const active = allCheques.filter(c => !c.deletedAt);
-    // Use normalized status for comparison
-    const inHand = active.filter(c => c.status === 'in-hand');
-    const returned = active.filter(c => c.status === 'returned');
-    
-    const totalValue = active.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
-    
     document.getElementById('totalCheques').textContent = active.length;
-    document.getElementById('inHandCount').textContent = inHand.length;
-    document.getElementById('returnedCount').textContent = returned.length;
-    document.getElementById('totalValue').textContent = Math.round(totalValue).toLocaleString('en-IN');
+    document.getElementById('inHandCount').textContent = active.filter(c => c.status === 'in-hand').length;
+    document.getElementById('returnedCount').textContent = active.filter(c => c.status === 'returned').length;
+    const tv = active.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    document.getElementById('totalValue').textContent = Math.round(tv).toLocaleString('en-IN');
     
     const recent = active.slice(0, 5);
-    const recentHtml = recent.length > 0 
-        ? `<div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Payee</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${recent.map(c => `
-                        <tr>
-                            <td>${c.number}</td>
-                            <td>${c.payee}</td>
-                            <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
-                            <td><span class="status-badge status-${c.status}">${c.displayStatus}</span></td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>`
-        : '<div class="empty-state"><i class="fas fa-receipt"></i><h3>No recent activity</h3></div>';
-    
-    document.getElementById('recentActivity').innerHTML = recentHtml;
+    document.getElementById('recentActivity').innerHTML = recent.length ?
+        `<div class="table-container"><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Status</th></tr></thead><tbody>${recent.map(c => `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td><td><span class="status-badge status-${c.status}">${c.status}</span></td></tr>`).join('')}</tbody></table></div>` :
+        '<div class="empty-state"><i class="fas fa-receipt"></i><h3>No recent activity</h3></div>';
 }
 
 function renderAllCheques() {
@@ -1947,14 +1966,8 @@ function renderAllCheques() {
     const bankFilter = document.getElementById('filterBank').value;
     
     let filtered = allCheques.filter(c => !c.deletedAt);
-    
-    if (statusFilter) {
-        filtered = filtered.filter(c => c.status === statusFilter);
-    }
-    
-    if (bankFilter) {
-        filtered = filtered.filter(c => c.bank === bankFilter);
-    }
+    if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
+    if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
     
     if (filtered.length === 0) {
         tbody.innerHTML = '';
@@ -1971,18 +1984,12 @@ function renderAllCheques() {
             <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
             <td>${c.bank}</td>
             <td>${formatDate(c.date)}</td>
-            <td><span class="status-badge status-${c.status}">${c.displayStatus}</span></td>
+            <td><span class="status-badge status-${c.status}">${c.status}</span></td>
             <td>
                 <div class="cheque-actions">
-                    <button class="action-btn btn-view" onclick="viewCheque('${c.id}')" title="View">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="action-btn btn-edit" onclick="editCheque('${c.id}')" title="Edit">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-btn btn-delete" onclick="deleteCheque('${c.id}')" title="Delete">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <button class="action-btn btn-change" data-tooltip="Change Status" onclick="openStatusModal('${c.id}', '${c.status}')"><i class="fas fa-exchange-alt"></i></button>
+                    <button class="action-btn btn-history" data-tooltip="View History" onclick="viewHistory('${c.id}')"><i class="fas fa-history"></i></button>
+                    <button class="action-btn btn-delete" data-tooltip="Delete" onclick="deleteCheque('${c.id}')"><i class="fas fa-trash"></i></button>
                 </div>
             </td>
         </tr>
@@ -1990,98 +1997,51 @@ function renderAllCheques() {
 }
 
 function renderInHand() {
-    // Use normalized status for comparison
     const list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
-    const tbody = document.getElementById('inHandTable');
-    const emptyState = document.getElementById('inHandEmpty');
-    
-    console.log('In Hand cheques:', list);
-    
-    if (list.length === 0) {
-        tbody.innerHTML = '';
-        emptyState.classList.remove('hidden');
-        return;
-    }
-    
-    emptyState.classList.add('hidden');
-    
-    tbody.innerHTML = list.map(c => `
+    document.getElementById('inHandTable').innerHTML = list.map(c => `
         <tr>
             <td>${c.number}</td>
             <td>${c.payee}</td>
             <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
             <td>${c.bank}</td>
             <td>${formatDate(c.date)}</td>
-            <td>
-                <button class="btn btn-sm btn-primary" onclick="updateChequeStatus('${c.id}', 'issued')">
-                    Issue
-                </button>
-            </td>
+            <td><button class="btn btn-sm btn-primary" onclick="openStatusModal('${c.id}', '${c.status}')">Issue</button></td>
         </tr>
     `).join('');
+    document.getElementById('inHandEmpty').classList.toggle('hidden', list.length > 0);
 }
 
 function renderReturned() {
     const list = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
-    const tbody = document.getElementById('returnedTable');
-    const emptyState = document.getElementById('returnedEmpty');
-    
-    if (list.length === 0) {
-        tbody.innerHTML = '';
-        emptyState.classList.remove('hidden');
-        return;
-    }
-    
-    emptyState.classList.add('hidden');
-    
-    tbody.innerHTML = list.map(c => `
+    document.getElementById('returnedTable').innerHTML = list.map(c => `
         <tr>
             <td>${c.number}</td>
             <td>${c.payee}</td>
-            <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
-            <td>${c.bank}</td>
-            <td>${c.returnReason}</td>
-            <td>
-                <button class="btn btn-sm btn-secondary" onclick="editCheque('${c.id}')">
-                    Reissue
-                </button>
-            </td>
+            <td>${Math.round(c.amount).toLocaleString('en-IN')}</td>
+            <td>${c.returnDetails?.reason || 'N/A'}</td>
+            <td><button class="btn btn-sm btn-secondary" onclick="openStatusModal('${c.id}', '${c.status}')">Reissue</button></td>
         </tr>
     `).join('');
+    document.getElementById('returnedEmpty').classList.toggle('hidden', list.length > 0);
 }
 
 function renderRecycle() {
     const list = allCheques.filter(c => c.deletedAt);
-    const tbody = document.getElementById('recycleTable');
-    const emptyState = document.getElementById('recycleEmpty');
-    
-    if (list.length === 0) {
-        tbody.innerHTML = '';
-        emptyState.classList.remove('hidden');
-        return;
-    }
-    
-    emptyState.classList.add('hidden');
-    
-    tbody.innerHTML = list.map(c => `
+    document.getElementById('recycleTable').innerHTML = list.map(c => `
         <tr>
             <td>${c.number}</td>
             <td>${c.payee}</td>
             <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
             <td>${formatDate(c.deletedAt)}</td>
-            <td>
-                <button class="btn btn-sm btn-success" onclick="restoreCheque('${c.id}')">
-                    Restore
-                </button>
-            </td>
+            <td><button class="btn btn-sm btn-success" onclick="restoreCheque('${c.id}')">Restore</button></td>
         </tr>
     `).join('');
+    document.getElementById('recycleEmpty').classList.toggle('hidden', list.length > 0);
 }
 
 function renderAnalytics() {
     const active = allCheques.filter(c => !c.deletedAt);
     const totalValue = active.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
-    
     document.getElementById('analyticsWidgets').innerHTML = `
         <div class="widget">
             <div class="widget-title">Total Value</div>
@@ -2091,57 +2051,12 @@ function renderAnalytics() {
 }
 
 function renderAudit() {
-    document.getElementById('auditTrail').innerHTML = '<div style="padding:20px; text-align:center; color:var(--gray);">Audit trail will appear here</div>';
+    document.getElementById('auditTrail').innerHTML = '<div style="padding:20px; text-align:center; color:var(--gray);">Audit logs are saved in Firestore "auditLog" collection.</div>';
 }
 
 function updateFilterBanks() {
     const banks = [...new Set(allCheques.filter(c => !c.deletedAt).map(c => c.bank).filter(Boolean))];
-    const select = document.getElementById('filterBank');
-    const currentValue = select.value;
-    
-    select.innerHTML = '<option value="">All Banks</option>' + 
-        banks.map(b => `<option value="${b}">${b}</option>`).join('');
-    
-    select.value = currentValue;
-}
-
-function viewCheque(id) {
-    const c = allCheques.find(x => x.id === id);
-    if (!c) return;
-    
-    alert(`Cheque #${c.number}\nPayee: ${c.payee}\nAmount: ₹${c.amount}\nBank: ${c.bank}\nStatus: ${c.displayStatus}\nDate: ${formatDate(c.date)}\nNotes: ${c.notes || 'None'}`);
-}
-
-async function editCheque(id) {
-    const c = allCheques.find(x => x.id === id);
-    if (!c) return;
-    
-    document.getElementById('chequeNumber').value = c.number;
-    document.getElementById('chequePayee').value = c.payee;
-    document.getElementById('chequeAmount').value = c.amount;
-    document.getElementById('chequeBank').value = c.bank;
-    document.getElementById('chequeDate').value = c.date;
-    document.getElementById('chequeStatus').value = c.status; // Use normalized status
-    document.getElementById('chequeNotes').value = c.notes || '';
-    
-    document.getElementById('addChequeForm').dataset.editId = id;
-    openModal('addChequeModal');
-}
-
-async function updateChequeStatus(id, newStatus) {
-    try {
-        await db.collection('cheques').doc(id).update({
-            status: newStatus, // Already normalized
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        await loadAllChequesData();
-        showToast(`Status updated to ${displayStatus(newStatus)}`, 'success');
-        
-    } catch (error) {
-        console.error('Error updating status:', error);
-        showToast('Error: ' + error.message, 'error');
-    }
+    document.getElementById('filterBank').innerHTML = '<option value="">All Banks</option>' + banks.map(b => `<option value="${b}">${b}</option>`).join('');
 }
 
 // Admin Functions
@@ -2156,13 +2071,11 @@ function editBank(bankId) {
     if (nameMatch && detailMatch) {
         const fullName = nameMatch[1].trim();
         const nameParts = fullName.split(' - ');
-        
         document.getElementById('editBankId').value = bankId;
         document.getElementById('editBankName').value = nameParts[0].trim();
         document.getElementById('editBankType').value = nameParts[1] ? nameParts[1].trim() : 'Current A/c';
         document.getElementById('editBankAccount').value = detailMatch[1].trim();
         document.getElementById('editBankIFSC').value = detailMatch[2].trim();
-        
         openModal('editBankModal');
     }
 }
@@ -2175,18 +2088,14 @@ function saveBankEdit() {
     const ifscCode = document.getElementById('editBankIFSC').value.trim();
     
     if (!bankId || !bankName || !accountNumber || !ifscCode) {
-        showToast('Please fill all required fields', 'error');
-        return;
+        return showToast('Please fill all required fields', 'error');
     }
     
     const bankElement = document.querySelector(`[data-bank="${bankId}"]`);
     if (bankElement) {
-        bankElement.querySelector('div').innerHTML = 
-            `<div><strong>${bankName} - ${accountType}</strong><br>` +
-            `<span style="font-size:11px; color:var(--gray);">A/c: ${accountNumber} | IFSC: ${ifscCode}</span></div>`;
+        bankElement.querySelector('div').innerHTML = `<div><strong>${bankName} - ${accountType}</strong><br><span style="font-size:11px; color:var(--gray);">A/c: ${accountNumber} | IFSC: ${ifscCode}</span></div>`;
         showToast('Bank account updated successfully', 'success');
     }
-    
     closeModal('editBankModal');
 }
 
@@ -2196,8 +2105,7 @@ function addBank() {
     const ifscCode = document.getElementById('newBankIFSC').value.trim();
     
     if (!bankName || !accountNumber) {
-        showToast('Please enter bank name and account number', 'error');
-        return;
+        return showToast('Please enter bank name and account number', 'error');
     }
     
     const bankId = 'bank_' + Date.now();
@@ -2205,22 +2113,12 @@ function addBank() {
     const item = document.createElement('div');
     item.className = 'dynamic-item';
     item.setAttribute('data-bank', bankId);
-    item.innerHTML = `
-        <div>
-            <strong>${bankName} - Current A/c</strong><br>
-            <span style="font-size:11px; color:var(--gray);">A/c: ${accountNumber} | IFSC: ${ifscCode || 'N/A'}</span>
-        </div>
-        <button class="btn btn-sm btn-secondary" onclick="editBank('${bankId}')">
-            <i class="fas fa-edit"></i> Edit
-        </button>
-    `;
-    
+    item.innerHTML = `<div><strong>${bankName} - Current A/c</strong><br><span style="font-size:11px; color:var(--gray);">A/c: ${accountNumber} | IFSC: ${ifscCode || 'N/A'}</span></div><button class="btn btn-sm btn-secondary" onclick="editBank('${bankId}')"><i class="fas fa-edit"></i> Edit</button>`;
     bankList.appendChild(item);
     
     document.getElementById('newBankName').value = '';
     document.getElementById('newBankAccount').value = '';
     document.getElementById('newBankIFSC').value = '';
-    
     showToast('Bank added successfully', 'success');
 }
 
@@ -2229,13 +2127,9 @@ function editUser(userId) {
     if (!userRow) return;
     
     const cells = userRow.querySelectorAll('td');
-    const userName = cells[0].textContent.trim();
-    const userEmail = cells[1].textContent.trim();
-    
     document.getElementById('editUserId').value = userId;
-    document.getElementById('editUserName').value = userName;
-    document.getElementById('editUserEmail').value = userEmail;
-    
+    document.getElementById('editUserName').value = cells[0].textContent.trim();
+    document.getElementById('editUserEmail').value = cells[1].textContent.trim();
     openModal('editUserModal');
 }
 
@@ -2245,63 +2139,34 @@ function saveUserEdit() {
     const userEmail = document.getElementById('editUserEmail').value.trim();
     
     if (!userId || !userName || !userEmail) {
-        showToast('Please fill all required fields', 'error');
-        return;
+        return showToast('Please fill all required fields', 'error');
     }
     
     const userRow = document.querySelector(`[data-user="${userId}"]`);
     if (userRow) {
-        userRow.innerHTML = `
-            <td>${userName}</td>
-            <td>${userEmail}</td>
-            <td><span class="status-badge" style="background:#dbeafe; color:#1e40af;">Maker</span></td>
-            <td>
-                <button class="btn btn-sm btn-secondary" onclick="editUser('${userId}')">
-                    <i class="fas fa-edit"></i> Edit
-                </button>
-            </td>
-        `;
+        userRow.innerHTML = `<td>${userName}</td><td>${userEmail}</td><td><span class="status-badge" style="background:#dbeafe; color:#1e40af;">Maker</span></td><td><button class="btn btn-sm btn-secondary" onclick="editUser('${userId}')"><i class="fas fa-edit"></i> Edit</button></td>`;
         showToast('User updated successfully', 'success');
     }
-    
     closeModal('editUserModal');
 }
 
 function inviteUser() {
     const email = document.getElementById('inviteEmail').value.trim();
-    
-    if (!email) {
-        showToast('Please enter email', 'error');
-        return;
-    }
+    if (!email) return showToast('Please enter email', 'error');
     
     const userId = 'user_' + Date.now();
     const tbody = document.getElementById('usersTable');
     const tr = document.createElement('tr');
     tr.setAttribute('data-user', userId);
-    tr.innerHTML = `
-        <td>Pending</td>
-        <td>${email}</td>
-        <td><span class="status-badge" style="background:#fef3c7; color:#b45309;">Maker</span></td>
-        <td>
-            <button class="btn btn-sm btn-secondary" onclick="editUser('${userId}')">
-                <i class="fas fa-edit"></i> Edit
-            </button>
-        </td>
-    `;
-    
+    tr.innerHTML = `<td>Pending</td><td>${email}</td><td><span class="status-badge" style="background:#fef3c7; color:#b45309;">Maker</span></td><td><button class="btn btn-sm btn-secondary" onclick="editUser('${userId}')"><i class="fas fa-edit"></i> Edit</button></td>`;
     tbody.appendChild(tr);
     
     closeModal('inviteUserModal');
     document.getElementById('inviteEmail').value = '';
-    
     showToast('Invite sent to ' + email, 'success');
 }
 
 function editEscalation(ruleId) {
-    const ruleElement = document.querySelector(`[data-rule="${ruleId}"]`);
-    if (!ruleElement) return;
-    
     document.getElementById('editEscId').value = ruleId;
     openModal('editEscalationModal');
 }
@@ -2312,19 +2177,13 @@ function saveEscalationEdit() {
     const value = document.getElementById('editEscValue').value.trim();
     const action = document.getElementById('editEscAction').value;
     
-    if (!ruleId || !value) {
-        showToast('Please fill all required fields', 'error');
-        return;
-    }
+    if (!ruleId || !value) return showToast('Please fill all required fields', 'error');
     
     const ruleElement = document.querySelector(`[data-rule="${ruleId}"]`);
     if (ruleElement) {
-        ruleElement.querySelector('div').innerHTML = 
-            `<div><strong>If ${condition} > ${value}</strong><br>` +
-            `<span style="font-size:11px; color:var(--gray);">Action: ${action}</span></div>`;
+        ruleElement.querySelector('div').innerHTML = `<div><strong>If ${condition} > ${value}</strong><br><span style="font-size:11px; color:var(--gray);">Action: ${action}</span></div>`;
         showToast('Escalation rule updated', 'success');
     }
-    
     closeModal('editEscalationModal');
 }
 
@@ -2333,29 +2192,16 @@ function addEscalation() {
     const value = document.getElementById('escValue').value.trim();
     const action = document.getElementById('escAction').value;
     
-    if (!value) {
-        showToast('Please enter a value', 'error');
-        return;
-    }
+    if (!value) return showToast('Please enter a value', 'error');
     
     const ruleId = 'rule_' + Date.now();
     const list = document.getElementById('escalationList');
     const item = document.createElement('div');
     item.className = 'dynamic-item';
     item.setAttribute('data-rule', ruleId);
-    item.innerHTML = `
-        <div>
-            <strong>If ${condition} > ${value}</strong><br>
-            <span style="font-size:11px; color:var(--gray);">Action: ${action}</span>
-        </div>
-        <button class="btn btn-sm btn-secondary" onclick="editEscalation('${ruleId}')">
-            <i class="fas fa-edit"></i> Edit
-        </button>
-    `;
-    
+    item.innerHTML = `<div><strong>If ${condition} > ${value}</strong><br><span style="font-size:11px; color:var(--gray);">Action: ${action}</span></div><button class="btn btn-sm btn-secondary" onclick="editEscalation('${ruleId}')"><i class="fas fa-edit"></i> Edit</button>`;
     list.appendChild(item);
     document.getElementById('escValue').value = '';
-    
     showToast('Escalation rule added', 'success');
 }
 
@@ -2369,7 +2215,6 @@ function editCustomField(fieldId) {
     document.getElementById('editFieldId').value = fieldId;
     document.getElementById('editFieldName').value = match ? match[1].trim() : '';
     document.getElementById('editFieldType').value = match ? match[2] : 'Text';
-    
     openModal('editCustomFieldModal');
 }
 
@@ -2378,17 +2223,13 @@ function saveCustomFieldEdit() {
     const fieldName = document.getElementById('editFieldName').value.trim();
     const fieldType = document.getElementById('editFieldType').value;
     
-    if (!fieldId || !fieldName) {
-        showToast('Please fill all required fields', 'error');
-        return;
-    }
+    if (!fieldId || !fieldName) return showToast('Please fill all required fields', 'error');
     
     const fieldElement = document.querySelector(`[data-field="${fieldId}"]`);
     if (fieldElement) {
         fieldElement.querySelector('span').textContent = fieldName + ' (' + fieldType + ')';
         showToast('Custom field updated', 'success');
     }
-    
     closeModal('editCustomFieldModal');
 }
 
@@ -2396,26 +2237,16 @@ function addCustomField() {
     const fieldName = document.getElementById('newFieldName').value.trim();
     const fieldType = document.getElementById('newFieldType').value;
     
-    if (!fieldName) {
-        showToast('Please enter field name', 'error');
-        return;
-    }
+    if (!fieldName) return showToast('Please enter field name', 'error');
     
     const fieldId = 'field_' + Date.now();
     const list = document.getElementById('customFieldsList');
     const item = document.createElement('div');
     item.className = 'dynamic-item';
     item.setAttribute('data-field', fieldId);
-    item.innerHTML = `
-        <span>${fieldName} (${fieldType})</span>
-        <button class="btn btn-sm btn-secondary" onclick="editCustomField('${fieldId}')">
-            <i class="fas fa-edit"></i> Edit
-        </button>
-    `;
-    
+    item.innerHTML = `<span>${fieldName} (${fieldType})</span><button class="btn btn-sm btn-secondary" onclick="editCustomField('${fieldId}')"><i class="fas fa-edit"></i> Edit</button>`;
     list.appendChild(item);
     document.getElementById('newFieldName').value = '';
-    
     showToast('Custom field added', 'success');
 }
 
@@ -2430,7 +2261,6 @@ function editCustomStatus(statusId) {
     document.getElementById('editStatusId').value = statusId;
     document.getElementById('editStatusName').value = name;
     document.getElementById('editStatusColor').value = rgbToHex(color) || '#6366f1';
-    
     openModal('editCustomStatusModal');
 }
 
@@ -2439,10 +2269,7 @@ function saveCustomStatusEdit() {
     const statusName = document.getElementById('editStatusName').value.trim();
     const statusColor = document.getElementById('editStatusColor').value;
     
-    if (!statusId || !statusName) {
-        showToast('Please fill all required fields', 'error');
-        return;
-    }
+    if (!statusId || !statusName) return showToast('Please fill all required fields', 'error');
     
     const statusElement = document.querySelector(`[data-status="${statusId}"]`);
     if (statusElement) {
@@ -2451,7 +2278,6 @@ function saveCustomStatusEdit() {
         span.nextSibling.textContent = ' ' + statusName;
         showToast('Custom status updated', 'success');
     }
-    
     closeModal('editCustomStatusModal');
 }
 
@@ -2459,26 +2285,16 @@ function addCustomStatus() {
     const statusName = document.getElementById('newStatusName').value.trim();
     const statusColor = document.getElementById('newStatusColor').value;
     
-    if (!statusName) {
-        showToast('Please enter status name', 'error');
-        return;
-    }
+    if (!statusName) return showToast('Please enter status name', 'error');
     
     const statusId = 'status_' + Date.now();
     const list = document.getElementById('customStatusList');
     const item = document.createElement('div');
     item.className = 'dynamic-item';
     item.setAttribute('data-status', statusId);
-    item.innerHTML = `
-        <span style="color:${statusColor};">●</span> ${statusName}
-        <button class="btn btn-sm btn-secondary" onclick="editCustomStatus('${statusId}')">
-            <i class="fas fa-edit"></i> Edit
-        </button>
-    `;
-    
+    item.innerHTML = `<span style="color:${statusColor};">●</span> ${statusName}<button class="btn btn-sm btn-secondary" onclick="editCustomStatus('${statusId}')"><i class="fas fa-edit"></i> Edit</button>`;
     list.appendChild(item);
     document.getElementById('newStatusName').value = '';
-    
     showToast('Custom status added', 'success');
 }
 
@@ -2493,12 +2309,7 @@ function rgbToHex(rgb) {
 
 function saveChequeBook() {
     const name = document.getElementById('bookName').value.trim();
-    
-    if (!name) {
-        showToast('Please enter book name', 'error');
-        return;
-    }
-    
+    if (!name) return showToast('Please enter book name', 'error');
     closeModal('chequeBookModal');
     showToast('Book created', 'success');
 }
@@ -2514,54 +2325,27 @@ function saveBranding() {
 }
 
 // Utilities
-function openModal(id) {
-    document.getElementById(id).classList.add('active');
-}
-
-function closeModal(id) {
-    document.getElementById(id).classList.remove('active');
-}
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
     toast.className = 'toast ' + type;
-    toast.innerHTML = `
-        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-        <span>${message}</span>
-    `;
+    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i><span>${message}</span>`;
     container.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.remove();
-    }, 3500);
+    setTimeout(() => toast.remove(), 3500);
 }
 
-function formatDate(dateInput) {
-    if (!dateInput) return 'N/A';
-    
-    let date;
-    if (dateInput.toDate) {
-        date = dateInput.toDate();
-    } else if (typeof dateInput === 'string') {
-        date = new Date(dateInput);
-    } else {
-        date = new Date(dateInput);
-    }
-    
-    return date.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-    });
+function formatDate(d) {
+    if (!d) return 'N/A';
+    const date = d.toDate ? d.toDate() : new Date(d);
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// Close modals on outside click
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
-        if (e.target === overlay) {
-            overlay.classList.remove('active');
-        }
+        if (e.target === overlay) overlay.classList.remove('active');
     });
 });
 </script>
