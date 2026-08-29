@@ -206,12 +206,189 @@ tr:hover{background:var(--light)}
 .login-box{padding:32px 24px}
 .action-btn::after{display:none}
 }
+
+/* ===== Added animations only — nothing above this line was changed ===== */
+@keyframes toonPopIn{0%{opacity:0;transform:scale(.4) translateY(18px)}60%{opacity:1;transform:scale(1.06) translateY(-4px)}80%{transform:scale(.96) translateY(1px)}100%{transform:scale(1) translateY(0)}}
+@keyframes toonFadeUp{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes toonWiggle{0%,100%{transform:rotate(0)}20%{transform:rotate(-6deg)}40%{transform:rotate(5deg)}60%{transform:rotate(-3deg)}80%{transform:rotate(2deg)}}
+@keyframes toonBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes toonPulseDot{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.5}}
+@keyframes toonSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes toonShimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+@keyframes toonSquish{0%,100%{transform:scale(1,1)}30%{transform:scale(1.12,.88)}50%{transform:scale(.92,1.08)}70%{transform:scale(1.04,.96)}}
+@keyframes toonModalPop{0%{opacity:0;transform:scale(.75) translateY(10px)}60%{opacity:1;transform:scale(1.03) translateY(-3px)}100%{transform:scale(1) translateY(0)}}
+@keyframes toonToastBounce{0%{transform:translateX(110%) scale(.9);opacity:0}55%{transform:translateX(-8%) scale(1.02);opacity:1}75%{transform:translateX(3%) scale(1)}100%{transform:translateX(0) scale(1)}}
+@keyframes toonStripes{0%{background-position:0 0}100%{background-position:28px 0}}
+@keyframes toonFloatSlow{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(2deg)}}
+@keyframes toonHeartbeat{0%,100%{transform:scale(1)}25%{transform:scale(1.15)}40%{transform:scale(.98)}60%{transform:scale(1.08)}}
+
+@media (prefers-reduced-motion: no-preference){
+
+/* Buttons: squishy press + tiny hop on hover */
+.btn{transition:transform .15s cubic-bezier(.34,1.56,.64,1),box-shadow .2s}
+.btn:hover{transform:translateY(-3px)}
+.btn:active{animation:toonSquish .32s ease}
+
+/* Sidebar logo + login title: gentle shimmering gradient */
+.sidebar-header h1,.login-header h1{background-size:200% auto;animation:toonShimmer 3.5s linear infinite}
+
+/* Nav items: wiggle icon + slide highlight */
+.nav-item{transition:transform .2s ease}
+.nav-item:hover{transform:translateX(4px)}
+.nav-item:hover i{animation:toonWiggle .5s ease}
+.nav-item.active{animation:toonFadeUp .3s ease}
+
+/* Dashboard widgets: pop in on view + playful hover lift */
+.widgets-grid .widget{animation:toonPopIn .5s cubic-bezier(.34,1.56,.64,1) both}
+.widgets-grid .widget:nth-child(1){animation-delay:.05s}
+.widgets-grid .widget:nth-child(2){animation-delay:.15s}
+.widgets-grid .widget:nth-child(3){animation-delay:.25s}
+.widgets-grid .widget:nth-child(4){animation-delay:.35s}
+.widget{transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s}
+.widget:hover{transform:translateY(-6px) rotate(-.5deg);box-shadow:0 14px 26px rgba(0,0,0,0.12)}
+.widget:hover .widget-icon{animation:toonWiggle .5s ease}
+
+/* Cards and admin cards: soft entrance */
+.card,.admin-card,.aging-card{animation:toonFadeUp .45s ease both}
+
+/* Kanban cards: bouncy hover, entrance pop */
+.kanban-card{animation:toonPopIn .4s cubic-bezier(.34,1.56,.64,1) both}
+.kanban-card:hover{animation:toonWiggle .4s ease}
+
+/* Action buttons + icon-only buttons: wiggle + spin on hover */
+.action-btn:hover{animation:toonWiggle .45s ease}
+.action-btn i,.btn i{transition:transform .2s}
+.btn:hover i.fa-sync{animation:toonSpin .6s linear infinite}
+.mobile-menu-btn:hover{animation:toonWiggle .5s ease}
+
+/* Status + payment badges: heartbeat pop, pulsing status dot */
+.status-badge,.payment-badge{animation:toonFadeUp .3s ease both}
+.status-badge::before{animation:toonPulseDot 1.6s ease-in-out infinite}
+
+/* Modals: bouncy pop instead of a flat slide */
+.modal{animation:toonModalPop .35s cubic-bezier(.34,1.56,.64,1) both}
+
+/* Toasts: bouncy entrance */
+.toast{animation:toonToastBounce .55s cubic-bezier(.34,1.56,.64,1) both}
+.toast i{animation:toonHeartbeat 1.2s ease-in-out .4s 1}
+
+/* Progress bars: animated candy-stripe fill, like it's "working" */
+.payment-progress-fill,#payProgressBar{background-image:linear-gradient(135deg,rgba(255,255,255,.25) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.25) 50%,rgba(255,255,255,.25) 75%,transparent 75%,transparent);background-size:28px 28px;animation:toonStripes 1s linear infinite}
+
+/* Empty states: friendly floating icon */
+.empty-state i{display:inline-block;animation:toonFloatSlow 2.6s ease-in-out infinite}
+
+/* Version badge: little heartbeat so it feels alive */
+.version-badge{display:inline-block;animation:toonHeartbeat 2.4s ease-in-out infinite}
+
+/* Aging/report/analytics widgets: staggered pop like the dashboard */
+.aging-grid .aging-card:nth-child(1){animation-delay:.05s}
+.aging-grid .aging-card:nth-child(2){animation-delay:.12s}
+.aging-grid .aging-card:nth-child(3){animation-delay:.19s}
+.aging-grid .aging-card:nth-child(4){animation-delay:.26s}
+
+/* User avatar circle: friendly little bob */
+#userAvatar{animation:toonBob 3s ease-in-out infinite}
+
+/* Login/signup submit button: extra bounce to invite a click */
+.login-box .btn-block{animation:toonBob 2.4s ease-in-out infinite}
+
+}
+
+/* ===== Illustration block (added) — undraw-style login/signup art with its own animations ===== */
+.login-container{gap:56px;max-width:1080px;margin:0 auto;flex-wrap:wrap}
+.login-illustration{flex:1;min-width:320px;max-width:440px;animation:illoEntrance .9s ease both}
+@media (max-width:900px){.login-illustration{display:none}}
+@keyframes illoEntrance{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes illoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+@keyframes illoSway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
+@keyframes illoSwayAlt{0%,100%{transform:rotate(4deg)}50%{transform:rotate(-4deg)}}
+@keyframes illoBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes illoPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.7)}}
+@keyframes illoGlow{0%,100%{opacity:.55}50%{opacity:1}}
+@media (prefers-reduced-motion: no-preference){
+.illo-float{animation:illoFloat 4s ease-in-out infinite}
+.illo-leaf-a{animation:illoSway 5s ease-in-out infinite}
+.illo-leaf-b{animation:illoSway 6.5s ease-in-out infinite reverse}
+.illo-leaf-c{animation:illoSwayAlt 5.5s ease-in-out infinite}
+.illo-leaf-d{animation:illoSwayAlt 7s ease-in-out infinite reverse}
+.illo-bob-a{animation:illoBob 3.6s ease-in-out infinite}
+.illo-bob-b{animation:illoBob 4.4s ease-in-out infinite reverse}
+.illo-pulse{animation:illoPulse 1.8s ease-in-out infinite}
+.illo-glow{animation:illoGlow 2.2s ease-in-out infinite}
+}
 </style>
 </head>
 <body>
 
 <!-- Login Screen -->
 <div class="login-container" id="loginScreen">
+    <div class="login-illustration">
+        <svg viewBox="0 0 480 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">
+            <defs>
+                <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#6366f1"/>
+                    <stop offset="100%" stop-color="#06b6d4"/>
+                </linearGradient>
+                <linearGradient id="laptopGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#4f46e5"/>
+                    <stop offset="100%" stop-color="#06b6d4"/>
+                </linearGradient>
+            </defs>
+            <circle cx="240" cy="270" r="210" fill="#eef2ff"/>
+
+            <!-- swaying decorative leaves, each on its own timing -->
+            <g class="illo-leaf-a" style="transform-box:fill-box;transform-origin:bottom center">
+                <ellipse cx="120" cy="150" rx="46" ry="20" fill="#f59e0b" opacity="0.85" transform="rotate(-35 120 150)"/>
+            </g>
+            <g class="illo-leaf-b" style="transform-box:fill-box;transform-origin:bottom center">
+                <ellipse cx="95" cy="210" rx="42" ry="18" fill="#fca5a5" opacity="0.85" transform="rotate(-70 95 210)"/>
+            </g>
+            <g class="illo-leaf-c" style="transform-box:fill-box;transform-origin:bottom center">
+                <ellipse cx="370" cy="130" rx="46" ry="20" fill="#10b981" opacity="0.85" transform="rotate(35 370 130)"/>
+            </g>
+            <g class="illo-leaf-d" style="transform-box:fill-box;transform-origin:bottom center">
+                <ellipse cx="395" cy="200" rx="46" ry="20" fill="#a78bfa" opacity="0.85" transform="rotate(65 395 200)"/>
+            </g>
+
+            <!-- phone gently floats, mirroring the reference screenshot's login card -->
+            <g class="illo-float" style="transform-box:fill-box;transform-origin:center">
+                <rect x="150" y="40" width="180" height="360" rx="26" fill="#1e293b"/>
+                <circle cx="240" cy="55" r="3.5" fill="#f8fafc" opacity="0.8"/>
+                <rect x="162" y="64" width="156" height="270" rx="14" fill="url(#screenGrad)"/>
+                <circle cx="240" cy="140" r="46" fill="#ffffff"/>
+                <circle cx="240" cy="127" r="17" fill="#6366f1"/>
+                <path d="M206,180 a34,26 0 0 1 68,0 z" fill="#6366f1"/>
+                <rect x="182" y="212" width="116" height="28" rx="8" fill="#ffffff"/>
+                <circle class="illo-pulse" cx="196" cy="226" r="4" fill="#06b6d4"/>
+                <rect x="182" y="252" width="116" height="28" rx="8" fill="#ffffff" opacity="0.92"/>
+            </g>
+
+            <!-- standing figure with notebook, like the woman in the reference image -->
+            <g class="illo-bob-a" style="transform-box:fill-box;transform-origin:bottom center">
+                <rect x="52" y="392" width="16" height="76" rx="8" fill="#1e293b"/>
+                <rect x="82" y="392" width="16" height="76" rx="8" fill="#1e293b"/>
+                <ellipse cx="60" cy="470" rx="13" ry="6" fill="#c4b5fd"/>
+                <ellipse cx="90" cy="470" rx="13" ry="6" fill="#c4b5fd"/>
+                <path d="M40,300 a48,55 0 0 1 96,0 v70 a48,20 0 0 1 -96,0 z" fill="#10b981"/>
+                <circle cx="75" cy="272" r="24" fill="#fbbf24"/>
+                <path d="M50,266 q6,-40 46,-30 q18,6 12,32 q-10,-14 -30,-14 q-18,0 -28,12 z" fill="#312e81"/>
+                <rect x="18" y="326" width="26" height="34" rx="4" fill="#f59e0b" transform="rotate(-8 31 343)"/>
+            </g>
+
+            <!-- seated figure with laptop, like the man in the reference image -->
+            <g class="illo-bob-b" style="transform-box:fill-box;transform-origin:bottom center">
+                <path d="M330,470 q60,26 96,-4 l-8,-18 q-40,20 -80,0 z" fill="#312e81"/>
+                <path d="M320,410 a54,52 0 0 1 100,10 v40 a54,22 0 0 1 -100,0 z" fill="#10b981"/>
+                <circle cx="368" cy="368" r="22" fill="#fbbf24"/>
+                <path d="M348,362 q2,-26 22,-24 q22,2 20,22 q-8,-10 -22,-10 q-12,0 -20,12 z" fill="#312e81"/>
+                <path d="M356,382 q12,10 24,0 l2,10 q-14,10 -28,0 z" fill="#312e81"/>
+                <path d="M340,392 q30,-10 62,4 l6,20 -74,4 z" fill="#1e293b"/>
+                <rect x="352" y="358" width="66" height="46" rx="5" fill="#4c1d95"/>
+                <rect class="illo-glow" x="358" y="364" width="54" height="34" rx="3" fill="url(#laptopGrad)"/>
+            </g>
+        </svg>
+    </div>
     <div class="login-box">
         <div class="login-header">
             <h1>NeonCheque</h1>
