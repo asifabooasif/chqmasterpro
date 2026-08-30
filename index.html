@@ -139,7 +139,203 @@
             height: 200%;
             background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
             background-size: 50px 50px;
-            animation: float 20s ease-in-out infinite
+            animation: float 20s ease-in-out infinite;
+            z-index: 1
+        }
+        .bg-cover-image {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            transition: background-image 0.4s ease;
+            z-index: 0
+        }
+        .login-container .bg-cover-image {
+            background-color: #4338ca
+        }
+        .bg-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.82), rgba(15, 23, 42, 0.72));
+            z-index: 0
+        }
+        .banner-image {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 32px;
+            margin-bottom: 24px;
+            background-size: cover;
+            background-position: center;
+            animation: fadeIn 0.6s ease;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18)
+        }
+        .banner-image.compact {
+            min-height: 180px;
+            padding: 24px
+        }
+        .banner-image::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.15) 0%, rgba(15, 23, 42, 0.85) 100%);
+            z-index: 0
+        }
+        .banner-image > * {
+            position: relative;
+            z-index: 1
+        }
+        .banner-image h2 {
+            color: #fff;
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 6px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3)
+        }
+        .banner-image p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            max-width: 480px
+        }
+        .banner-image .version-badge {
+            width: fit-content;
+            margin-bottom: 12px
+        }
+        .bg-picker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 12px;
+            margin: 12px 0 18px
+        }
+        .bg-picker-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            height: 90px;
+            cursor: pointer;
+            border: 3px solid transparent;
+            background-size: cover;
+            background-position: center;
+            transition: all 0.25s ease
+        }
+        .bg-picker-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15)
+        }
+        .bg-picker-item.selected {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25)
+        }
+        .bg-picker-item .bg-picker-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0.75), transparent);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 4px 6px;
+            text-align: center
+        }
+        .bg-picker-item .selected-check {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px
+        }
+        .bg-picker-item.selected .selected-check {
+            display: flex
+        }
+        .bg-upload-tile {
+            height: 90px;
+            border-radius: 12px;
+            border: 2px dashed var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            color: var(--gray);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease
+        }
+        .bg-upload-tile:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(99, 102, 241, 0.05)
+        }
+        .bg-upload-tile i {
+            font-size: 18px
+        }
+        .range-row {
+            display: flex;
+            align-items: center;
+            gap: 10px
+        }
+        .range-row input[type="range"] {
+            flex: 1
+        }
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 42px;
+            height: 22px
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0
+        }
+        .switch-slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: #cbd5e1;
+            transition: 0.3s;
+            border-radius: 22px
+        }
+        .switch-slider::before {
+            content: '';
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #fff;
+            transition: 0.3s;
+            border-radius: 50%
+        }
+        .switch input:checked+.switch-slider {
+            background-color: var(--primary)
+        }
+        .switch input:checked+.switch-slider::before {
+            transform: translateX(20px)
         }
         .login-box {
             background: rgba(255, 255, 255, 0.95);
@@ -1601,6 +1797,8 @@
 </head>
 <body>
     <div class="login-container" id="loginScreen">
+        <div class="bg-cover-image" id="loginBgImage"></div>
+        <div class="bg-overlay" id="loginBgOverlay"></div>
         <div class="login-box">
             <div class="login-header">
                 <h1>NeonCheque</h1>
@@ -1629,6 +1827,8 @@
         </div>
     </div>
     <div class="login-container hidden" id="signupScreen">
+        <div class="bg-cover-image" id="signupBgImage"></div>
+        <div class="bg-overlay" id="signupBgOverlay"></div>
         <div class="login-box">
             <div class="login-header">
                 <h1>Create Account</h1>
@@ -1733,6 +1933,11 @@
                 </div>
             </div>
             <div id="dashboardView" class="view-content active">
+                <div class="banner-image" id="dashboardBanner">
+                    <span class="version-badge">✦ NeonCheque v5.0</span>
+                    <h2 id="dashboardBannerTitle">Welcome back to NeonCheque</h2>
+                    <p id="dashboardBannerText">Track every cheque in real-time — issued, in-hand, returned, or cleared — all from one futuristic control center.</p>
+                </div>
                 <div class="widgets-grid">
                     <div class="widget">
                         <div class="widget-header">
@@ -1930,6 +2135,10 @@
                 </div>
             </div>
             <div id="analyticsView" class="view-content">
+                <div class="banner-image compact" id="analyticsBanner">
+                    <h2>Insights that move with your money</h2>
+                    <p>A live look at trends, aging, and cash flow across every cheque book.</p>
+                </div>
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">Analytics</h2>
@@ -1949,6 +2158,10 @@
                 </div>
             </div>
             <div id="reportsView" class="view-content">
+                <div class="banner-image compact" id="reportsBanner">
+                    <h2>Build the report you need</h2>
+                    <p>Mix filters, date ranges, and fields to get exactly the export your team is asking for.</p>
+                </div>
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">Custom Report Builder</h2>
@@ -2272,6 +2485,66 @@
                                     <i class="fas fa-save"></i> Save
                                 </button>
                             </div>
+                        </div>
+                        <div class="admin-card" style="margin-top:20px">
+                            <h4><i class="fas fa-image"></i> Background Images &amp; Banners</h4>
+                            <p style="font-size:12px;color:var(--gray);margin-bottom:4px">
+                                Choose which picture shows on the login screen and on the dashboard banner. Click a
+                                thumbnail to apply it instantly, in full size, everywhere that slot is used.
+                            </p>
+
+                            <label style="display:block;margin:16px 0 4px;font-weight:700;font-size:13px">
+                                <i class="fas fa-sign-in-alt" style="color:var(--primary)"></i> Login &amp; Sign Up Background
+                            </label>
+                            <div class="bg-picker-grid" id="loginBgPicker"></div>
+
+                            <label style="display:block;margin:8px 0 4px;font-weight:700;font-size:13px">
+                                <i class="fas fa-th-large" style="color:var(--primary)"></i> Dashboard Banner
+                            </label>
+                            <div class="bg-picker-grid" id="dashboardBgPicker"></div>
+
+                            <label style="display:block;margin:8px 0 4px;font-weight:700;font-size:13px">
+                                <i class="fas fa-chart-line" style="color:var(--primary)"></i> Analytics Banner
+                            </label>
+                            <div class="bg-picker-grid" id="analyticsBgPicker"></div>
+
+                            <label style="display:block;margin:8px 0 4px;font-weight:700;font-size:13px">
+                                <i class="fas fa-file-alt" style="color:var(--primary)"></i> Reports Banner
+                            </label>
+                            <div class="bg-picker-grid" id="reportsBgPicker"></div>
+
+                            <div class="admin-grid" style="margin-top:18px">
+                                <div>
+                                    <div class="toggle-row">
+                                        <span style="font-size:13px;font-weight:600">Show dashboard &amp; page banners</span>
+                                        <label class="switch">
+                                            <input type="checkbox" id="bannersEnabled" checked onchange="updateBgControls()">
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="toggle-row">
+                                        <span style="font-size:13px;font-weight:600">Full-size / large images</span>
+                                        <label class="switch">
+                                            <input type="checkbox" id="bgLargeMode" checked onchange="updateBgControls()">
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style="font-size:13px;font-weight:600">Overlay darkness</label>
+                                    <div class="range-row">
+                                        <i class="fas fa-sun" style="color:var(--gray)"></i>
+                                        <input type="range" id="bgOverlayStrength" min="0" max="90" value="55" oninput="updateBgControls()">
+                                        <i class="fas fa-moon" style="color:var(--gray)"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" style="margin-top:14px" onclick="saveBackgroundSettings()">
+                                <i class="fas fa-save"></i> Save Background Settings
+                            </button>
+                            <button class="btn btn-secondary" style="margin-top:14px" onclick="resetBackgroundSettings()">
+                                <i class="fas fa-undo"></i> Reset to Defaults
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2798,6 +3071,7 @@
             document.getElementById('loginForm').addEventListener('submit', handleLogin);
             document.getElementById('signupForm').addEventListener('submit', handleSignup);
             document.getElementById('chequeDate').valueAsDate = new Date();
+            initBackgroundImages();
             auth.onAuthStateChanged(user => {
                 if (user) {
                     currentUser = user;
@@ -4178,6 +4452,175 @@
             const color = document.getElementById('primaryColor').value;
             document.documentElement.style.setProperty('--primary', color);
             showToast('Branding saved', 'success');
+        }
+
+        // ---------- Background Images & Banners ----------
+        const PRESET_BG_IMAGES = [
+            { id: 'code', url: 'assets/bg-code.jpg', label: 'Design & Code' },
+            { id: 'vr-purple', url: 'assets/bg-vr-purple.jpg', label: 'Futuristic Data' },
+            { id: 'vr-crypto', url: 'assets/bg-vr-crypto.jpg', label: 'Crypto / Insights' },
+            { id: 'idea', url: 'assets/bg-idea.jpg', label: 'Ideas & Growth' },
+            { id: 'login', url: 'assets/bg-login.jpg', label: 'Dreamy Skyline' }
+        ];
+
+        const BG_SLOTS = {
+            login: { pickerId: 'loginBgPicker', storageKey: 'bg_login', default: 'login' },
+            dashboard: { pickerId: 'dashboardBgPicker', storageKey: 'bg_dashboard', default: 'vr-purple' },
+            analytics: { pickerId: 'analyticsBgPicker', storageKey: 'bg_analytics', default: 'vr-crypto' },
+            reports: { pickerId: 'reportsBgPicker', storageKey: 'bg_reports', default: 'idea' }
+        };
+
+        function getBgSelection(slotName) {
+            const slot = BG_SLOTS[slotName];
+            const saved = localStorage.getItem(slot.storageKey);
+            if (saved) {
+                try { return JSON.parse(saved); } catch (e) { /* fall through */ }
+            }
+            return { type: 'preset', value: slot.default };
+        }
+
+        function resolveBgUrl(selection) {
+            if (!selection) return '';
+            if (selection.type === 'custom') return selection.value;
+            const preset = PRESET_BG_IMAGES.find(p => p.id === selection.value);
+            return preset ? preset.url : '';
+        }
+
+        function renderBgPicker(slotName) {
+            const slot = BG_SLOTS[slotName];
+            const container = document.getElementById(slot.pickerId);
+            if (!container) return;
+            const current = getBgSelection(slotName);
+            let html = PRESET_BG_IMAGES.map(img => {
+                const isSelected = current.type === 'preset' && current.value === img.id;
+                return `<div class="bg-picker-item${isSelected ? ' selected' : ''}" style="background-image:url('${img.url}')"
+                            onclick="selectBgImage('${slotName}','${img.id}')" title="${img.label}">
+                            <div class="bg-picker-label">${img.label}</div>
+                            <div class="selected-check"><i class="fas fa-check"></i></div>
+                        </div>`;
+            }).join('');
+            const isCustomSelected = current.type === 'custom';
+            html += `<label class="bg-upload-tile" style="${isCustomSelected ? 'border-color:var(--primary);color:var(--primary)' : ''}">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>${isCustomSelected ? 'Custom ✓' : 'Upload own'}</span>
+                        <input type="file" accept="image/*" style="display:none" onchange="uploadCustomBg('${slotName}', this)">
+                     </label>`;
+            container.innerHTML = html;
+        }
+
+        function renderAllBgPickers() {
+            Object.keys(BG_SLOTS).forEach(renderBgPicker);
+        }
+
+        function selectBgImage(slotName, presetId) {
+            const slot = BG_SLOTS[slotName];
+            localStorage.setItem(slot.storageKey, JSON.stringify({ type: 'preset', value: presetId }));
+            renderBgPicker(slotName);
+            applyBackgroundSettings();
+        }
+
+        function uploadCustomBg(slotName, inputEl) {
+            const file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            if (file.size > 3 * 1024 * 1024) {
+                showToast('Please choose an image under 3MB', 'error');
+                return;
+            }
+            const slot = BG_SLOTS[slotName];
+            const reader = new FileReader();
+            reader.onload = e => {
+                localStorage.setItem(slot.storageKey, JSON.stringify({ type: 'custom', value: e.target.result }));
+                renderBgPicker(slotName);
+                applyBackgroundSettings();
+                showToast('Custom image applied', 'success');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateBgControls() {
+            applyBackgroundSettings();
+        }
+
+        function applyBackgroundSettings() {
+            const bannersEnabled = document.getElementById('bannersEnabled') ?
+                document.getElementById('bannersEnabled').checked : true;
+            const largeMode = document.getElementById('bgLargeMode') ?
+                document.getElementById('bgLargeMode').checked : true;
+            const overlayStrength = document.getElementById('bgOverlayStrength') ?
+                document.getElementById('bgOverlayStrength').value : 55;
+            const overlayAlpha = overlayStrength / 100;
+
+            // Login & Signup
+            const loginUrl = resolveBgUrl(getBgSelection('login'));
+            ['loginBgImage', 'signupBgImage'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && loginUrl) el.style.backgroundImage = `url('${loginUrl}')`;
+            });
+            ['loginBgOverlay', 'signupBgOverlay'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.background =
+                    `linear-gradient(135deg, rgba(99,102,241,${0.5 + overlayAlpha * 0.4}), rgba(15,23,42,${0.35 + overlayAlpha * 0.5}))`;
+            });
+
+            // Dashboard / Analytics / Reports banners
+            applyBanner('dashboardBanner', 'dashboard', bannersEnabled, largeMode, overlayAlpha);
+            applyBanner('analyticsBanner', 'analytics', bannersEnabled, largeMode, overlayAlpha);
+            applyBanner('reportsBanner', 'reports', bannersEnabled, largeMode, overlayAlpha);
+        }
+
+        function applyBanner(elementId, slotName, bannersEnabled, largeMode, overlayAlpha) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            if (!bannersEnabled) {
+                el.classList.add('hidden');
+                return;
+            }
+            el.classList.remove('hidden');
+            const url = resolveBgUrl(getBgSelection(slotName));
+            if (url) el.style.backgroundImage = `url('${url}')`;
+            el.classList.toggle('compact', !largeMode && elementId !== 'dashboardBanner');
+            el.style.setProperty('--overlay-alpha', overlayAlpha);
+            el.style.filter = `brightness(${1.1 - overlayAlpha * 0.25})`;
+        }
+
+        function saveBackgroundSettings() {
+            const settings = {
+                bannersEnabled: document.getElementById('bannersEnabled').checked,
+                largeMode: document.getElementById('bgLargeMode').checked,
+                overlayStrength: document.getElementById('bgOverlayStrength').value
+            };
+            localStorage.setItem('bg_display_settings', JSON.stringify(settings));
+            applyBackgroundSettings();
+            showToast('Background settings saved', 'success');
+        }
+
+        function resetBackgroundSettings() {
+            Object.values(BG_SLOTS).forEach(slot => localStorage.removeItem(slot.storageKey));
+            localStorage.removeItem('bg_display_settings');
+            document.getElementById('bannersEnabled').checked = true;
+            document.getElementById('bgLargeMode').checked = true;
+            document.getElementById('bgOverlayStrength').value = 55;
+            renderAllBgPickers();
+            applyBackgroundSettings();
+            showToast('Background settings reset to defaults', 'info');
+        }
+
+        function loadBackgroundDisplaySettings() {
+            const saved = localStorage.getItem('bg_display_settings');
+            if (!saved) return;
+            try {
+                const s = JSON.parse(saved);
+                if (document.getElementById('bannersEnabled')) document.getElementById('bannersEnabled').checked = s.bannersEnabled !== false;
+                if (document.getElementById('bgLargeMode')) document.getElementById('bgLargeMode').checked = s.largeMode !== false;
+                if (document.getElementById('bgOverlayStrength') && s.overlayStrength !== undefined)
+                    document.getElementById('bgOverlayStrength').value = s.overlayStrength;
+            } catch (e) { /* ignore malformed */ }
+        }
+
+        function initBackgroundImages() {
+            loadBackgroundDisplaySettings();
+            renderAllBgPickers();
+            applyBackgroundSettings();
         }
 
         function openModal(id) { document.getElementById(id).classList.add('active'); }
