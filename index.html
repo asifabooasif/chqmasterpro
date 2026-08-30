@@ -20,12 +20,14 @@ body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh
 @keyframes scaleIn{from{opacity:0;transform:scale(0.9)}to{opacity:1;transform:scale(1)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes shimmer{0%{background-position:-1000px 0}100%{background-position:1000px 0}}
 @keyframes rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .login-container{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px;position:relative;overflow:hidden}
 .login-container::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,0.1) 1px,transparent 1px);background-size:50px 50px;animation:float 20s ease-in-out infinite}
 .login-box{background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-radius:24px;padding:48px;width:100%;max-width:450px;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:slideUp 0.6s ease;z-index:1;position:relative}
 .login-header{text-align:center;margin-bottom:32px;animation:fadeIn 0.8s ease}
 .login-header h1{font-size:32px;font-weight:800;background:linear-gradient(135deg,var(--primary),var(--secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:pulse 3s ease-in-out infinite}
+.login-box p{animation:fadeIn 1s ease}
 .form-group{margin-bottom:18px;animation:slideIn 0.5s ease backwards}
 .form-group:nth-child(1){animation-delay:0.1s}
 .form-group:nth-child(2){animation-delay:0.2s}
@@ -40,8 +42,6 @@ body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh
 .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(99,102,241,0.4)}
 .btn-secondary{background:white;color:var(--dark);border:2px solid var(--border)}
 .btn-secondary:hover{background:var(--light);transform:translateY(-2px)}
-.btn-success{background:linear-gradient(135deg,var(--success),#059669);color:white}
-.btn-info{background:linear-gradient(135deg,var(--info),#2563eb);color:white}
 .btn-sm{padding:7px 14px;font-size:12px}
 .btn-block{width:100%;justify-content:center;animation:fadeIn 1.2s ease}
 .app-container{display:none;min-height:100vh}
@@ -125,6 +125,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s ease}
 .modal-overlay.active{display:flex}
 .modal{background:white;border-radius:18px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:scaleIn 0.4s ease}
+@keyframes modalSlide{from{opacity:0;transform:translateY(-20px) scale(0.9)}to{opacity:1;transform:translateY(0) scale(1)}}
 .modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:white;border-radius:18px 18px 0 0;z-index:10}
 .modal-title{font-size:18px;font-weight:700}
 .modal-close{width:32px;height:32px;border:none;background:var(--light);border-radius:8px;cursor:pointer;transition:all 0.3s ease}
@@ -237,6 +238,8 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px}
 .report-actions{display:flex;gap:10px;flex-wrap:wrap}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.loading{position:relative;pointer-events:none}
+.loading::after{content:'';position:absolute;top:50%;left:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:rotate 0.8s linear infinite}
 @media (max-width:768px){
 .sidebar{transform:translateX(-100%);width:280px}
 .sidebar.active{transform:translateX(0)}
@@ -272,6 +275,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .action-btn::after{display:none}
 }
 @keyframes slideDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideInRight{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}
 </style>
 </head>
 <body>
@@ -431,7 +435,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="widget-header">
 <div>
 <div class="widget-title">Total Value</div>
-<div class="widget-value">₹<span id="totalValue">0</span></div>
+<div class="widget-value"><span id="totalValue">0</span></div>
 </div>
 <div class="widget-icon warning"><i class="fas fa-rupee-sign"></i></div>
 </div>
@@ -465,10 +469,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </button>
 </div>
 <div class="filters">
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="filterChequeNumber" placeholder="Search by number..." onkeyup="renderAllCheques()">
-</div>
 <div class="filter-group">
 <label>Status</label>
 <select id="filterStatus" onchange="renderAllCheques()">
@@ -517,18 +517,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="card-header">
 <h2 class="card-title">Cheques In Hand</h2>
 </div>
-<div class="filters">
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="inHandFilterNumber" placeholder="Search by number..." onkeyup="renderInHand()">
-</div>
-<div class="filter-group">
-<label>Bank</label>
-<select id="inHandBank" onchange="renderInHand()">
-<option value="">All Banks</option>
-</select>
-</div>
-</div>
 <div class="table-container">
 <table>
 <thead>
@@ -554,18 +542,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="card">
 <div class="card-header">
 <h2 class="card-title">Returned Cheques</h2>
-</div>
-<div class="filters">
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="returnedFilterNumber" placeholder="Search by number..." onkeyup="renderReturned()">
-</div>
-<div class="filter-group">
-<label>Bank</label>
-<select id="returnedBank" onchange="renderReturned()">
-<option value="">All Banks</option>
-</select>
-</div>
 </div>
 <div class="table-container">
 <table>
@@ -688,10 +664,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <option value="">All Banks</option>
 </select>
 </div>
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="reportChequeNumber" placeholder="Search by number..." onkeyup="generateReport()">
-</div>
 </div>
 <div class="report-actions">
 <button class="btn btn-primary" onclick="exportReport('excel')">
@@ -720,11 +692,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </thead>
 <tbody id="reportTableBody"></tbody>
 </table>
-</div>
-<div id="reportEmpty" class="empty-state" style="display:none;">
-<i class="fas fa-file-alt"></i>
-<h3>No data to display</h3>
-<p>Adjust filters or run report to see results</p>
 </div>
 </div>
 </div>
@@ -1837,11 +1804,9 @@ else return '<span class="payment-badge unpaid"><i class="fas fa-exclamation-cir
 function renderAllCheques() {
 const tbody = document.getElementById('allChequesTable');
 const emptyState = document.getElementById('allChequesEmpty');
-const chequeNumberFilter = document.getElementById('filterChequeNumber').value.toLowerCase();
 const statusFilter = document.getElementById('filterStatus').value;
 const bankFilter = document.getElementById('filterBank').value;
 let filtered = allCheques.filter(c => !c.deletedAt);
-if (chequeNumberFilter) filtered = filtered.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
 if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
 if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
 if (filtered.length === 0) {
@@ -1861,7 +1826,7 @@ paymentInfo = `<div style="min-width:100px">
 <div style="font-size:11px">
 <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
 <span style="color:var(--gray)">/</span>
-<span>${totalAmount.toLocaleString('en-IN')}</span>
+<span>₹${totalAmount.toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -1904,11 +1869,7 @@ ${c.status === 'returned' ? `
 }).join('');
 }
 function renderInHand() {
-const chequeNumberFilter = document.getElementById('inHandFilterNumber').value.toLowerCase();
-const bankFilter = document.getElementById('inHandBank').value;
-let list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
-if (chequeNumberFilter) list = list.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
-if (bankFilter) list = list.filter(c => c.bank === bankFilter);
+const list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
 document.getElementById('inHandTable').innerHTML = list.map(c => `
 <tr>
 <td>${c.number}</td>
@@ -1922,11 +1883,7 @@ document.getElementById('inHandTable').innerHTML = list.map(c => `
 document.getElementById('inHandEmpty').classList.toggle('hidden',list.length>0);
 }
 function renderReturned() {
-const chequeNumberFilter = document.getElementById('returnedFilterNumber').value.toLowerCase();
-const bankFilter = document.getElementById('returnedBank').value;
-let list = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
-if (chequeNumberFilter) list = list.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
-if (bankFilter) list = list.filter(c => c.bank === bankFilter);
+const list = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
 const tbody = document.getElementById('returnedTable');
 const emptyState = document.getElementById('returnedEmpty');
 if (list.length === 0) {
@@ -1945,7 +1902,7 @@ return `<tr>
 <td>${c.number}</td>
 <td>${c.payee}</td>
 <td>
-<div style="font-weight:700">${totalAmount.toLocaleString('en-IN')}</div>
+<div style="font-weight:700">₹${totalAmount.toLocaleString('en-IN')}</div>
 <div style="font-size:11px;color:var(--gray)">
 Paid: <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span> |
 Due: <span style="color:var(--danger);font-weight:600">₹${Math.round(remaining).toLocaleString('en-IN')}</span>
@@ -2075,49 +2032,20 @@ document.getElementById('reportDateFrom').value = thirtyDaysAgo.toISOString().sp
 document.getElementById('reportDateTo').value = today.toISOString().split('T')[0];
 generateReport();
 }
-function getFilteredReportData() {
+function generateReport() {
 const dateFrom = document.getElementById('reportDateFrom').value;
 const dateTo = document.getElementById('reportDateTo').value;
 const statusFilter = document.getElementById('reportStatus').value;
 const bankFilter = document.getElementById('reportBank').value;
-const chequeNumberFilter = document.getElementById('reportChequeNumber').value.toLowerCase();
 let filtered = allCheques.filter(c => !c.deletedAt);
-if (dateFrom) {
-filtered = filtered.filter(c => {
-const chequeDate = c.date?.toDate ? c.date.toDate() : new Date(c.date);
-return chequeDate >= new Date(dateFrom);
-});
-}
-if (dateTo) {
-filtered = filtered.filter(c => {
-const chequeDate = c.date?.toDate ? c.date.toDate() : new Date(c.date);
-return chequeDate <= new Date(dateTo);
-});
-}
-if (statusFilter) {
-filtered = filtered.filter(c => c.status?.toLowerCase() === statusFilter.toLowerCase());
-}
-if (bankFilter) {
-filtered = filtered.filter(c => c.bank === bankFilter);
-}
-if (chequeNumberFilter) {
-filtered = filtered.filter(c => c.number?.toLowerCase().includes(chequeNumberFilter));
-}
-return filtered;
-}
-function generateReport() {
-const filtered = getFilteredReportData();
+if (dateFrom) filtered = filtered.filter(c => c.date >= dateFrom);
+if (dateTo) filtered = filtered.filter(c => c.date <= dateTo);
+if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
+if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
 const tbody = document.getElementById('reportTableBody');
-const emptyState = document.getElementById('reportEmpty');
 const today = new Date();
-if (filtered.length === 0) {
-tbody.innerHTML = '';
-emptyState.style.display = 'block';
-return;
-}
-emptyState.style.display = 'none';
 tbody.innerHTML = filtered.map(c => {
-const chequeDate = c.date?.toDate ? c.date.toDate() : new Date(c.date);
+const chequeDate = new Date(c.date);
 const daysOutstanding = Math.floor((today-chequeDate)/(1000*60*60*24));
 return `<tr>
 <td>${c.number}</td>
@@ -2132,61 +2060,7 @@ return `<tr>
 showToast(`Report generated: ${filtered.length} cheques`,'success');
 }
 function exportReport(format) {
-const filtered = getFilteredReportData();
-if (filtered.length === 0) {
-showToast('No data to export','error');
-return;
-}
-const today = new Date();
-const filename = `cheque_report_${new Date().toISOString().split('T')[0]}`;
-if (format === 'csv') {
-let csv = 'Cheque Number,Payee,Amount,Bank,Date,Status,Days Outstanding\n';
-filtered.forEach(c => {
-const chequeDate = c.date?.toDate ? c.date.toDate() : new Date(c.date);
-const daysOutstanding = Math.floor((today-chequeDate)/(1000*60*60*24));
-csv += `${c.number},"${c.payee}",${c.amount},"${c.bank}",${c.date},${c.status},${daysOutstanding}\n`;
-});
-const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-const link = document.createElement('a');
-link.href = URL.createObjectURL(blob);
-link.download = `${filename}.csv`;
-document.body.appendChild(link);
-link.click();
-document.body.removeChild(link);
-showToast(`CSV exported: ${filtered.length} records`,'success');
-} else if (format === 'excel') {
-let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1"><thead><tr style="background-color:#6366f1;color:white"><th>Cheque Number</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Status</th><th>Days Outstanding</th></tr></thead><tbody>';
-filtered.forEach(c => {
-const chequeDate = c.date?.toDate ? c.date.toDate() : new Date(c.date);
-const daysOutstanding = Math.floor((today-chequeDate)/(1000*60*60*24));
-html += `<tr><td>${c.number}</td><td>${c.payee}</td><td>${c.amount}</td><td>${c.bank}</td><td>${c.date}</td><td>${c.status}</td><td>${daysOutstanding}</td></tr>`;
-});
-html += '</tbody></table></body></html>';
-const blob = new Blob([html], {type: 'application/vnd.ms-excel'});
-const link = document.createElement('a');
-link.href = URL.createObjectURL(blob);
-link.download = `${filename}.xls`;
-document.body.appendChild(link);
-link.click();
-document.body.removeChild(link);
-showToast(`Excel exported: ${filtered.length} records`,'success');
-} else if (format === 'pdf') {
-const printWindow = window.open('','_blank');
-if (!printWindow) {
-showToast('Please allow popups to export PDF','error');
-return;
-}
-let html = `<!DOCTYPE html><html><head><title>Cheque Report</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#6366f1}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background-color:#6366f1;color:white}tr:nth-child(even){background-color:#f2f2f2}</style></head><body><h1>Cheque Report</h1><p>Generated: ${new Date().toLocaleString()}</p><p>Total Records: ${filtered.length}</p><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Status</th><th>Days Outstanding</th></tr></thead><tbody>`;
-filtered.forEach(c => {
-const chequeDate = c.date?.toDate ? c.date.toDate() : new Date(c.date);
-const daysOutstanding = Math.floor((today-chequeDate)/(1000*60*60*24));
-html += `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${c.amount.toLocaleString('en-IN')}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td>${c.status}</td><td>${daysOutstanding}</td></tr>`;
-});
-html += '</tbody></table><script>window.onload=function(){window.print()}<\/script></body></html>';
-printWindow.document.write(html);
-printWindow.document.close();
-showToast('PDF export opened in print dialog','success');
-}
+showToast(`Exporting report as ${format.toUpperCase()}...`,'success');
 }
 function renderAging() {
 const grid = document.getElementById('agingGrid');
@@ -2199,7 +2073,7 @@ days60:{count:0,amount:0,cheques:[]},
 days90:{count:0,amount:0,cheques:[]}
 };
 allCheques.filter(c => !c.deletedAt && c.status !== 'cleared').forEach(cheque => {
-const chequeDate = cheque.date?.toDate ? cheque.date.toDate() : new Date(cheque.date);
+const chequeDate = new Date(cheque.date);
 const daysOutstanding = Math.floor((today-chequeDate)/(1000*60*60*24));
 let bucket;
 if (daysOutstanding <= 30) bucket = 'current';
@@ -2223,7 +2097,7 @@ grid.innerHTML = `
 </div>
 <div class="aging-card days60">
 <div class="aging-title">61-90 days</div>
-<div class="aging-value">₹${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
+<div class="aging-value">${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
 <div class="aging-count">${buckets.days60.count} cheques</div>
 </div>
 <div class="aging-card days90">
@@ -2275,7 +2149,7 @@ document.getElementById('analyticsWidgets').innerHTML = `
 </div>
 <div class="widget">
 <div class="widget-title">In Hand Value</div>
-<div class="widget-value">${Math.round(inHandValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">₹${Math.round(inHandValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">Issued Value</div>
@@ -2292,13 +2166,19 @@ document.getElementById('auditTrail').innerHTML = '<div style="padding:20px;text
 }
 function updateFilterBanks() {
 const banks = [...new Set(allCheques.filter(c => !c.deletedAt).map(c => c.bank).filter(Boolean))];
+const select = document.getElementById('filterBank');
+const reportSelect = document.getElementById('reportBank');
+const currentValue = select ? select.value : '';
+const reportCurrentValue = reportSelect ? reportSelect.value : '';
 const options = '<option value="">All Banks</option>' + banks.map(b => `<option value="${b}">${b}</option>`).join('');
-['filterBank','inHandBank','returnedBank','reportBank'].forEach(id => {
-const el = document.getElementById(id);
-if (el) {
-el.innerHTML = options;
+if (select) {
+select.innerHTML = options;
+select.value = currentValue;
 }
-});
+if (reportSelect) {
+reportSelect.innerHTML = options;
+reportSelect.value = reportCurrentValue;
+}
 }
 function openAddPaymentModal(chequeId) {
 const cheque = allCheques.find(c => c.id === chequeId);
@@ -2310,7 +2190,7 @@ const percentage = cheque.amount > 0 ? Math.min((totalPaid/cheque.amount)*100,10
 document.getElementById('paymentChequeId').value = chequeId;
 document.getElementById('payChequeNumber').textContent = cheque.number;
 document.getElementById('payChequePayee').textContent = cheque.payee;
-document.getElementById('payChequeAmount').textContent = '' + (parseFloat(cheque.amount)||0).toLocaleString('en-IN');
+document.getElementById('payChequeAmount').textContent = '₹' + (parseFloat(cheque.amount)||0).toLocaleString('en-IN');
 document.getElementById('payTotalPaid').textContent = '₹' + Math.round(totalPaid).toLocaleString('en-IN');
 document.getElementById('payRemainingBalance').textContent = '₹' + Math.round(remaining).toLocaleString('en-IN');
 document.getElementById('payMaxAmount').textContent = '' + Math.round(remaining).toLocaleString('en-IN');
@@ -2450,7 +2330,7 @@ html += `
 <span class="payment-badge paid" style="margin-left:8px">${methodLabels[p.method]||p.method}</span>
 </div>
 <div style="display:flex;align-items:center">
-<span class="payment-history-amount">${(parseFloat(p.amount)||0).toLocaleString('en-IN')}</span>
+<span class="payment-history-amount">₹${(parseFloat(p.amount)||0).toLocaleString('en-IN')}</span>
 <button class="btn-delete-payment" onclick="deletePayment('${chequeId}','${p.id}')" title="Delete Payment">
 <i class="fas fa-trash"></i>
 </button>
