@@ -1063,7 +1063,7 @@ Settings & Administration
 <input type="text" id="chequeNumber" required>
 </div>
 <div class="form-group">
-<label>Amount () *</label>
+<label>Amount (₹) *</label>
 <input type="number" id="chequeAmount" required step="0.01">
 </div>
 </div>
@@ -2188,8 +2188,80 @@ return `<tr>
 showToast(`Report generated: ${filtered.length} cheques`,'success');
 }
 
+// FIXED EXPORT FUNCTION
 function exportReport(format) {
-showToast(`Exporting report as ${format.toUpperCase()}...`,'success');
+    const dateFrom = document.getElementById('reportDateFrom').value;
+    const dateTo = document.getElementById('reportDateTo').value;
+    const statusFilter = document.getElementById('reportStatus').value;
+    const bankFilter = document.getElementById('reportBank').value;
+    
+    let filtered = allCheques.filter(c => !c.deletedAt);
+    if (dateFrom) filtered = filtered.filter(c => c.date >= dateFrom);
+    if (dateTo) filtered = filtered.filter(c => c.date <= dateTo);
+    if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
+    if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
+    
+    if (filtered.length === 0) {
+        showToast('No data matches filters to export.', 'warning');
+        return;
+    }
+
+    const today = new Date();
+    
+    if (format === 'csv') {
+        let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // BOM for Excel compatibility
+        csvContent += "Cheque Number,Payee,Amount,Bank,Date,Status,Days Outstanding\n";
+        filtered.forEach(c => {
+            const chequeDate = new Date(c.date);
+            const daysOutstanding = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
+            csvContent += `${c.number},"${c.payee}",${c.amount},"${c.bank}",${formatDate(c.date)},${c.status},${daysOutstanding}\n`;
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `cheque_report_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`CSV exported successfully (${filtered.length} records)`, 'success');
+    } 
+    else if (format === 'excel') {
+        let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1"><thead><tr style="background-color:#6366f1;color:white"><th>Cheque Number</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Status</th><th>Days Outstanding</th></tr></thead><tbody>';
+        filtered.forEach(c => {
+            const chequeDate = new Date(c.date);
+            const daysOutstanding = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
+            html += `<tr><td>${c.number}</td><td>${c.payee}</td><td>${c.amount}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td>${c.status}</td><td>${daysOutstanding}</td></tr>`;
+        });
+        html += '</tbody></table></body></html>';
+        const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `cheque_report_${new Date().toISOString().split('T')[0]}.xls`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`Excel exported successfully (${filtered.length} records)`, 'success');
+    } 
+    else if (format === 'pdf') {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showToast('Please allow popups to export PDF', 'error');
+            return;
+        }
+        let html = `<html><head><title>Cheque Report</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#6366f1}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background-color:#6366f1;color:white}tr:nth-child(even){background-color:#f2f2f2}</style></head><body><h1>Cheque Report</h1><p>Generated: ${new Date().toLocaleString()}</p><p>Total Records: ${filtered.length}</p><table><thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Status</th><th>Days Outstanding</th></tr></thead><tbody>`;
+        filtered.forEach(c => {
+            const chequeDate = new Date(c.date);
+            const daysOutstanding = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
+            html += `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${c.amount.toLocaleString('en-IN')}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td>${c.status}</td><td>${daysOutstanding}</td></tr>`;
+        });
+        html += `</tbody></table></body></html>`;
+        printWindow.document.write(html);
+        printWindow.document.close();
+        setTimeout(() => {
+            printWindow.print();
+        }, 500);
+        showToast('PDF report opened for printing/saving', 'success');
+    }
 }
 
 function renderAging() {
@@ -2434,7 +2506,7 @@ let html = `<div class="payment-summary-box">
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Remaining</div>
-<div class="payment-summary-value">${Math.round(remaining).toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">₹${Math.round(remaining).toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Progress</div>
