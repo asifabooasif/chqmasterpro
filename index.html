@@ -14,138 +14,31 @@
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif}
 body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;overflow-x:hidden}
 .hidden{display:none!important}.view-content{display:none!important;animation:fadeIn 0.4s ease}.view-content.active{display:block!important}
-
-/* Background Illustrations */
-.bg-illustration{
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  pointer-events:none;
-  z-index:0;
-  opacity:0.15;
-  transition:opacity 0.5s ease;
-}
-
-/* Login Background - Purple Mountains */
-.login-bg{
-  background: 
-    radial-gradient(ellipse at 20% 30%, rgba(168,85,247,0.4) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(236,72,153,0.3) 0%, transparent 50%),
-    linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%);
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  z-index:-1;
-  overflow:hidden;
-}
-
-.mountain{
-  position:absolute;
-  bottom:0;
-  width:0;
-  height:0;
-  border-left:300px solid transparent;
-  border-right:300px solid transparent;
-  border-bottom:400px solid rgba(147,51,234,0.3);
-  animation:float 8s ease-in-out infinite;
-}
-
+.bg-illustration{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.15;transition:opacity 0.5s ease;}
+.login-bg{background:radial-gradient(ellipse at 20% 30%, rgba(168,85,247,0.4) 0%, transparent 50%),radial-gradient(ellipse at 80% 20%, rgba(236,72,153,0.3) 0%, transparent 50%),linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%);position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;overflow:hidden;}
+.mountain{position:absolute;bottom:0;width:0;height:0;border-left:300px solid transparent;border-right:300px solid transparent;border-bottom:400px solid rgba(147,51,234,0.3);animation:float 8s ease-in-out infinite;}
 .mountain-1{left:-100px;bottom:0;animation-delay:0s}
 .mountain-2{left:200px;bottom:50px;border-bottom-color:rgba(168,85,247,0.25);animation-delay:2s}
 .mountain-3{right:-50px;bottom:0;border-bottom-color:rgba(192,132,252,0.2);animation-delay:4s}
-
-.moon{
-  position:absolute;
-  top:80px;
-  right:150px;
-  width:80px;
-  height:80px;
-  background:radial-gradient(circle, rgba(251,191,36,0.8) 0%, rgba(245,158,11,0.4) 100%);
-  border-radius:50%;
-  box-shadow:0 0 40px rgba(251,191,36,0.5);
-  animation:pulse 4s ease-in-out infinite;
-}
-
-.star{
-  position:absolute;
-  background:white;
-  border-radius:50%;
-  animation:twinkle 3s ease-in-out infinite;
-}
-
+.moon{position:absolute;top:80px;right:150px;width:80px;height:80px;background:radial-gradient(circle, rgba(251,191,36,0.8) 0%, rgba(245,158,11,0.4) 100%);border-radius:50%;box-shadow:0 0 40px rgba(251,191,36,0.5);animation:pulse 4s ease-in-out infinite;}
+.star{position:absolute;background:white;border-radius:50%;animation:twinkle 3s ease-in-out infinite;}
 .star-1{top:100px;left:200px;width:3px;height:3px;animation-delay:0s}
 .star-2{top:150px;left:400px;width:2px;height:2px;animation-delay:0.5s}
 .star-3{top:200px;left:100px;width:4px;height:4px;animation-delay:1s}
 .star-4{top:120px;left:600px;width:2px;height:2px;animation-delay:1.5s}
-
-/* Dashboard Background - Designer Theme */
-.dashboard-bg{
-  background:
-    radial-gradient(circle at 30% 50%, rgba(99,102,241,0.15) 0%, transparent 50%),
-    radial-gradient(circle at 70% 30%, rgba(6,182,212,0.1) 0%, transparent 40%),
-    linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-}
-
-.floating-ui-element{
-  position:absolute;
-  background:linear-gradient(135deg, var(--primary), var(--secondary));
-  border-radius:12px;
-  opacity:0.1;
-  animation:float 6s ease-in-out infinite;
-}
-
+.dashboard-bg{background:radial-gradient(circle at 30% 50%, rgba(99,102,241,0.15) 0%, transparent 50%),radial-gradient(circle at 70% 30%, rgba(6,182,212,0.1) 0%, transparent 40%),linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);}
+.floating-ui-element{position:absolute;background:linear-gradient(135deg, var(--primary), var(--secondary));border-radius:12px;opacity:0.1;animation:float 6s ease-in-out infinite;}
 .ui-element-1{top:100px;right:100px;width:120px;height:80px;animation-delay:0s}
 .ui-element-2{bottom:200px;right:200px;width:100px;height:100px;animation-delay:2s}
 .ui-element-3{top:200px;left:150px;width:80px;height:80px;animation-delay:4s}
-
-/* Analytics Background - VR/Tech Theme */
-.analytics-bg{
-  background:
-    radial-gradient(circle at 50% 50%, rgba(139,92,246,0.1) 0%, transparent 60%),
-    linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-}
-
-.floating-crypto{
-  position:absolute;
-  opacity:0.08;
-  animation:float 7s ease-in-out infinite;
-}
-
+.analytics-bg{background:radial-gradient(circle at 50% 50%, rgba(139,92,246,0.1) 0%, transparent 60%),linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);}
+.floating-crypto{position:absolute;opacity:0.08;animation:float 7s ease-in-out infinite;}
 .crypto-1{top:150px;right:150px;font-size:80px;animation-delay:0s}
 .crypto-2{bottom:250px;right:100px;font-size:60px;animation-delay:2s}
 .crypto-3{top:250px;left:100px;font-size:70px;animation-delay:4s}
-
-/* Settings Background - Innovation Theme */
-.settings-bg{
-  background:
-    radial-gradient(circle at 60% 40%, rgba(245,158,11,0.1) 0%, transparent 50%),
-    linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-}
-
-.lightbulb-glow{
-  position:absolute;
-  top:100px;
-  right:150px;
-  width:150px;
-  height:150px;
-  background:radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%);
-  border-radius:50%;
-  animation:pulse 3s ease-in-out infinite;
-}
-
-/* Parallax Effect */
-.parallax-layer{
-  position:absolute;
-  width:100%;
-  height:120%;
-  will-change:transform;
-}
-
-/* Animations */
+.settings-bg{background:radial-gradient(circle at 60% 40%, rgba(245,158,11,0.1) 0%, transparent 50%),linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);}
+.lightbulb-glow{position:absolute;top:100px;right:150px;width:150px;height:150px;background:radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%);border-radius:50%;animation:pulse 3s ease-in-out infinite;}
+.parallax-layer{position:absolute;width:100%;height:120%;will-change:transform;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
@@ -154,7 +47,6 @@ body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 @keyframes twinkle{0%,100%{opacity:0.3}50%{opacity:1}}
 @keyframes rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-
 .login-container{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px;position:relative;z-index:1}
 .login-box{background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-radius:24px;padding:48px;width:100%;max-width:450px;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:slideUp 0.6s ease;z-index:1;position:relative}
 .login-header{text-align:center;margin-bottom:32px;animation:fadeIn 0.8s ease}
@@ -371,7 +263,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .loading{position:relative;pointer-events:none}
 .loading::after{content:'';position:absolute;top:50%;left:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:rotate 0.8s linear infinite}
-
 @media (max-width:768px){
 .sidebar{transform:translateX(-100%);width:280px}
 .sidebar.active{transform:translateX(0)}
@@ -410,7 +301,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </style>
 </head>
 <body>
-<!-- Login Screen with Mountain Background -->
 <div class="login-container" id="loginScreen">
 <div class="login-bg">
 <div class="moon"></div>
@@ -450,7 +340,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Signup Screen -->
 <div class="login-container hidden" id="signupScreen">
 <div class="login-bg">
 <div class="moon"></div>
@@ -486,7 +375,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Main App -->
 <div class="app-container" id="appContainer">
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 <aside class="sidebar" id="sidebar">
@@ -566,7 +454,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Dashboard View with Designer Background -->
 <div id="dashboardView" class="view-content active dashboard-bg">
 <div class="floating-ui-element ui-element-1"></div>
 <div class="floating-ui-element ui-element-2"></div>
@@ -594,7 +481,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="widget-header">
 <div>
 <div class="widget-title">Total Value</div>
-<div class="widget-value">₹<span id="totalValue">0</span></div>
+<div class="widget-value"><span id="totalValue">0</span></div>
 </div>
 <div class="widget-icon warning"><i class="fas fa-rupee-sign"></i></div>
 </div>
@@ -620,7 +507,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- All Cheques View -->
 <div id="allChequesView" class="view-content">
 <div class="card">
 <div class="card-header">
@@ -630,6 +516,10 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </button>
 </div>
 <div class="filters">
+<div class="filter-group">
+<label>Cheque Number</label>
+<input type="text" id="filterChequeNumber" placeholder="Search by number" onkeyup="renderAllCheques()">
+</div>
 <div class="filter-group">
 <label>Status</label>
 <select id="filterStatus" onchange="renderAllCheques()">
@@ -674,11 +564,22 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- In Hand View -->
 <div id="inHandView" class="view-content">
 <div class="card">
 <div class="card-header">
 <h2 class="card-title">Cheques In Hand</h2>
+</div>
+<div class="filters">
+<div class="filter-group">
+<label>Cheque Number</label>
+<input type="text" id="filterInHandChequeNumber" placeholder="Search by number" onkeyup="renderInHand()">
+</div>
+<div class="filter-group">
+<label>Bank</label>
+<select id="inHandBank" onchange="renderInHand()">
+<option value="">All Banks</option>
+</select>
+</div>
 </div>
 <div class="table-container">
 <table>
@@ -702,11 +603,22 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Returned View -->
 <div id="returnedView" class="view-content">
 <div class="card">
 <div class="card-header">
 <h2 class="card-title">Returned Cheques</h2>
+</div>
+<div class="filters">
+<div class="filter-group">
+<label>Cheque Number</label>
+<input type="text" id="filterReturnedChequeNumber" placeholder="Search by number" onkeyup="renderReturned()">
+</div>
+<div class="filter-group">
+<label>Bank</label>
+<select id="returnedBank" onchange="renderReturned()">
+<option value="">All Banks</option>
+</select>
+</div>
 </div>
 <div class="table-container">
 <table>
@@ -730,7 +642,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Recycle View -->
 <div id="recycleView" class="view-content">
 <div class="card">
 <div class="card-header">
@@ -757,7 +668,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Kanban View -->
 <div id="kanbanView" class="view-content dashboard-bg">
 <div class="floating-ui-element ui-element-1"></div>
 <div class="floating-ui-element ui-element-2"></div>
@@ -772,7 +682,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Timeline View -->
 <div id="timelineView" class="view-content">
 <div class="card">
 <div class="card-header">
@@ -782,7 +691,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Analytics View with VR/Tech Background -->
 <div id="analyticsView" class="view-content analytics-bg">
 <i class="fab fa-bitcoin floating-crypto crypto-1"></i>
 <i class="fab fa-ethereum floating-crypto crypto-2"></i>
@@ -795,7 +703,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Books View -->
 <div id="booksView" class="view-content">
 <div class="card">
 <div class="card-header">
@@ -808,7 +715,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Reports View -->
 <div id="reportsView" class="view-content analytics-bg">
 <i class="fas fa-chart-bar floating-crypto crypto-1"></i>
 <i class="fas fa-file-invoice floating-crypto crypto-2"></i>
@@ -880,7 +786,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Aging View -->
 <div id="agingView" class="view-content">
 <div class="card">
 <div class="card-header">
@@ -909,7 +814,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Audit View -->
 <div id="auditView" class="view-content">
 <div class="card">
 <div class="card-header">
@@ -919,7 +823,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
-<!-- Settings View with Innovation Background -->
 <div id="settingsView" class="view-content settings-bg">
 <div class="lightbulb-glow"></div>
 <div class="card">
@@ -1144,8 +1047,6 @@ Settings & Administration
 </main>
 </div>
 
-<!-- Modals remain the same as in previous code -->
-<!-- Add Cheque Modal -->
 <div class="modal-overlay" id="addChequeModal">
 <div class="modal">
 <div class="modal-header">
@@ -1207,7 +1108,6 @@ Settings & Administration
 </div>
 </div>
 
-<!-- Other modals remain the same... -->
 <div class="modal-overlay" id="statusChangeModal">
 <div class="modal">
 <div class="modal-header">
@@ -1597,7 +1497,6 @@ Settings & Administration
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
-// Firebase Configuration
 const firebaseConfig = {
 apiKey: "AIzaSyAZ7wyQhcaWoZa1ify5xqUKk12YodLTxU8",
 authDomain: "neoncheque.firebaseapp.com",
@@ -1613,7 +1512,6 @@ const auth = firebase.auth();
 let allCheques = [];
 let currentUser = null;
 
-// Parallax Effect
 window.addEventListener('scroll', () => {
 const scrolled = window.pageYOffset;
 const parallaxElements = document.querySelectorAll('.parallax-layer, .floating-ui-element, .floating-crypto, .mountain');
@@ -1623,7 +1521,6 @@ el.style.transform = `translateY(${scrolled * speed}px)`;
 });
 });
 
-// Status Field Configurations
 const statusFieldConfigs = {
 'in-hand': [
 {id:'receivedDate',label:'Received Date',type:'date',required:true},
@@ -1657,7 +1554,6 @@ const statusFieldConfigs = {
 ]
 };
 
-// Authentication
 document.addEventListener('DOMContentLoaded', () => {
 document.getElementById('loginForm').addEventListener('submit', handleLogin);
 document.getElementById('signupForm').addEventListener('submit', handleSignup);
@@ -2020,9 +1916,11 @@ const tbody = document.getElementById('allChequesTable');
 const emptyState = document.getElementById('allChequesEmpty');
 const statusFilter = document.getElementById('filterStatus').value;
 const bankFilter = document.getElementById('filterBank').value;
+const chequeNumberFilter = document.getElementById('filterChequeNumber').value.toLowerCase();
 let filtered = allCheques.filter(c => !c.deletedAt);
 if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
 if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
+if (chequeNumberFilter) filtered = filtered.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
 if (filtered.length === 0) {
 tbody.innerHTML = '';
 emptyState.classList.remove('hidden');
@@ -2084,7 +1982,11 @@ ${c.status === 'returned' ? `
 }
 
 function renderInHand() {
-const list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
+const bankFilter = document.getElementById('inHandBank').value;
+const chequeNumberFilter = document.getElementById('filterInHandChequeNumber').value.toLowerCase();
+let list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
+if (bankFilter) list = list.filter(c => c.bank === bankFilter);
+if (chequeNumberFilter) list = list.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
 document.getElementById('inHandTable').innerHTML = list.map(c => `
 <tr>
 <td>${c.number}</td>
@@ -2099,7 +2001,11 @@ document.getElementById('inHandEmpty').classList.toggle('hidden',list.length>0);
 }
 
 function renderReturned() {
-const list = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
+const bankFilter = document.getElementById('returnedBank').value;
+const chequeNumberFilter = document.getElementById('filterReturnedChequeNumber').value.toLowerCase();
+let list = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
+if (bankFilter) list = list.filter(c => c.bank === bankFilter);
+if (chequeNumberFilter) list = list.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
 const tbody = document.getElementById('returnedTable');
 const emptyState = document.getElementById('returnedEmpty');
 if (list.length === 0) {
@@ -2121,7 +2027,7 @@ return `<tr>
 <div style="font-weight:700">₹${totalAmount.toLocaleString('en-IN')}</div>
 <div style="font-size:11px;color:var(--gray)">
 Paid: <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span> |
-Due: <span style="color:var(--danger);font-weight:600">₹${Math.round(remaining).toLocaleString('en-IN')}</span>
+Due: <span style="color:var(--danger);font-weight:600">${Math.round(remaining).toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar" style="margin-top:4px">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -2421,7 +2327,7 @@ document.getElementById('payChequeNumber').textContent = cheque.number;
 document.getElementById('payChequePayee').textContent = cheque.payee;
 document.getElementById('payChequeAmount').textContent = '' + (parseFloat(cheque.amount)||0).toLocaleString('en-IN');
 document.getElementById('payTotalPaid').textContent = '₹' + Math.round(totalPaid).toLocaleString('en-IN');
-document.getElementById('payRemainingBalance').textContent = '₹' + Math.round(remaining).toLocaleString('en-IN');
+document.getElementById('payRemainingBalance').textContent = '' + Math.round(remaining).toLocaleString('en-IN');
 document.getElementById('payMaxAmount').textContent = '' + Math.round(remaining).toLocaleString('en-IN');
 document.getElementById('payProgressPercent').textContent = percentage.toFixed(1) + '%';
 document.getElementById('payProgressBar').style.width = percentage + '%';
@@ -2528,7 +2434,7 @@ let html = `<div class="payment-summary-box">
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Remaining</div>
-<div class="payment-summary-value">₹${Math.round(remaining).toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">${Math.round(remaining).toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Progress</div>
