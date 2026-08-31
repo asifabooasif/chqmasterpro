@@ -263,6 +263,12 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .loading{position:relative;pointer-events:none}
 .loading::after{content:'';position:absolute;top:50%;left:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:rotate 0.8s linear infinite}
+.aging-info-banner{background:linear-gradient(135deg, var(--info), #2563eb);color:white;padding:16px 20px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;gap:12px;animation:slideUp 0.5s ease}
+.aging-info-banner i{font-size:24px;animation:pulse 2s ease-in-out infinite}
+.aging-info-banner .info-content{flex:1}
+.aging-info-banner .info-title{font-weight:700;font-size:14px;margin-bottom:2px}
+.aging-info-banner .info-desc{font-size:12px;opacity:0.9}
+.aging-last-update{font-size:11px;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:20px;font-weight:600}
 @media (max-width:768px){
 .sidebar{transform:translateX(-100%);width:280px}
 .sidebar.active{transform:translateX(0)}
@@ -296,6 +302,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .toast-container{right:0;left:0}
 .login-box{padding:32px 24px}
 .action-btn::after{display:none}
+.aging-info-banner{flex-direction:column;text-align:center}
 }
 @keyframes slideDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
 </style>
@@ -789,10 +796,21 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div id="agingView" class="view-content">
 <div class="card">
 <div class="card-header">
-<h2 class="card-title">Aging Report (30/60/90)</h2>
+<h2 class="card-title">
+<i class="fas fa-hand-holding" style="color:var(--info);margin-right:8px"></i>
+In-Hand Cheques Aging (30/60/90)
+</h2>
 <button class="btn btn-primary btn-sm" onclick="refreshAging()">
 <i class="fas fa-sync"></i> Refresh
 </button>
+</div>
+<div class="aging-info-banner">
+<i class="fas fa-info-circle"></i>
+<div class="info-content">
+<div class="info-title">Auto-Tracking Active</div>
+<div class="info-desc">This report tracks only <strong>In-Hand</strong> cheques. Days outstanding are calculated from today's date to each cheque date and auto-refresh daily.</div>
+</div>
+<div class="aging-last-update" id="agingLastUpdate">Last Update: --</div>
 </div>
 <div class="aging-grid" id="agingGrid"></div>
 <div class="table-container">
@@ -803,13 +821,18 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <th>Payee</th>
 <th>Amount</th>
 <th>Bank</th>
-<th>Date</th>
+<th>Cheque Date</th>
 <th>Days Outstanding</th>
 <th>Aging Bucket</th>
 </tr>
 </thead>
 <tbody id="agingTableBody"></tbody>
 </table>
+</div>
+<div id="agingEmpty" class="empty-state hidden">
+<i class="fas fa-hand-holding"></i>
+<h3>No in-hand cheques to age</h3>
+<p>Move cheques to "In Hand" status to see them here</p>
 </div>
 </div>
 </div>
@@ -1511,6 +1534,7 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 let allCheques = [];
 let currentUser = null;
+let lastAgingUpdateDate = null; // Track last aging refresh date for auto-update
 
 window.addEventListener('scroll', () => {
 const scrolled = window.pageYOffset;
@@ -1554,6 +1578,22 @@ const statusFieldConfigs = {
 ]
 };
 
+// AUTO-UPDATE AGING: Check every 60 seconds if day has changed, and re-render aging if active
+function startAgingAutoUpdate() {
+    setInterval(() => {
+        const today = new Date().toDateString();
+        if (lastAgingUpdateDate && lastAgingUpdateDate !== today) {
+            // Day has changed - auto refresh aging if the view is currently active
+            const agingView = document.getElementById('agingView');
+            if (agingView && agingView.classList.contains('active')) {
+                renderAging();
+                showToast('Aging report auto-updated for new day', 'info');
+            }
+        }
+        lastAgingUpdateDate = new Date().toDateString();
+    }, 60000); // Check every 60 seconds
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 document.getElementById('loginForm').addEventListener('submit', handleLogin);
 document.getElementById('signupForm').addEventListener('submit', handleSignup);
@@ -1567,6 +1607,7 @@ document.getElementById('loginScreen').classList.add('hidden');
 document.getElementById('appContainer').classList.add('active');
 loadAllChequesData();
 showToast('Welcome back!','success');
+startAgingAutoUpdate(); // Start auto-refresh timer
 } else {
 document.getElementById('appContainer').classList.remove('active');
 document.getElementById('loginScreen').classList.remove('hidden');
@@ -1641,7 +1682,7 @@ if (viewName === 'recycle') renderRecycle();
 if (viewName === 'kanban') renderKanban();
 if (viewName === 'timeline') renderTimeline();
 if (viewName === 'analytics') renderAnalytics();
-if (viewName === 'aging') renderAging();
+if (viewName === 'aging') renderAging(); // Always recalculate on view open
 if (viewName === 'audit') renderAudit();
 if (viewName === 'reports') initReportFilters();
 }, 100);
@@ -2188,7 +2229,6 @@ return `<tr>
 showToast(`Report generated: ${filtered.length} cheques`,'success');
 }
 
-// FIXED EXPORT FUNCTION
 function exportReport(format) {
     const dateFrom = document.getElementById('reportDateFrom').value;
     const dateTo = document.getElementById('reportDateTo').value;
@@ -2209,7 +2249,7 @@ function exportReport(format) {
     const today = new Date();
     
     if (format === 'csv') {
-        let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // BOM for Excel compatibility
+        let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
         csvContent += "Cheque Number,Payee,Amount,Bank,Date,Status,Days Outstanding\n";
         filtered.forEach(c => {
             const chequeDate = new Date(c.date);
@@ -2264,19 +2304,39 @@ function exportReport(format) {
     }
 }
 
+// UPDATED AGING: Only for In-Hand cheques, tracks days from today to cheque date
 function renderAging() {
 const grid = document.getElementById('agingGrid');
 const tbody = document.getElementById('agingTableBody');
+const emptyState = document.getElementById('agingEmpty');
 const today = new Date();
+// Reset time to midnight for accurate day calculation
+today.setHours(0,0,0,0);
+
+// FILTER: Only In-Hand cheques (not deleted)
+const inHandCheques = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
+
+if (inHandCheques.length === 0) {
+    grid.innerHTML = '';
+    tbody.innerHTML = '';
+    emptyState.classList.remove('hidden');
+    updateAgingLastUpdate();
+    return;
+}
+emptyState.classList.add('hidden');
+
 const buckets = {
 current:{count:0,amount:0,cheques:[]},
 days30:{count:0,amount:0,cheques:[]},
 days60:{count:0,amount:0,cheques:[]},
 days90:{count:0,amount:0,cheques:[]}
 };
-allCheques.filter(c => !c.deletedAt && c.status !== 'cleared').forEach(cheque => {
+
+inHandCheques.forEach(cheque => {
 const chequeDate = new Date(cheque.date);
-const daysOutstanding = Math.floor((today-chequeDate)/(1000*60*60*24));
+chequeDate.setHours(0,0,0,0);
+// Days outstanding = Today - Cheque Date (how many days the cheque has been in hand)
+const daysOutstanding = Math.floor((today - chequeDate)/(1000*60*60*24));
 let bucket;
 if (daysOutstanding <= 30) bucket = 'current';
 else if (daysOutstanding <= 60) bucket = 'days30';
@@ -2286,34 +2346,37 @@ buckets[bucket].count++;
 buckets[bucket].amount += parseFloat(cheque.amount) || 0;
 buckets[bucket].cheques.push({...cheque,daysOutstanding});
 });
+
 grid.innerHTML = `
 <div class="aging-card current">
-<div class="aging-title">Current (0-30 days)</div>
+<div class="aging-title">Current (0-30 days in hand)</div>
 <div class="aging-value">₹${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
 <div class="aging-count">${buckets.current.count} cheques</div>
 </div>
 <div class="aging-card days30">
-<div class="aging-title">31-60 days</div>
+<div class="aging-title">31-60 days in hand</div>
 <div class="aging-value">₹${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
 <div class="aging-count">${buckets.days30.count} cheques</div>
 </div>
 <div class="aging-card days60">
-<div class="aging-title">61-90 days</div>
+<div class="aging-title">61-90 days in hand</div>
 <div class="aging-value">₹${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
 <div class="aging-count">${buckets.days60.count} cheques</div>
 </div>
 <div class="aging-card days90">
-<div class="aging-title">90+ days</div>
+<div class="aging-title">90+ days in hand</div>
 <div class="aging-value">₹${Math.round(buckets.days90.amount).toLocaleString('en-IN')}</div>
 <div class="aging-count">${buckets.days90.count} cheques</div>
 </div>
 `;
+
 const allAgingCheques = [
 ...buckets.current.cheques,
 ...buckets.days30.cheques,
 ...buckets.days60.cheques,
 ...buckets.days90.cheques
 ];
+
 tbody.innerHTML = allAgingCheques.map(c => {
 let bucketLabel;
 if (c.daysOutstanding <= 30) bucketLabel = 'Current (0-30)';
@@ -2326,7 +2389,7 @@ return `<tr>
 <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
 <td>${c.bank}</td>
 <td>${formatDate(c.date)}</td>
-<td>${c.daysOutstanding} days</td>
+<td><strong style="color:${c.daysOutstanding>60?'var(--danger)':c.daysOutstanding>30?'var(--warning)':'var(--success)'}">${c.daysOutstanding} days</strong></td>
 <td>
 <span class="status-badge" style="background:${c.daysOutstanding>60?'#fee2e2':c.daysOutstanding>30?'#fef3c7':'#d1fae5'};color:${c.daysOutstanding>60?'#b91c1c':c.daysOutstanding>30?'#b45309':'#065f46'}">
 ${bucketLabel}
@@ -2334,6 +2397,19 @@ ${bucketLabel}
 </td>
 </tr>`;
 }).join('');
+
+updateAgingLastUpdate();
+}
+
+function updateAgingLastUpdate() {
+    const now = new Date();
+    const timeStr = now.toLocaleString('en-IN', { 
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+    const el = document.getElementById('agingLastUpdate');
+    if (el) el.textContent = 'Last Update: ' + timeStr;
+    lastAgingUpdateDate = now.toDateString();
 }
 
 function refreshAging() {
