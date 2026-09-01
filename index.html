@@ -14,7 +14,8 @@
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif}
 body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;overflow-x:hidden}
 .hidden{display:none!important}.view-content{display:none!important;animation:fadeIn 0.4s ease}.view-content.active{display:block!important}
-.bg-illustration{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.15;transition:opacity 0.5s ease;}
+
+/* === ANIMATED BACKGROUNDS === */
 .login-bg{background:radial-gradient(ellipse at 20% 30%, rgba(168,85,247,0.4) 0%, transparent 50%),radial-gradient(ellipse at 80% 20%, rgba(236,72,153,0.3) 0%, transparent 50%),linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%);position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;overflow:hidden;}
 .mountain{position:absolute;bottom:0;width:0;height:0;border-left:300px solid transparent;border-right:300px solid transparent;border-bottom:400px solid rgba(147,51,234,0.3);animation:float 8s ease-in-out infinite;}
 .mountain-1{left:-100px;bottom:0;animation-delay:0s}
@@ -26,19 +27,21 @@ body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh
 .star-2{top:150px;left:400px;width:2px;height:2px;animation-delay:0.5s}
 .star-3{top:200px;left:100px;width:4px;height:4px;animation-delay:1s}
 .star-4{top:120px;left:600px;width:2px;height:2px;animation-delay:1.5s}
-.dashboard-bg{background:radial-gradient(circle at 30% 50%, rgba(99,102,241,0.15) 0%, transparent 50%),radial-gradient(circle at 70% 30%, rgba(6,182,212,0.1) 0%, transparent 40%),linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);}
+.dashboard-bg{background:radial-gradient(circle at 30% 50%, rgba(99,102,241,0.15) 0%, transparent 50%),radial-gradient(circle at 70% 30%, rgba(6,182,212,0.1) 0%, transparent 40%),linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);position:relative;overflow:hidden;}
 .floating-ui-element{position:absolute;background:linear-gradient(135deg, var(--primary), var(--secondary));border-radius:12px;opacity:0.1;animation:float 6s ease-in-out infinite;}
 .ui-element-1{top:100px;right:100px;width:120px;height:80px;animation-delay:0s}
 .ui-element-2{bottom:200px;right:200px;width:100px;height:100px;animation-delay:2s}
 .ui-element-3{top:200px;left:150px;width:80px;height:80px;animation-delay:4s}
-.analytics-bg{background:radial-gradient(circle at 50% 50%, rgba(139,92,246,0.1) 0%, transparent 60%),linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);}
+.analytics-bg{background:radial-gradient(circle at 50% 50%, rgba(139,92,246,0.1) 0%, transparent 60%),linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);position:relative;overflow:hidden;}
 .floating-crypto{position:absolute;opacity:0.08;animation:float 7s ease-in-out infinite;}
 .crypto-1{top:150px;right:150px;font-size:80px;animation-delay:0s}
 .crypto-2{bottom:250px;right:100px;font-size:60px;animation-delay:2s}
 .crypto-3{top:250px;left:100px;font-size:70px;animation-delay:4s}
-.settings-bg{background:radial-gradient(circle at 60% 40%, rgba(245,158,11,0.1) 0%, transparent 50%),linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);}
+.settings-bg{background:radial-gradient(circle at 60% 40%, rgba(245,158,11,0.1) 0%, transparent 50%),linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);position:relative;overflow:hidden;}
 .lightbulb-glow{position:absolute;top:100px;right:150px;width:150px;height:150px;background:radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%);border-radius:50%;animation:pulse 3s ease-in-out infinite;}
 .parallax-layer{position:absolute;width:100%;height:120%;will-change:transform;}
+
+/* === KEYFRAME ANIMATIONS === */
 @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
@@ -48,6 +51,7 @@ body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh
 @keyframes twinkle{0%,100%{opacity:0.3}50%{opacity:1}}
 @keyframes rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes slideDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideInRight{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}
 
 .login-container{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px;position:relative;z-index:1}
 .login-box{background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-radius:24px;padding:48px;width:100%;max-width:450px;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:slideUp 0.6s ease;z-index:1;position:relative}
@@ -65,7 +69,7 @@ body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh
 .btn::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border-radius:50%;background:rgba(255,255,255,0.3);transform:translate(-50%,-50%);transition:width 0.6s,height 0.6s}
 .btn:hover::before{width:300px;height:300px}
 .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:white}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(99,102,241,0.4)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 15px rgba(99,102,241,0.3)}
 .btn-secondary{background:white;color:var(--dark);border:2px solid var(--border)}
 .btn-secondary:hover{background:var(--light);transform:translateY(-2px)}
 .btn-sm{padding:7px 14px;font-size:12px}
@@ -161,7 +165,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .empty-state i{font-size:56px;margin-bottom:14px;opacity:0.3;animation:float 3s ease-in-out infinite}
 .toast-container{position:fixed;top:20px;right:20px;z-index:3000}
 .toast{background:white;padding:14px 20px;border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,0.12);margin-bottom:10px;animation:slideInRight 0.4s ease;min-width:300px;border-left:4px solid var(--info);display:flex;align-items:center;gap:12px}
-@keyframes slideInRight{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}
 .toast.success{border-left-color:var(--success)}
 .toast.error{border-left-color:var(--danger)}
 .toast i{animation:rotate 0.5s ease}
@@ -263,8 +266,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px}
 .report-actions{display:flex;gap:10px;flex-wrap:wrap}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.loading{position:relative;pointer-events:none}
-.loading::after{content:'';position:absolute;top:50%;left:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:rotate 0.8s linear infinite}
 .aging-info-banner{background:linear-gradient(135deg, var(--info), #2563eb);color:white;padding:16px 20px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;gap:12px;animation:slideUp 0.5s ease}
 .aging-info-banner i{font-size:24px;animation:pulse 2s ease-in-out infinite}
 .aging-info-banner .info-content{flex:1}
@@ -489,7 +490,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="widget-header">
 <div>
 <div class="widget-title">Total Value</div>
-<div class="widget-value"><span id="totalValue">0</span></div>
+<div class="widget-value">₹<span id="totalValue">0</span></div>
 </div>
 <div class="widget-icon warning"><i class="fas fa-rupee-sign"></i></div>
 </div>
@@ -524,10 +525,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </button>
 </div>
 <div class="filters">
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="filterChequeNumber" placeholder="Search by number" onkeyup="renderAllCheques()">
-</div>
 <div class="filter-group">
 <label>Status</label>
 <select id="filterStatus" onchange="renderAllCheques()">
@@ -577,18 +574,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="card-header">
 <h2 class="card-title">Cheques In Hand</h2>
 </div>
-<div class="filters">
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="filterInHandChequeNumber" placeholder="Search by number" onkeyup="renderInHand()">
-</div>
-<div class="filter-group">
-<label>Bank</label>
-<select id="inHandBank" onchange="renderInHand()">
-<option value="">All Banks</option>
-</select>
-</div>
-</div>
 <div class="table-container">
 <table>
 <thead>
@@ -615,18 +600,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="card">
 <div class="card-header">
 <h2 class="card-title">Returned Cheques</h2>
-</div>
-<div class="filters">
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="filterReturnedChequeNumber" placeholder="Search by number" onkeyup="renderReturned()">
-</div>
-<div class="filter-group">
-<label>Bank</label>
-<select id="returnedBank" onchange="renderReturned()">
-<option value="">All Banks</option>
-</select>
-</div>
 </div>
 <div class="table-container">
 <table>
@@ -809,7 +782,7 @@ In-Hand Cheques Aging (30/60/90)
 <i class="fas fa-info-circle"></i>
 <div class="info-content">
 <div class="info-title">Auto-Tracking Active</div>
-<div class="info-desc">This report tracks only <strong>In-Hand</strong> cheques. Days outstanding are calculated from today's date to each cheque date and auto-refresh daily.</div>
+<div class="info-desc">This report tracks <strong>ONLY "In-Hand"</strong> cheques. Days are calculated from the <strong>Cheque Date</strong> to <strong>Today</strong> and auto-refresh daily.</div>
 </div>
 <div class="aging-last-update" id="agingLastUpdate">Last Update: --</div>
 </div>
@@ -823,7 +796,7 @@ In-Hand Cheques Aging (30/60/90)
 <th>Amount</th>
 <th>Bank</th>
 <th>Cheque Date</th>
-<th>Days Outstanding</th>
+<th>Days from Cheque Date</th>
 <th>Aging Bucket</th>
 </tr>
 </thead>
@@ -1950,11 +1923,9 @@ const tbody = document.getElementById('allChequesTable');
 const emptyState = document.getElementById('allChequesEmpty');
 const statusFilter = document.getElementById('filterStatus').value;
 const bankFilter = document.getElementById('filterBank').value;
-const chequeNumberFilter = document.getElementById('filterChequeNumber').value.toLowerCase();
 let filtered = allCheques.filter(c => !c.deletedAt);
 if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
 if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
-if (chequeNumberFilter) filtered = filtered.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
 if (filtered.length === 0) {
 tbody.innerHTML = '';
 emptyState.classList.remove('hidden');
@@ -2016,11 +1987,7 @@ ${c.status === 'returned' ? `
 }
 
 function renderInHand() {
-const bankFilter = document.getElementById('inHandBank').value;
-const chequeNumberFilter = document.getElementById('filterInHandChequeNumber').value.toLowerCase();
-let list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
-if (bankFilter) list = list.filter(c => c.bank === bankFilter);
-if (chequeNumberFilter) list = list.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
+const list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
 document.getElementById('inHandTable').innerHTML = list.map(c => `
 <tr>
 <td>${c.number}</td>
@@ -2035,11 +2002,7 @@ document.getElementById('inHandEmpty').classList.toggle('hidden',list.length>0);
 }
 
 function renderReturned() {
-const bankFilter = document.getElementById('returnedBank').value;
-const chequeNumberFilter = document.getElementById('filterReturnedChequeNumber').value.toLowerCase();
-let list = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
-if (bankFilter) list = list.filter(c => c.bank === bankFilter);
-if (chequeNumberFilter) list = list.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
+const list = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
 const tbody = document.getElementById('returnedTable');
 const emptyState = document.getElementById('returnedEmpty');
 if (list.length === 0) {
@@ -2297,7 +2260,7 @@ function exportReport(format) {
     }
 }
 
-// CORRECTED AGING: Strictly filters ONLY 'in-hand' cheques and calculates days from cheque date to today
+// STRICTLY CORRECTED AGING: ONLY filters 'in-hand' cheques and calculates days from Cheque Date to Today
 function renderAging() {
     const grid = document.getElementById('agingGrid');
     const tbody = document.getElementById('agingTableBody');
@@ -2305,7 +2268,7 @@ function renderAging() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // STRICT FILTER: Only In-Hand cheques (not deleted)
+    // STRICT FILTER: ONLY cheques with status 'in-hand'
     const inHandCheques = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
 
     if (inHandCheques.length === 0) {
@@ -2327,38 +2290,38 @@ function renderAging() {
     inHandCheques.forEach(cheque => {
         const chequeDate = new Date(cheque.date);
         chequeDate.setHours(0, 0, 0, 0);
-        // Days outstanding = Today - Cheque Date
-        const daysOutstanding = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
+        // Days from Cheque Date to Today
+        const daysFromChequeDate = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
         
         let bucket;
-        if (daysOutstanding <= 30) bucket = 'current';
-        else if (daysOutstanding <= 60) bucket = 'days30';
-        else if (daysOutstanding <= 90) bucket = 'days60';
+        if (daysFromChequeDate <= 30) bucket = 'current';
+        else if (daysFromChequeDate <= 60) bucket = 'days30';
+        else if (daysFromChequeDate <= 90) bucket = 'days60';
         else bucket = 'days90';
         
         buckets[bucket].count++;
         buckets[bucket].amount += parseFloat(cheque.amount) || 0;
-        buckets[bucket].cheques.push({ ...cheque, daysOutstanding });
+        buckets[bucket].cheques.push({ ...cheque, daysFromChequeDate });
     });
 
     grid.innerHTML = `
     <div class="aging-card current">
-    <div class="aging-title">Current (0-30 days in hand)</div>
+    <div class="aging-title">Current (0-30 days)</div>
     <div class="aging-value">₹${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.current.count} cheques</div>
     </div>
     <div class="aging-card days30">
-    <div class="aging-title">31-60 days in hand</div>
+    <div class="aging-title">31-60 days</div>
     <div class="aging-value">₹${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days30.count} cheques</div>
     </div>
     <div class="aging-card days60">
-    <div class="aging-title">61-90 days in hand</div>
+    <div class="aging-title">61-90 days</div>
     <div class="aging-value">₹${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days60.count} cheques</div>
     </div>
     <div class="aging-card days90">
-    <div class="aging-title">90+ days in hand</div>
+    <div class="aging-title">90+ days</div>
     <div class="aging-value">₹${Math.round(buckets.days90.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days90.count} cheques</div>
     </div>
@@ -2373,19 +2336,19 @@ function renderAging() {
 
     tbody.innerHTML = allAgingCheques.map(c => {
     let bucketLabel;
-    if (c.daysOutstanding <= 30) bucketLabel = 'Current (0-30)';
-    else if (c.daysOutstanding <= 60) bucketLabel = '31-60 days';
-    else if (c.daysOutstanding <= 90) bucketLabel = '61-90 days';
-    else bucketLabel = '90+ days';
+    if (c.daysFromChequeDate <= 30) bucketLabel = '0-30 Days';
+    else if (c.daysFromChequeDate <= 60) bucketLabel = '31-60 Days';
+    else if (c.daysFromChequeDate <= 90) bucketLabel = '61-90 Days';
+    else bucketLabel = '90+ Days';
     return `<tr>
     <td>${c.number}</td>
     <td>${c.payee}</td>
     <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
     <td>${c.bank}</td>
     <td>${formatDate(c.date)}</td>
-    <td><strong style="color:${c.daysOutstanding>60?'var(--danger)':c.daysOutstanding>30?'var(--warning)':'var(--success)'}">${c.daysOutstanding} days</strong></td>
+    <td><strong style="color:${c.daysFromChequeDate>60?'var(--danger)':c.daysFromChequeDate>30?'var(--warning)':'var(--success)'}">${c.daysFromChequeDate} days</strong></td>
     <td>
-    <span class="status-badge" style="background:${c.daysOutstanding>60?'#fee2e2':c.daysOutstanding>30?'#fef3c7':'#d1fae5'};color:${c.daysOutstanding>60?'#b91c1c':c.daysOutstanding>30?'#b45309':'#065f46'}">
+    <span class="status-badge" style="background:${c.daysFromChequeDate>60?'#fee2e2':c.daysFromChequeDate>30?'#fef3c7':'#d1fae5'};color:${c.daysFromChequeDate>60?'#b91c1c':c.daysFromChequeDate>30?'#b45309':'#065f46'}">
     ${bucketLabel}
     </span>
     </td>
