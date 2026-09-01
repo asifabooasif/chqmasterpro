@@ -152,6 +152,8 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .filter-group label{font-weight:600;font-size:11px;color:var(--gray);text-transform:uppercase}
 .filter-group select,.filter-group input{padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px;min-width:140px;transition:all 0.3s ease}
 .filter-group select:focus,.filter-group input:focus{border-color:var(--primary);outline:none;transform:translateY(-2px)}
+.bulk-actions{display:flex;gap:10px;align-items:center;padding:10px;background:var(--light);border-radius:8px;margin-bottom:15px;animation:slideIn 0.3s ease}
+.bulk-actions .btn{padding:8px 16px}
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s ease}
 .modal-overlay.active{display:flex}
 .modal{background:white;border-radius:18px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:scaleIn 0.4s ease}
@@ -306,6 +308,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .login-box{padding:32px 24px}
 .action-btn::after{display:none}
 .aging-info-banner{flex-direction:column;text-align:center}
+.bulk-actions{flex-direction:column;align-items:stretch}
 }
 </style>
 </head>
@@ -490,7 +493,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="widget-header">
 <div>
 <div class="widget-title">Total Value</div>
-<div class="widget-value">₹<span id="totalValue">0</span></div>
+<div class="widget-value"><span id="totalValue">0</span></div>
 </div>
 <div class="widget-icon warning"><i class="fas fa-rupee-sign"></i></div>
 </div>
@@ -526,8 +529,16 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 <div class="filters">
 <div class="filter-group">
+<label>Cheque Number</label>
+<input type="text" id="filterChequeNumber" placeholder="Search by number" onkeyup="applyFilters()">
+</div>
+<div class="filter-group">
+<label>Payee Name</label>
+<input type="text" id="filterPayee" placeholder="Search by payee" onkeyup="applyFilters()">
+</div>
+<div class="filter-group">
 <label>Status</label>
-<select id="filterStatus" onchange="renderAllCheques()">
+<select id="filterStatus" onchange="applyFilters()">
 <option value="">All</option>
 <option value="draft">Draft</option>
 <option value="in-hand">In Hand</option>
@@ -540,15 +551,27 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 <div class="filter-group">
 <label>Bank</label>
-<select id="filterBank" onchange="renderAllCheques()">
+<select id="filterBank" onchange="applyFilters()">
 <option value="">All Banks</option>
 </select>
 </div>
+</div>
+<div class="bulk-actions" id="bulkActions" style="display:none">
+<input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+<label for="selectAll">Select All</label>
+<button class="btn btn-secondary btn-sm" onclick="bulkDelete()">
+<i class="fas fa-trash"></i> Delete Selected
+</button>
+<button class="btn btn-secondary btn-sm" onclick="bulkExport()">
+<i class="fas fa-download"></i> Export Selected
+</button>
+<span id="selectedCount">0 selected</span>
 </div>
 <div class="table-container">
 <table>
 <thead>
 <tr>
+<th><input type="checkbox" id="headerCheckbox" onchange="toggleSelectAll()"></th>
 <th>#</th>
 <th>Payee</th>
 <th>Amount</th>
@@ -1106,6 +1129,68 @@ Settings & Administration
 </div>
 </div>
 
+<div class="modal-overlay" id="editChequeModal">
+<div class="modal">
+<div class="modal-header">
+<h2 class="modal-title">Edit Cheque Details</h2>
+<button class="modal-close" onclick="closeModal('editChequeModal')">
+<i class="fas fa-times"></i>
+</button>
+</div>
+<div class="modal-body">
+<input type="hidden" id="editChequeId">
+<form id="editChequeForm">
+<div class="form-row">
+<div class="form-group">
+<label>Number *</label>
+<input type="text" id="editChequeNumber" required>
+</div>
+<div class="form-group">
+<label>Amount (₹) *</label>
+<input type="number" id="editChequeAmount" required step="0.01">
+</div>
+</div>
+<div class="form-group">
+<label>Payee *</label>
+<input type="text" id="editChequePayee" required>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label>Bank *</label>
+<input type="text" id="editChequeBank" required>
+</div>
+<div class="form-group">
+<label>Date *</label>
+<input type="date" id="editChequeDate" required>
+</div>
+</div>
+<div class="form-group">
+<label>Status *</label>
+<select id="editChequeStatus" required>
+<option value="draft">Draft</option>
+<option value="in-hand">In Hand</option>
+<option value="issued">Issued</option>
+<option value="deposited">Deposited</option>
+<option value="returned">Returned</option>
+<option value="cleared">Cleared</option>
+<option value="stopped">Stopped</option>
+</select>
+</div>
+<div class="form-group">
+<label>Notes</label>
+<textarea id="editChequeNotes" rows="2"></textarea>
+</div>
+</form>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" onclick="closeModal('editChequeModal')">Cancel</button>
+<button class="btn btn-primary" onclick="saveEditCheque()">
+<i class="fas fa-save"></i> Update
+</button>
+</div>
+</div>
+</div>
+
 <div class="modal-overlay" id="statusChangeModal">
 <div class="modal">
 <div class="modal-header">
@@ -1510,6 +1595,7 @@ const auth = firebase.auth();
 let allCheques = [];
 let currentUser = null;
 let lastAgingUpdateDate = null;
+let selectedCheques = new Set();
 
 window.addEventListener('scroll', () => {
 const scrolled = window.pageYOffset;
@@ -1717,6 +1803,52 @@ showToast('Error: ' + error.message,'error');
 }
 }
 
+function openEditModal(chequeId) {
+const cheque = allCheques.find(c => c.id === chequeId);
+if (!cheque) return;
+document.getElementById('editChequeId').value = cheque.id;
+document.getElementById('editChequeNumber').value = cheque.number;
+document.getElementById('editChequePayee').value = cheque.payee;
+document.getElementById('editChequeAmount').value = cheque.amount;
+document.getElementById('editChequeBank').value = cheque.bank;
+document.getElementById('editChequeDate').value = cheque.date;
+document.getElementById('editChequeStatus').value = cheque.status;
+document.getElementById('editChequeNotes').value = cheque.notes || '';
+openModal('editChequeModal');
+}
+
+async function saveEditCheque() {
+const id = document.getElementById('editChequeId').value;
+const number = document.getElementById('editChequeNumber').value.trim();
+const payee = document.getElementById('editChequePayee').value.trim();
+const amount = parseFloat(document.getElementById('editChequeAmount').value);
+const bank = document.getElementById('editChequeBank').value.trim();
+const date = document.getElementById('editChequeDate').value;
+const status = document.getElementById('editChequeStatus').value;
+const notes = document.getElementById('editChequeNotes').value.trim();
+if (!number || !payee || !amount || !bank || !date) {
+return showToast('Fill all required fields','error');
+}
+try {
+const historyEntry = {
+action:'Updated',
+details:`Cheque #${number} updated`,
+timestamp:new Date().toISOString(),
+user:currentUser ? currentUser.email:'system'
+};
+await db.collection('cheques').doc(id).update({
+number,payee,amount,bank,date,status,notes,
+history:firebase.firestore.FieldValue.arrayUnion(historyEntry),
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+});
+closeModal('editChequeModal');
+await loadAllChequesData();
+showToast('Cheque updated successfully','success');
+} catch (error) {
+showToast('Error: ' + error.message,'error');
+}
+}
+
 function openStatusModal(chequeId, currentStatus) {
 document.getElementById('statusChequeId').value = chequeId;
 document.getElementById('newStatusSelect').value = '';
@@ -1918,20 +2050,30 @@ else if (percentage > 0) return `<span class="payment-badge partial"><i class="f
 else return '<span class="payment-badge unpaid"><i class="fas fa-exclamation-circle"></i> Unpaid</span>';
 }
 
+function applyFilters() {
+renderAllCheques();
+}
+
 function renderAllCheques() {
 const tbody = document.getElementById('allChequesTable');
 const emptyState = document.getElementById('allChequesEmpty');
+const chequeNumberFilter = document.getElementById('filterChequeNumber').value.toLowerCase();
+const payeeFilter = document.getElementById('filterPayee').value.toLowerCase();
 const statusFilter = document.getElementById('filterStatus').value;
 const bankFilter = document.getElementById('filterBank').value;
 let filtered = allCheques.filter(c => !c.deletedAt);
+if (chequeNumberFilter) filtered = filtered.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
+if (payeeFilter) filtered = filtered.filter(c => c.payee.toLowerCase().includes(payeeFilter));
 if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
 if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
 if (filtered.length === 0) {
 tbody.innerHTML = '';
 emptyState.classList.remove('hidden');
+document.getElementById('bulkActions').style.display = 'none';
 return;
 }
 emptyState.classList.add('hidden');
+document.getElementById('bulkActions').style.display = 'flex';
 tbody.innerHTML = filtered.map(c => {
 let paymentInfo = '-';
 if (c.status === 'returned') {
@@ -1950,7 +2092,9 @@ paymentInfo = `<div style="min-width:100px">
 </div>
 </div>`;
 }
+const isSelected = selectedCheques.has(c.id);
 return `<tr>
+<td><input type="checkbox" class="cheque-checkbox" data-id="${c.id}" ${isSelected?'checked':''} onchange="toggleChequeSelection('${c.id}')"></td>
 <td>${c.number}</td>
 <td>${c.payee}</td>
 <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
@@ -1963,6 +2107,9 @@ ${getPaymentStatusBadge(c)}
 <td>${paymentInfo}</td>
 <td>
 <div class="cheque-actions">
+<button class="action-btn btn-edit" data-tooltip="Edit" onclick="openEditModal('${c.id}')">
+<i class="fas fa-edit"></i>
+</button>
 ${c.status === 'returned' ? `
 <button class="action-btn btn-payment" data-tooltip="Add Payment" onclick="openAddPaymentModal('${c.id}')">
 <i class="fas fa-money-bill-wave"></i>
@@ -1984,6 +2131,69 @@ ${c.status === 'returned' ? `
 </td>
 </tr>`;
 }).join('');
+updateSelectedCount();
+}
+
+function toggleChequeSelection(id) {
+if (selectedCheques.has(id)) {
+selectedCheques.delete(id);
+} else {
+selectedCheques.add(id);
+}
+updateSelectedCount();
+}
+
+function toggleSelectAll() {
+const headerCheckbox = document.getElementById('headerCheckbox');
+const checkboxes = document.querySelectorAll('.cheque-checkbox');
+if (headerCheckbox.checked) {
+const visibleCheques = allCheques.filter(c => !c.deletedAt);
+visibleCheques.forEach(c => selectedCheques.add(c.id));
+checkboxes.forEach(cb => cb.checked = true);
+} else {
+selectedCheques.clear();
+checkboxes.forEach(cb => cb.checked = false);
+}
+updateSelectedCount();
+}
+
+function updateSelectedCount() {
+document.getElementById('selectedCount').textContent = `${selectedCheques.size} selected`;
+document.getElementById('headerCheckbox').checked = selectedCheques.size > 0;
+}
+
+function bulkDelete() {
+if (selectedCheques.size === 0) {
+showToast('No cheques selected','error');
+return;
+}
+if (confirm(`Delete ${selectedCheques.size} selected cheques?`)) {
+selectedCheques.forEach(id => {
+db.collection('cheques').doc(id).update({deletedAt:firebase.firestore.FieldValue.serverTimestamp()});
+});
+selectedCheques.clear();
+loadAllChequesData();
+showToast('Selected cheques moved to recycle bin','success');
+}
+}
+
+function bulkExport() {
+if (selectedCheques.size === 0) {
+showToast('No cheques selected','error');
+return;
+}
+const selected = allCheques.filter(c => selectedCheques.has(c.id));
+let csv = 'Number,Payee,Amount,Bank,Date,Status\n';
+selected.forEach(c => {
+csv += `${c.number},"${c.payee}",${c.amount},"${c.bank}",${c.date},${c.status}\n`;
+});
+const blob = new Blob([csv], { type: 'text/csv' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = `cheques_export_${new Date().toISOString().split('T')[0]}.csv`;
+a.click();
+showToast('Exported selected cheques','success');
 }
 
 function renderInHand() {
@@ -2260,17 +2470,13 @@ function exportReport(format) {
     }
 }
 
-// STRICTLY CORRECTED AGING: ONLY filters 'in-hand' cheques and calculates days from Cheque Date to Today
 function renderAging() {
     const grid = document.getElementById('agingGrid');
     const tbody = document.getElementById('agingTableBody');
     const emptyState = document.getElementById('agingEmpty');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    // STRICT FILTER: ONLY cheques with status 'in-hand'
     const inHandCheques = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
-
     if (inHandCheques.length === 0) {
         if(grid) grid.innerHTML = '';
         if(tbody) tbody.innerHTML = '';
@@ -2279,31 +2485,25 @@ function renderAging() {
         return;
     }
     if(emptyState) emptyState.classList.add('hidden');
-
     const buckets = {
         current: { count: 0, amount: 0, cheques: [] },
         days30: { count: 0, amount: 0, cheques: [] },
         days60: { count: 0, amount: 0, cheques: [] },
         days90: { count: 0, amount: 0, cheques: [] }
     };
-
     inHandCheques.forEach(cheque => {
         const chequeDate = new Date(cheque.date);
         chequeDate.setHours(0, 0, 0, 0);
-        // Days from Cheque Date to Today
         const daysFromChequeDate = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
-        
         let bucket;
         if (daysFromChequeDate <= 30) bucket = 'current';
         else if (daysFromChequeDate <= 60) bucket = 'days30';
         else if (daysFromChequeDate <= 90) bucket = 'days60';
         else bucket = 'days90';
-        
         buckets[bucket].count++;
         buckets[bucket].amount += parseFloat(cheque.amount) || 0;
         buckets[bucket].cheques.push({ ...cheque, daysFromChequeDate });
     });
-
     grid.innerHTML = `
     <div class="aging-card current">
     <div class="aging-title">Current (0-30 days)</div>
@@ -2312,7 +2512,7 @@ function renderAging() {
     </div>
     <div class="aging-card days30">
     <div class="aging-title">31-60 days</div>
-    <div class="aging-value">₹${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days30.count} cheques</div>
     </div>
     <div class="aging-card days60">
@@ -2326,14 +2526,12 @@ function renderAging() {
     <div class="aging-count">${buckets.days90.count} cheques</div>
     </div>
     `;
-
     const allAgingCheques = [
     ...buckets.current.cheques,
     ...buckets.days30.cheques,
     ...buckets.days60.cheques,
     ...buckets.days90.cheques
     ];
-
     tbody.innerHTML = allAgingCheques.map(c => {
     let bucketLabel;
     if (c.daysFromChequeDate <= 30) bucketLabel = '0-30 Days';
@@ -2354,7 +2552,6 @@ function renderAging() {
     </td>
     </tr>`;
     }).join('');
-
     updateAgingLastUpdate();
 }
 
