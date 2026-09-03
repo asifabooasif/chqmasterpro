@@ -155,6 +155,20 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .bulk-input{width:100%;min-height:100px;padding:12px;border:2px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;font-family:monospace}
 .bulk-input:focus{border-color:var(--primary);outline:none}
 .filter-hint{font-size:11px;color:var(--gray);margin-top:5px}
+.compact-filters{display:flex;gap:10px;align-items:center;margin-bottom:20px}
+.compact-filters .btn{padding:8px 16px}
+.three-dot-menu{position:relative;display:inline-block}
+.three-dot-btn{width:36px;height:36px;border:none;border-radius:8px;background:var(--primary);cursor:pointer;font-size:18px;color:white;transition:all 0.3s ease;display:flex;align-items:center;justify-content:center}
+.three-dot-btn:hover{background:var(--primary-dark);transform:scale(1.05)}
+.dropdown-menu{display:none;position:absolute;right:0;top:100%;background:white;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:280px;z-index:100;margin-top:8px;padding:16px;animation:fadeIn 0.2s ease}
+.dropdown-menu.show{display:block}
+.dropdown-section{margin-bottom:16px}
+.dropdown-section:last-child{margin-bottom:0}
+.dropdown-section label{display:block;font-weight:600;font-size:11px;color:var(--gray);text-transform:uppercase;margin-bottom:8px}
+.dropdown-section select,.dropdown-section input,.dropdown-section textarea{width:100%;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px;transition:all 0.3s ease}
+.dropdown-section select:focus,.dropdown-section input:focus,.dropdown-section textarea:focus{border-color:var(--primary);outline:none}
+.dropdown-actions{display:flex;gap:8px;margin-top:12px}
+.dropdown-actions .btn{flex:1;justify-content:center}
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s ease}
 .modal-overlay.active{display:flex}
 .modal{background:white;border-radius:18px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:scaleIn 0.4s ease}
@@ -275,14 +289,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .aging-info-banner .info-title{font-weight:700;font-size:14px;margin-bottom:2px}
 .aging-info-banner .info-desc{font-size:12px;opacity:0.9}
 .aging-last-update{font-size:11px;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:20px;font-weight:600}
-.three-dot-menu{position:relative;display:inline-block}
-.three-dot-btn{width:32px;height:32px;border:none;border-radius:8px;background:var(--light);cursor:pointer;font-size:16px;color:var(--gray);transition:all 0.3s ease}
-.three-dot-btn:hover{background:var(--border);color:var(--dark)}
-.dropdown-menu{display:none;position:absolute;right:0;top:100%;background:white;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);min-width:180px;z-index:100;margin-top:4px}
-.dropdown-menu.show{display:block;animation:fadeIn 0.2s ease}
-.dropdown-item{padding:10px 14px;cursor:pointer;transition:all 0.2s ease;display:flex;align-items:center;gap:8px;font-size:13px}
-.dropdown-item:hover{background:var(--light)}
-.dropdown-item i{width:16px;text-align:center}
 @media (max-width:768px){
 .sidebar{transform:translateX(-100%);width:280px}
 .sidebar.active{transform:translateX(0)}
@@ -319,6 +325,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .aging-info-banner{flex-direction:column;text-align:center}
 .bulk-actions{flex-direction:column;align-items:stretch}
 .filter-row{grid-template-columns:1fr}
+.dropdown-menu{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);min-width:300px;max-width:90vw;max-height:80vh;overflow-y:auto}
 }
 </style>
 </head>
@@ -537,19 +544,27 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <i class="fas fa-plus"></i> Add Cheque
 </button>
 </div>
-<div class="advanced-filter">
-<h3><i class="fas fa-filter"></i> Advanced Bulk Filter</h3>
-<div class="filter-row">
-<div class="filter-group">
-<label>Bulk Cheque Numbers (comma or line separated)</label>
-<textarea id="bulkChequeNumbers" class="bulk-input" placeholder="Enter cheque numbers:&#10;123456&#10;123457&#10;123458&#10;or: 123456, 123457, 123458"></textarea>
-<div class="filter-hint">Enter multiple cheque numbers separated by commas or new lines</div>
+
+<!-- Compact Filters with Three Dot Menu -->
+<div class="compact-filters">
+<button class="btn btn-secondary" onclick="toggleCompactFilters()">
+<i class="fas fa-ellipsis-v"></i> Filters & Sort
+</button>
+<span id="activeFilters" style="color:var(--gray);font-size:13px"></span>
 </div>
-<div class="filter-group">
+
+<!-- Dropdown Menu for Filters -->
+<div class="dropdown-menu" id="compactFiltersDropdown">
+<div class="dropdown-section">
+<label>Bulk Cheque Numbers</label>
+<textarea id="bulkChequeNumbers" class="bulk-input" placeholder="Enter cheque numbers (comma or line separated)" style="min-height:60px"></textarea>
+<div class="filter-hint">Example: 123456, 123457 or one per line</div>
+</div>
+<div class="dropdown-section">
 <label>Payee Name</label>
-<input type="text" id="filterPayee" placeholder="Search by payee name">
+<input type="text" id="filterPayee" placeholder="Search by payee">
 </div>
-<div class="filter-group">
+<div class="dropdown-section">
 <label>Status</label>
 <select id="filterStatus">
 <option value="">All Status</option>
@@ -562,15 +577,15 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <option value="stopped">Stopped</option>
 </select>
 </div>
-<div class="filter-group">
+<div class="dropdown-section">
 <label>Bank</label>
 <select id="filterBank">
 <option value="">All Banks</option>
 </select>
 </div>
-<div class="filter-group">
+<div class="dropdown-section">
 <label>Sort By</label>
-<select id="sortBy" onchange="applyBulkFilter()">
+<select id="sortBy">
 <option value="chequeDate-desc">Cheque Date (Newest)</option>
 <option value="chequeDate-asc">Cheque Date (Oldest)</option>
 <option value="createdAt-desc">Created Date (Newest)</option>
@@ -583,19 +598,16 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <option value="payee-desc">Payee Name (Z-A)</option>
 </select>
 </div>
-</div>
-<div style="display:flex;gap:10px;flex-wrap:wrap">
+<div class="dropdown-actions">
 <button class="btn btn-primary" onclick="applyBulkFilter()">
-<i class="fas fa-search"></i> Apply Filter
+<i class="fas fa-search"></i> Apply
 </button>
 <button class="btn btn-secondary" onclick="clearBulkFilter()">
-<i class="fas fa-times"></i> Clear Filter
-</button>
-<button class="btn btn-success" onclick="openBulkIssueModal()" id="bulkIssueBtn" style="display:none">
-<i class="fas fa-paper-plane"></i> Bulk Issue Selected
+<i class="fas fa-times"></i> Clear
 </button>
 </div>
 </div>
+
 <div class="bulk-actions" id="bulkActions" style="display:none">
 <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
 <label for="selectAll">Select All</label>
@@ -907,7 +919,7 @@ In-Hand Cheques Aging (30/60/90)
 <i class="fas fa-info-circle"></i>
 <div class="info-content">
 <div class="info-title">Auto-Tracking Active</div>
-<div class="info-desc">This report tracks <strong>ONLY "In-Hand"</strong> cheques. Days are calculated from the <strong>Cheque Date</strong> to <strong>Today</strong> and auto-refresh daily.</div>
+<div class="info-desc">This report tracks <strong>ONLY "In-Hand"</strong> cheques. Days are calculated from <strong>Today</strong> to <strong>Cheque Date</strong> and auto-refresh daily.</div>
 </div>
 <div class="aging-last-update" id="agingLastUpdate">Last Update: --</div>
 </div>
@@ -921,7 +933,7 @@ In-Hand Cheques Aging (30/60/90)
 <th>Amount</th>
 <th>Bank</th>
 <th>Date</th>
-<th>Days Outstanding</th>
+<th>Days to Cheque Date</th>
 <th>Aging Bucket</th>
 </tr>
 </thead>
@@ -1965,7 +1977,7 @@ function sortCheques(cheques, sortBy) {
             valA = parseFloat(a.amount) || 0;
             valB = parseFloat(b.amount) || 0;
         } else if (field === 'number') {
-            valA = (c.number || '').toString();
+            valA = (a.number || '').toString();
             valB = (b.number || '').toString();
         } else if (field === 'payee') {
             valA = (a.payee || '').toLowerCase();
@@ -1981,6 +1993,21 @@ function sortCheques(cheques, sortBy) {
     
     return sorted;
 }
+
+// Toggle compact filters dropdown
+function toggleCompactFilters() {
+    const dropdown = document.getElementById('compactFiltersDropdown');
+    dropdown.classList.toggle('show');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('compactFiltersDropdown');
+    const button = e.target.closest('.compact-filters button');
+    if (!dropdown.contains(e.target) && !button) {
+        dropdown.classList.remove('show');
+    }
+});
 
 function applyBulkFilter() {
 const bulkNumbers = document.getElementById('bulkChequeNumbers').value.trim();
@@ -2023,6 +2050,14 @@ filtered = sortCheques(filtered, sortBy);
 bulkFilteredCheques = filtered;
 renderBulkFilteredCheques();
 
+// Update active filters display
+let filterText = [];
+if (bulkNumbers) filterText.push(`${chequeNumbers.length} cheques`);
+if (payeeFilter) filterText.push(`Payee: ${payeeFilter}`);
+if (statusFilter) filterText.push(`Status: ${statusFilter}`);
+if (bankFilter) filterText.push(`Bank: ${bankFilter}`);
+document.getElementById('activeFilters').textContent = filterText.length > 0 ? `Active: ${filterText.join(', ')}` : '';
+
 if (filtered.length > 0) {
 document.getElementById('bulkIssueBtn').style.display = 'inline-flex';
 showToast(`Found ${filtered.length} cheques`, 'success');
@@ -2030,6 +2065,9 @@ showToast(`Found ${filtered.length} cheques`, 'success');
 document.getElementById('bulkIssueBtn').style.display = 'none';
 showToast('No cheques found matching criteria', 'info');
 }
+
+// Close dropdown
+document.getElementById('compactFiltersDropdown').classList.remove('show');
 }
 
 function clearBulkFilter() {
@@ -2038,11 +2076,13 @@ document.getElementById('filterPayee').value = '';
 document.getElementById('filterStatus').value = '';
 document.getElementById('filterBank').value = '';
 document.getElementById('sortBy').value = 'chequeDate-desc';
+document.getElementById('activeFilters').textContent = '';
 bulkFilteredCheques = [];
 selectedCheques.clear();
 document.getElementById('bulkIssueBtn').style.display = 'none';
 renderAllCheques();
 showToast('Filters cleared', 'info');
+document.getElementById('compactFiltersDropdown').classList.remove('show');
 }
 
 function renderBulkFilteredCheques() {
@@ -2070,7 +2110,7 @@ paymentInfo = `<div style="min-width:100px">
 <div style="font-size:11px">
 <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
 <span style="color:var(--gray)">/</span>
-<span>₹${totalAmount.toLocaleString('en-IN')}</span>
+<span>${totalAmount.toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -2092,10 +2132,10 @@ ${getPaymentStatusBadge(c)}
 <td>${paymentInfo}</td>
 <td>
 <div class="three-dot-menu">
-<button class="three-dot-btn" onclick="toggleDropdown(event, '${c.id}')">
+<button class="three-dot-btn" onclick="toggleRowDropdown(event, '${c.id}')">
 <i class="fas fa-ellipsis-v"></i>
 </button>
-<div class="dropdown-menu" id="dropdown-${c.id}">
+<div class="dropdown-menu" id="row-dropdown-${c.id}" style="min-width:150px;right:0">
 <div class="dropdown-item" onclick="openEditModal('${c.id}')">
 <i class="fas fa-edit"></i> Edit
 </div>
@@ -2125,20 +2165,21 @@ ${c.status === 'returned' ? `
 updateSelectedCount();
 }
 
-function toggleDropdown(event, chequeId) {
+function toggleRowDropdown(event, chequeId) {
 event.stopPropagation();
-const dropdown = document.getElementById(`dropdown-${chequeId}`);
-const allDropdowns = document.querySelectorAll('.dropdown-menu');
+const dropdown = document.getElementById(`row-dropdown-${chequeId}`);
+const allDropdowns = document.querySelectorAll('[id^="row-dropdown-"]');
 allDropdowns.forEach(d => {
-if (d.id !== `dropdown-${chequeId}`) {
+if (d.id !== `row-dropdown-${chequeId}`) {
 d.classList.remove('show');
 }
 });
 dropdown.classList.toggle('show');
 }
 
+// Close all row dropdowns when clicking outside
 document.addEventListener('click', () => {
-const allDropdowns = document.querySelectorAll('.dropdown-menu');
+const allDropdowns = document.querySelectorAll('[id^="row-dropdown-"]');
 allDropdowns.forEach(d => d.classList.remove('show'));
 });
 
@@ -2615,7 +2656,7 @@ paymentInfo = `<div style="min-width:100px">
 <div style="font-size:11px">
 <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
 <span style="color:var(--gray)">/</span>
-<span>₹${totalAmount.toLocaleString('en-IN')}</span>
+<span>${totalAmount.toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -2637,10 +2678,10 @@ ${getPaymentStatusBadge(c)}
 <td>${paymentInfo}</td>
 <td>
 <div class="three-dot-menu">
-<button class="three-dot-btn" onclick="toggleDropdown(event, '${c.id}')">
+<button class="three-dot-btn" onclick="toggleRowDropdown(event, '${c.id}')">
 <i class="fas fa-ellipsis-v"></i>
 </button>
-<div class="dropdown-menu" id="dropdown-${c.id}">
+<div class="dropdown-menu" id="row-dropdown-${c.id}" style="min-width:150px;right:0">
 <div class="dropdown-item" onclick="openEditModal('${c.id}')">
 <i class="fas fa-edit"></i> Edit
 </div>
@@ -3034,39 +3075,39 @@ function renderAging() {
     inHandCheques.forEach(cheque => {
         const chequeDate = new Date(cheque.date);
         chequeDate.setHours(0, 0, 0, 0);
-        // Calculate days from cheque date to today
-        const daysFromChequeDate = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
+        // Calculate days FROM today TO cheque date
+        const daysToChequeDate = Math.ceil((chequeDate - today) / (1000 * 60 * 60 * 24));
         
         let bucket;
-        if (daysFromChequeDate <= 30) bucket = 'current';
-        else if (daysFromChequeDate <= 60) bucket = 'days30';
-        else if (daysFromChequeDate <= 90) bucket = 'days60';
+        if (daysToChequeDate <= 30) bucket = 'current';
+        else if (daysToChequeDate <= 60) bucket = 'days30';
+        else if (daysToChequeDate <= 90) bucket = 'days60';
         else bucket = 'days90';
         
         buckets[bucket].count++;
         buckets[bucket].amount += parseFloat(cheque.amount) || 0;
-        buckets[bucket].cheques.push({ ...cheque, daysFromChequeDate });
+        buckets[bucket].cheques.push({ ...cheque, daysToChequeDate });
     });
     
     grid.innerHTML = `
     <div class="aging-card current">
-    <div class="aging-title">Current (0-30 days)</div>
-    <div class="aging-value">₹${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-title">0-30 Days</div>
+    <div class="aging-value">${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.current.count} cheques</div>
     </div>
     <div class="aging-card days30">
-    <div class="aging-title">31-60 days</div>
-    <div class="aging-value">₹${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-title">31-60 Days</div>
+    <div class="aging-value">${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days30.count} cheques</div>
     </div>
     <div class="aging-card days60">
-    <div class="aging-title">61-90 days</div>
-    <div class="aging-value">₹${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-title">61-90 Days</div>
+    <div class="aging-value">${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days60.count} cheques</div>
     </div>
     <div class="aging-card days90">
-    <div class="aging-title">90+ days</div>
-    <div class="aging-value">₹${Math.round(buckets.days90.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-title">90+ Days</div>
+    <div class="aging-value">${Math.round(buckets.days90.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days90.count} cheques</div>
     </div>
     `;
@@ -3080,9 +3121,9 @@ function renderAging() {
     
     tbody.innerHTML = allAgingCheques.map(c => {
     let bucketLabel;
-    if (c.daysFromChequeDate <= 30) bucketLabel = '0-30 Days';
-    else if (c.daysFromChequeDate <= 60) bucketLabel = '31-60 Days';
-    else if (c.daysFromChequeDate <= 90) bucketLabel = '61-90 Days';
+    if (c.daysToChequeDate <= 30) bucketLabel = '0-30 Days';
+    else if (c.daysToChequeDate <= 60) bucketLabel = '31-60 Days';
+    else if (c.daysToChequeDate <= 90) bucketLabel = '61-90 Days';
     else bucketLabel = '90+ Days';
     return `<tr>
     <td>${c.number}</td>
@@ -3090,9 +3131,9 @@ function renderAging() {
     <td>${Math.round(c.amount).toLocaleString('en-IN')}</td>
     <td>${c.bank}</td>
     <td>${formatDate(c.date)}</td>
-    <td><strong style="color:${c.daysFromChequeDate>60?'var(--danger)':c.daysFromChequeDate>30?'var(--warning)':'var(--success)'}">${c.daysFromChequeDate} days</strong></td>
+    <td><strong style="color:${c.daysToChequeDate>60?'var(--danger)':c.daysToChequeDate>30?'var(--warning)':'var(--success)'}">${c.daysToChequeDate} days</strong></td>
     <td>
-    <span class="status-badge" style="background:${c.daysFromChequeDate>60?'#fee2e2':c.daysFromChequeDate>30?'#fef3c7':'#d1fae5'};color:${c.daysFromChequeDate>60?'#b91c1c':c.daysFromChequeDate>30?'#b45309':'#065f46'}">
+    <span class="status-badge" style="background:${c.daysToChequeDate>60?'#fee2e2':c.daysToChequeDate>30?'#fef3c7':'#d1fae5'};color:${c.daysToChequeDate>60?'#b91c1c':c.daysToChequeDate>30?'#b45309':'#065f46'}">
     ${bucketLabel}
     </span>
     </td>
@@ -3126,11 +3167,11 @@ const issuedValue = active.filter(c => c.status === 'issued').reduce((sum,c) => 
 document.getElementById('analyticsWidgets').innerHTML = `
 <div class="widget">
 <div class="widget-title">Total Value</div>
-<div class="widget-value">₹${Math.round(totalValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">${Math.round(totalValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">In Hand Value</div>
-<div class="widget-value">₹${Math.round(inHandValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">${Math.round(inHandValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">Issued Value</div>
@@ -3283,7 +3324,7 @@ let html = `<div class="payment-summary-box">
 <div class="payment-summary-grid">
 <div class="payment-summary-item">
 <div class="payment-summary-label">Total Amount</div>
-<div class="payment-summary-value">₹${totalAmount.toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">${totalAmount.toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Total Paid</div>
