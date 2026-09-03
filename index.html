@@ -568,6 +568,21 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <option value="">All Banks</option>
 </select>
 </div>
+<div class="filter-group">
+<label>Sort By</label>
+<select id="sortBy" onchange="applyBulkFilter()">
+<option value="chequeDate-desc">Cheque Date (Newest)</option>
+<option value="chequeDate-asc">Cheque Date (Oldest)</option>
+<option value="createdAt-desc">Created Date (Newest)</option>
+<option value="createdAt-asc">Created Date (Oldest)</option>
+<option value="amount-desc">Amount (High to Low)</option>
+<option value="amount-asc">Amount (Low to High)</option>
+<option value="number-asc">Cheque Number (A-Z)</option>
+<option value="number-desc">Cheque Number (Z-A)</option>
+<option value="payee-asc">Payee Name (A-Z)</option>
+<option value="payee-desc">Payee Name (Z-A)</option>
+</select>
+</div>
 </div>
 <div style="display:flex;gap:10px;flex-wrap:wrap">
 <button class="btn btn-primary" onclick="applyBulkFilter()">
@@ -637,6 +652,21 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <option value="">All Banks</option>
 </select>
 </div>
+<div class="filter-group">
+<label>Sort By</label>
+<select id="sortInHandBy" onchange="applyInHandFilter()">
+<option value="chequeDate-desc">Cheque Date (Newest)</option>
+<option value="chequeDate-asc">Cheque Date (Oldest)</option>
+<option value="createdAt-desc">Created Date (Newest)</option>
+<option value="createdAt-asc">Created Date (Oldest)</option>
+<option value="amount-desc">Amount (High to Low)</option>
+<option value="amount-asc">Amount (Low to High)</option>
+<option value="number-asc">Cheque Number (A-Z)</option>
+<option value="number-desc">Cheque Number (Z-A)</option>
+<option value="payee-asc">Payee Name (A-Z)</option>
+<option value="payee-desc">Payee Name (Z-A)</option>
+</select>
+</div>
 </div>
 <div class="table-container">
 <table>
@@ -678,6 +708,21 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <label>Bank</label>
 <select id="filterReturnedBank" onchange="applyReturnedFilter()">
 <option value="">All Banks</option>
+</select>
+</div>
+<div class="filter-group">
+<label>Sort By</label>
+<select id="sortReturnedBy" onchange="applyReturnedFilter()">
+<option value="chequeDate-desc">Cheque Date (Newest)</option>
+<option value="chequeDate-asc">Cheque Date (Oldest)</option>
+<option value="createdAt-desc">Created Date (Newest)</option>
+<option value="createdAt-asc">Created Date (Oldest)</option>
+<option value="amount-desc">Amount (High to Low)</option>
+<option value="amount-asc">Amount (Low to High)</option>
+<option value="number-asc">Cheque Number (A-Z)</option>
+<option value="number-desc">Cheque Number (Z-A)</option>
+<option value="payee-asc">Payee Name (A-Z)</option>
+<option value="payee-desc">Payee Name (Z-A)</option>
 </select>
 </div>
 </div>
@@ -1141,7 +1186,7 @@ Settings & Administration
 <input type="text" id="chequeNumber" required>
 </div>
 <div class="form-group">
-<label>Amount () *</label>
+<label>Amount (₹) *</label>
 <input type="number" id="chequeAmount" required step="0.01">
 </div>
 </div>
@@ -1902,11 +1947,47 @@ showToast('Error: ' + error.message,'error');
 }
 }
 
+// Sort function
+function sortCheques(cheques, sortBy) {
+    const sorted = [...cheques];
+    const [field, direction] = sortBy.split('-');
+    
+    sorted.sort((a, b) => {
+        let valA, valB;
+        
+        if (field === 'chequeDate') {
+            valA = new Date(a.date || 0);
+            valB = new Date(b.date || 0);
+        } else if (field === 'createdAt') {
+            valA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+            valB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+        } else if (field === 'amount') {
+            valA = parseFloat(a.amount) || 0;
+            valB = parseFloat(b.amount) || 0;
+        } else if (field === 'number') {
+            valA = (c.number || '').toString();
+            valB = (b.number || '').toString();
+        } else if (field === 'payee') {
+            valA = (a.payee || '').toLowerCase();
+            valB = (b.payee || '').toLowerCase();
+        }
+        
+        if (direction === 'asc') {
+            return valA > valB ? 1 : valA < valB ? -1 : 0;
+        } else {
+            return valA < valB ? 1 : valA > valB ? -1 : 0;
+        }
+    });
+    
+    return sorted;
+}
+
 function applyBulkFilter() {
 const bulkNumbers = document.getElementById('bulkChequeNumbers').value.trim();
 const payeeFilter = document.getElementById('filterPayee').value.toLowerCase();
 const statusFilter = document.getElementById('filterStatus').value;
 const bankFilter = document.getElementById('filterBank').value;
+const sortBy = document.getElementById('sortBy').value;
 
 if (!bulkNumbers && !payeeFilter && !statusFilter && !bankFilter) {
 showToast('Please enter at least one filter criteria','error');
@@ -1936,6 +2017,9 @@ if (bankFilter) {
 filtered = filtered.filter(c => c.bank === bankFilter);
 }
 
+// Apply sorting
+filtered = sortCheques(filtered, sortBy);
+
 bulkFilteredCheques = filtered;
 renderBulkFilteredCheques();
 
@@ -1953,6 +2037,7 @@ document.getElementById('bulkChequeNumbers').value = '';
 document.getElementById('filterPayee').value = '';
 document.getElementById('filterStatus').value = '';
 document.getElementById('filterBank').value = '';
+document.getElementById('sortBy').value = 'chequeDate-desc';
 bulkFilteredCheques = [];
 selectedCheques.clear();
 document.getElementById('bulkIssueBtn').style.display = 'none';
@@ -2381,6 +2466,7 @@ function applyInHandFilter() {
 const chequeNumberFilter = document.getElementById('filterInHandChequeNumber').value.toLowerCase();
 const payeeFilter = document.getElementById('filterInHandPayee').value.toLowerCase();
 const bankFilter = document.getElementById('filterInHandBank').value;
+const sortBy = document.getElementById('sortInHandBy').value;
 
 let filtered = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
 
@@ -2395,6 +2481,9 @@ filtered = filtered.filter(c => c.payee.toLowerCase().includes(payeeFilter));
 if (bankFilter) {
 filtered = filtered.filter(c => c.bank === bankFilter);
 }
+
+// Apply sorting
+filtered = sortCheques(filtered, sortBy);
 
 const tbody = document.getElementById('inHandTable');
 const emptyState = document.getElementById('inHandEmpty');
@@ -2422,6 +2511,7 @@ function applyReturnedFilter() {
 const chequeNumberFilter = document.getElementById('filterReturnedChequeNumber').value.toLowerCase();
 const payeeFilter = document.getElementById('filterReturnedPayee').value.toLowerCase();
 const bankFilter = document.getElementById('filterReturnedBank').value;
+const sortBy = document.getElementById('sortReturnedBy').value;
 
 let filtered = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
 
@@ -2436,6 +2526,9 @@ filtered = filtered.filter(c => c.payee.toLowerCase().includes(payeeFilter));
 if (bankFilter) {
 filtered = filtered.filter(c => c.bank === bankFilter);
 }
+
+// Apply sorting
+filtered = sortCheques(filtered, sortBy);
 
 const tbody = document.getElementById('returnedTable');
 const emptyState = document.getElementById('returnedEmpty');
@@ -2492,11 +2585,17 @@ const chequeNumberFilter = document.getElementById('filterChequeNumber') ? docum
 const payeeFilter = document.getElementById('filterPayee') ? document.getElementById('filterPayee').value.toLowerCase() : '';
 const statusFilter = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
 const bankFilter = document.getElementById('filterBank') ? document.getElementById('filterBank').value : '';
+const sortBy = document.getElementById('sortBy') ? document.getElementById('sortBy').value : 'chequeDate-desc';
+
 let filtered = allCheques.filter(c => !c.deletedAt);
 if (chequeNumberFilter) filtered = filtered.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
 if (payeeFilter) filtered = filtered.filter(c => c.payee.toLowerCase().includes(payeeFilter));
 if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
 if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
+
+// Apply sorting
+filtered = sortCheques(filtered, sortBy);
+
 if (filtered.length === 0) {
 tbody.innerHTML = '';
 emptyState.classList.remove('hidden');
@@ -2912,7 +3011,10 @@ function renderAging() {
     const emptyState = document.getElementById('agingEmpty');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    // ONLY consider in-hand cheques
     const inHandCheques = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
+    
     if (inHandCheques.length === 0) {
         if(grid) grid.innerHTML = '';
         if(tbody) tbody.innerHTML = '';
@@ -2921,39 +3023,45 @@ function renderAging() {
         return;
     }
     if(emptyState) emptyState.classList.add('hidden');
+    
     const buckets = {
         current: { count: 0, amount: 0, cheques: [] },
         days30: { count: 0, amount: 0, cheques: [] },
         days60: { count: 0, amount: 0, cheques: [] },
         days90: { count: 0, amount: 0, cheques: [] }
     };
+    
     inHandCheques.forEach(cheque => {
         const chequeDate = new Date(cheque.date);
         chequeDate.setHours(0, 0, 0, 0);
+        // Calculate days from cheque date to today
         const daysFromChequeDate = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
+        
         let bucket;
         if (daysFromChequeDate <= 30) bucket = 'current';
         else if (daysFromChequeDate <= 60) bucket = 'days30';
         else if (daysFromChequeDate <= 90) bucket = 'days60';
         else bucket = 'days90';
+        
         buckets[bucket].count++;
         buckets[bucket].amount += parseFloat(cheque.amount) || 0;
         buckets[bucket].cheques.push({ ...cheque, daysFromChequeDate });
     });
+    
     grid.innerHTML = `
     <div class="aging-card current">
     <div class="aging-title">Current (0-30 days)</div>
-    <div class="aging-value">${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">₹${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.current.count} cheques</div>
     </div>
     <div class="aging-card days30">
     <div class="aging-title">31-60 days</div>
-    <div class="aging-value">${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">₹${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days30.count} cheques</div>
     </div>
     <div class="aging-card days60">
     <div class="aging-title">61-90 days</div>
-    <div class="aging-value">${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">₹${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days60.count} cheques</div>
     </div>
     <div class="aging-card days90">
@@ -2962,12 +3070,14 @@ function renderAging() {
     <div class="aging-count">${buckets.days90.count} cheques</div>
     </div>
     `;
+    
     const allAgingCheques = [
     ...buckets.current.cheques,
     ...buckets.days30.cheques,
     ...buckets.days60.cheques,
     ...buckets.days90.cheques
     ];
+    
     tbody.innerHTML = allAgingCheques.map(c => {
     let bucketLabel;
     if (c.daysFromChequeDate <= 30) bucketLabel = '0-30 Days';
@@ -2977,7 +3087,7 @@ function renderAging() {
     return `<tr>
     <td>${c.number}</td>
     <td>${c.payee}</td>
-    <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+    <td>${Math.round(c.amount).toLocaleString('en-IN')}</td>
     <td>${c.bank}</td>
     <td>${formatDate(c.date)}</td>
     <td><strong style="color:${c.daysFromChequeDate>60?'var(--danger)':c.daysFromChequeDate>30?'var(--warning)':'var(--success)'}">${c.daysFromChequeDate} days</strong></td>
@@ -2988,6 +3098,7 @@ function renderAging() {
     </td>
     </tr>`;
     }).join('');
+    
     updateAgingLastUpdate();
 }
 
