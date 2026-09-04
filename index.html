@@ -14,6 +14,8 @@
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif}
 body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;overflow-x:hidden}
 .hidden{display:none!important}.view-content{display:none!important;animation:fadeIn 0.4s ease}.view-content.active{display:block!important}
+
+/* === ANIMATED BACKGROUNDS === */
 .login-bg{background:radial-gradient(ellipse at 20% 30%, rgba(168,85,247,0.4) 0%, transparent 50%),radial-gradient(ellipse at 80% 20%, rgba(236,72,153,0.3) 0%, transparent 50%),linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%);position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;overflow:hidden;}
 .mountain{position:absolute;bottom:0;width:0;height:0;border-left:300px solid transparent;border-right:300px solid transparent;border-bottom:400px solid rgba(147,51,234,0.3);animation:float 8s ease-in-out infinite;}
 .mountain-1{left:-100px;bottom:0;animation-delay:0s}
@@ -38,6 +40,8 @@ body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh
 .settings-bg{background:radial-gradient(circle at 60% 40%, rgba(245,158,11,0.1) 0%, transparent 50%),linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);position:relative;overflow:hidden;}
 .lightbulb-glow{position:absolute;top:100px;right:150px;width:150px;height:150px;background:radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%);border-radius:50%;animation:pulse 3s ease-in-out infinite;}
 .parallax-layer{position:absolute;width:100%;height:120%;will-change:transform;}
+
+/* === KEYFRAME ANIMATIONS === */
 @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
@@ -48,6 +52,7 @@ body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh
 @keyframes rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes slideDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideInRight{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}
+
 .login-container{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px;position:relative;z-index:1}
 .login-box{background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-radius:24px;padding:48px;width:100%;max-width:450px;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:slideUp 0.6s ease;z-index:1;position:relative}
 .login-header{text-align:center;margin-bottom:32px;animation:fadeIn 0.8s ease}
@@ -149,16 +154,12 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .filter-group select:focus,.filter-group input:focus{border-color:var(--primary);outline:none;transform:translateY(-2px)}
 .bulk-actions{display:flex;gap:10px;align-items:center;padding:15px;background:var(--light);border-radius:12px;margin-bottom:15px;animation:slideIn 0.3s ease;flex-wrap:wrap}
 .bulk-actions .btn{padding:8px 16px}
-.compact-filters{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;position:relative}
-.compact-filters .btn{padding:8px 16px}
-.dropdown-menu{position:absolute;top:100%;left:0;background:white;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:280px;z-index:1000;margin-top:5px;padding:16px;display:none}
-.dropdown-menu.show{display:block;animation:fadeIn 0.2s ease}
-.dropdown-section{margin-bottom:12px}
-.dropdown-section:last-child{margin-bottom:0}
-.dropdown-section label{display:block;font-weight:600;font-size:11px;color:var(--gray);text-transform:uppercase;margin-bottom:6px}
-.dropdown-section input,.dropdown-section select{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px}
-.dropdown-actions{display:flex;gap:8px;margin-top:12px}
-.dropdown-actions .btn{flex:1;justify-content:center}
+.advanced-filter{background:var(--light);padding:20px;border-radius:12px;margin-bottom:20px;animation:fadeIn 0.5s ease}
+.advanced-filter h3{font-size:14px;margin-bottom:15px;color:var(--dark);display:flex;align-items:center;gap:8px}
+.filter-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:15px}
+.bulk-input{width:100%;min-height:100px;padding:12px;border:2px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;font-family:monospace}
+.bulk-input:focus{border-color:var(--primary);outline:none}
+.filter-hint{font-size:11px;color:var(--gray);margin-top:5px}
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s ease}
 .modal-overlay.active{display:flex}
 .modal{background:white;border-radius:18px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:scaleIn 0.4s ease}
@@ -315,7 +316,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .aging-info-banner{flex-direction:column;text-align:center}
 .bulk-actions{flex-direction:column;align-items:stretch}
 .filter-row{grid-template-columns:1fr}
-.dropdown-menu{position:fixed;top:auto;left:10px;right:10px;min-width:auto}
 }
 </style>
 </head>
@@ -535,67 +535,50 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </button>
 </div>
 
-<!-- FIXED: Separated Filter and Sort with proper dropdown handling -->
-<div class="compact-filters">
-    <div style="position: relative;">
-        <button class="btn btn-secondary" onclick="toggleDropdown('filterMenu')">
-            <i class="fas fa-filter"></i> Filter
-        </button>
-        <div id="filterMenu" class="dropdown-menu">
-            <div class="dropdown-section">
-                <label>Cheque Number</label>
-                <input type="text" id="filterChequeNumber" placeholder="Search by number" oninput="applyFilters()">
-            </div>
-            <div class="dropdown-section">
-                <label>Payee Name</label>
-                <input type="text" id="filterPayee" placeholder="Search by payee" oninput="applyFilters()">
-            </div>
-            <div class="dropdown-section">
-                <label>Status</label>
-                <select id="filterStatus" onchange="applyFilters()">
-                    <option value="">All Status</option>
-                    <option value="draft">Draft</option>
-                    <option value="in-hand">In Hand</option>
-                    <option value="issued">Issued</option>
-                    <option value="deposited">Deposited</option>
-                    <option value="returned">Returned</option>
-                    <option value="cleared">Cleared</option>
-                    <option value="stopped">Stopped</option>
-                </select>
-            </div>
-            <div class="dropdown-section">
-                <label>Bank</label>
-                <select id="filterBank" onchange="applyFilters()">
-                    <option value="">All Banks</option>
-                </select>
-            </div>
-            <div class="dropdown-actions">
-                <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="clearFilters()">Clear Filters</button>
-            </div>
-        </div>
-    </div>
-
-    <div style="position: relative;">
-        <button class="btn btn-secondary" onclick="toggleDropdown('sortMenu')">
-            <i class="fas fa-sort"></i> Sort
-        </button>
-        <div id="sortMenu" class="dropdown-menu">
-            <div class="dropdown-section">
-                <label>Sort By</label>
-                <select id="sortBy" onchange="applyFilters()">
-                    <option value="chequeDate-desc">Date (Newest First)</option>
-                    <option value="chequeDate-asc">Date (Oldest First)</option>
-                    <option value="amount-desc">Amount (High to Low)</option>
-                    <option value="amount-asc">Amount (Low to High)</option>
-                    <option value="number-asc">Cheque Number (A-Z)</option>
-                    <option value="number-desc">Cheque Number (Z-A)</option>
-                    <option value="payee-asc">Payee Name (A-Z)</option>
-                    <option value="payee-desc">Payee Name (Z-A)</option>
-                </select>
-            </div>
-        </div>
-    </div>
-    <span id="activeFilters" style="color:var(--gray);font-size:13px; margin-left:10px;"></span>
+<!-- Advanced Bulk Filter -->
+<div class="advanced-filter">
+<h3><i class="fas fa-filter"></i> Advanced Bulk Filter</h3>
+<div class="filter-row">
+<div class="filter-group">
+<label>Bulk Cheque Numbers (comma or line separated)</label>
+<textarea id="bulkChequeNumbers" class="bulk-input" placeholder="Enter cheque numbers:&#10;123456&#10;123457&#10;123458&#10;or: 123456, 123457, 123458"></textarea>
+<div class="filter-hint">Enter multiple cheque numbers separated by commas or new lines</div>
+</div>
+<div class="filter-group">
+<label>Payee Name</label>
+<input type="text" id="filterPayee" placeholder="Search by payee name">
+</div>
+<div class="filter-group">
+<label>Status</label>
+<select id="filterStatus">
+<option value="">All Status</option>
+<option value="draft">Draft</option>
+<option value="in-hand">In Hand</option>
+<option value="issued">Issued</option>
+<option value="deposited">Deposited</option>
+<option value="returned">Returned</option>
+<option value="cleared">Cleared</option>
+<option value="stopped">Stopped</option>
+</select>
+</div>
+<div class="filter-group">
+<label>Bank</label>
+<select id="filterBank">
+<option value="">All Banks</option>
+</select>
+</div>
+</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<button class="btn btn-primary" onclick="applyBulkFilter()">
+<i class="fas fa-search"></i> Apply Filter
+</button>
+<button class="btn btn-secondary" onclick="clearBulkFilter()">
+<i class="fas fa-times"></i> Clear Filter
+</button>
+<button class="btn btn-success" onclick="openBulkIssueModal()" id="bulkIssueBtn" style="display:none">
+<i class="fas fa-paper-plane"></i> Bulk Issue Selected
+</button>
+</div>
 </div>
 
 <div class="bulk-actions" id="bulkActions" style="display:none">
@@ -609,6 +592,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </button>
 <span id="selectedCount">0 selected</span>
 </div>
+
 <div class="table-container">
 <table>
 <thead>
@@ -639,22 +623,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="card-header">
 <h2 class="card-title">Cheques In Hand</h2>
 </div>
-<div class="filters">
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="filterInHandChequeNumber" placeholder="Search by cheque number" onkeyup="applyInHandFilter()">
-</div>
-<div class="filter-group">
-<label>Payee Name</label>
-<input type="text" id="filterInHandPayee" placeholder="Search by payee name" onkeyup="applyInHandFilter()">
-</div>
-<div class="filter-group">
-<label>Bank</label>
-<select id="filterInHandBank" onchange="applyInHandFilter()">
-<option value="">All Banks</option>
-</select>
-</div>
-</div>
 <div class="table-container">
 <table>
 <thead>
@@ -681,22 +649,6 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="card">
 <div class="card-header">
 <h2 class="card-title">Returned Cheques</h2>
-</div>
-<div class="filters">
-<div class="filter-group">
-<label>Cheque Number</label>
-<input type="text" id="filterReturnedChequeNumber" placeholder="Search by cheque number" onkeyup="applyReturnedFilter()">
-</div>
-<div class="filter-group">
-<label>Payee Name</label>
-<input type="text" id="filterReturnedPayee" placeholder="Search by payee name" onkeyup="applyReturnedFilter()">
-</div>
-<div class="filter-group">
-<label>Bank</label>
-<select id="filterReturnedBank" onchange="applyReturnedFilter()">
-<option value="">All Banks</option>
-</select>
-</div>
 </div>
 <div class="table-container">
 <table>
@@ -879,7 +831,7 @@ In-Hand Cheques Aging (30/60/90)
 <i class="fas fa-info-circle"></i>
 <div class="info-content">
 <div class="info-title">Auto-Tracking Active</div>
-<div class="info-desc">This report tracks <strong>ONLY "In-Hand"</strong> cheques. Days are calculated from <strong>Today</strong> to <strong>Cheque Date</strong> and auto-refresh daily.</div>
+<div class="info-desc">This report tracks <strong>ONLY "In-Hand"</strong> cheques. Days are calculated from the <strong>Cheque Date</strong> to <strong>Today</strong> and auto-refresh daily.</div>
 </div>
 <div class="aging-last-update" id="agingLastUpdate">Last Update: --</div>
 </div>
@@ -892,8 +844,8 @@ In-Hand Cheques Aging (30/60/90)
 <th>Payee</th>
 <th>Amount</th>
 <th>Bank</th>
-<th>Date</th>
-<th>Days to Cheque Date</th>
+<th>Cheque Date</th>
+<th>Days from Cheque Date</th>
 <th>Aging Bucket</th>
 </tr>
 </thead>
@@ -1141,7 +1093,7 @@ Settings & Administration
 </main>
 </div>
 
-<!-- All Modals (Add Cheque, Status Change, History, Payment, etc.) -->
+<!-- Modals -->
 <div class="modal-overlay" id="addChequeModal">
 <div class="modal">
 <div class="modal-header">
@@ -1723,12 +1675,36 @@ el.style.transform = `translateY(${scrolled * speed}px)`;
 });
 
 const statusFieldConfigs = {
-'in-hand': [{id:'receivedDate',label:'Received Date',type:'date',required:true},{id:'receivedFrom',label:'Received From',type:'text',required:true}],
-'issued': [{id:'issuedDate',label:'Issue Date',type:'date',required:true},{id:'issuedTo',label:'Issued To',type:'text',required:true},{id:'deliveryMode',label:'Delivery Mode',type:'select',options:['Hand Delivered','Courier','Registered Post','Email/Scan'],required:true},{id:'trackingNo',label:'Tracking No.',type:'text',required:false}],
-'deposited': [{id:'depositDate',label:'Deposit Date',type:'date',required:true},{id:'depositBranch',label:'Bank Branch',type:'text',required:true},{id:'slipNumber',label:'Slip/Challan No.',type:'text',required:true}],
-'cleared': [{id:'clearDate',label:'Clearance Date',type:'date',required:true},{id:'utrNumber',label:'UTR/Reference No.',type:'text',required:true},{id:'clearedAmount',label:'Cleared Amount',type:'number',required:false}],
-'returned': [{id:'returnDate',label:'Return Date',type:'date',required:true},{id:'returnReason',label:'Bank Reason Code',type:'select',options:['Insufficient Funds (NSF)','Signature Mismatch','Account Closed','Stop Payment','Stale Dated','Other'],required:true},{id:'bankCharges',label:'Bank Charges ()',type:'number',required:false}],
-'stopped': [{id:'stopDate',label:'Stop Date',type:'date',required:true},{id:'stopReason',label:'Reason',type:'select',options:['Lost','Stolen','Dispute','Duplicate','Other'],required:true},{id:'complaintRef',label:'FIR Reference',type:'text',required:false}]
+'in-hand': [
+{id:'receivedDate',label:'Received Date',type:'date',required:true},
+{id:'receivedFrom',label:'Received From',type:'text',required:true}
+],
+'issued': [
+{id:'issuedDate',label:'Issue Date',type:'date',required:true},
+{id:'issuedTo',label:'Issued To',type:'text',required:true},
+{id:'deliveryMode',label:'Delivery Mode',type:'select',options:['Hand Delivered','Courier','Registered Post','Email/Scan'],required:true},
+{id:'trackingNo',label:'Tracking No.',type:'text',required:false}
+],
+'deposited': [
+{id:'depositDate',label:'Deposit Date',type:'date',required:true},
+{id:'depositBranch',label:'Bank Branch',type:'text',required:true},
+{id:'slipNumber',label:'Slip/Challan No.',type:'text',required:true}
+],
+'cleared': [
+{id:'clearDate',label:'Clearance Date',type:'date',required:true},
+{id:'utrNumber',label:'UTR/Reference No.',type:'text',required:true},
+{id:'clearedAmount',label:'Cleared Amount',type:'number',required:false}
+],
+'returned': [
+{id:'returnDate',label:'Return Date',type:'date',required:true},
+{id:'returnReason',label:'Bank Reason Code',type:'select',options:['Insufficient Funds (NSF)','Signature Mismatch','Account Closed','Stop Payment','Stale Dated','Other'],required:true},
+{id:'bankCharges',label:'Bank Charges (₹)',type:'number',required:false}
+],
+'stopped': [
+{id:'stopDate',label:'Stop Date',type:'date',required:true},
+{id:'stopReason',label:'Reason',type:'select',options:['Lost','Stolen','Dispute','Duplicate','Other'],required:true},
+{id:'complaintRef',label:'FIR Reference',type:'text',required:false}
+]
 };
 
 function startAgingAutoUpdate() {
@@ -1895,125 +1871,64 @@ showToast('Error: ' + error.message,'error');
 }
 }
 
-// FIXED Sort function
-function sortCheques(cheques, sortBy) {
-    const sorted = [...cheques];
-    const parts = sortBy.split('-');
-    const field = parts[0];
-    const direction = parts[1] || 'desc';
-    
-    sorted.sort((a, b) => {
-        let valA, valB;
-        
-        if (field === 'chequeDate') {
-            valA = new Date(a.date || 0).getTime();
-            valB = new Date(b.date || 0).getTime();
-        } else if (field === 'createdAt') {
-            valA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime()) : 0;
-            valB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime()) : 0;
-        } else if (field === 'amount') {
-            valA = parseFloat(a.amount) || 0;
-            valB = parseFloat(b.amount) || 0;
-        } else if (field === 'number') {
-            valA = (a.number || '').toString().toLowerCase();
-            valB = (b.number || '').toString().toLowerCase();
-        } else if (field === 'payee') {
-            valA = (a.payee || '').toLowerCase();
-            valB = (b.payee || '').toLowerCase();
-        }
-        
-        if (direction === 'asc') {
-            return valA > valB ? 1 : valA < valB ? -1 : 0;
-        } else {
-            return valA < valB ? 1 : valA > valB ? -1 : 0;
-        }
-    });
-    
-    return sorted;
+function applyBulkFilter() {
+const bulkNumbers = document.getElementById('bulkChequeNumbers').value.trim();
+const payeeFilter = document.getElementById('filterPayee').value.toLowerCase();
+const statusFilter = document.getElementById('filterStatus').value;
+const bankFilter = document.getElementById('filterBank').value;
+
+if (!bulkNumbers && !payeeFilter && !statusFilter && !bankFilter) {
+showToast('Please enter at least one filter criteria','error');
+return;
 }
 
-// FIXED: Proper dropdown toggle that works with CSS display property
-function toggleDropdown(menuId) {
-    // Close all other dropdowns first
-    document.querySelectorAll('.dropdown-menu').forEach(menu => {
-        if (menu.id !== menuId) {
-            menu.style.display = 'none';
-            menu.classList.remove('show');
-        }
-    });
-    
-    const menu = document.getElementById(menuId);
-    // Check if currently visible (either via style.display or class)
-    const isVisible = menu.style.display === 'block' || menu.classList.contains('show');
-    
-    if (isVisible) {
-        menu.style.display = 'none';
-        menu.classList.remove('show');
-    } else {
-        menu.style.display = 'block';
-        menu.classList.add('show');
-    }
+// Parse bulk cheque numbers (comma or newline separated)
+let chequeNumbers = [];
+if (bulkNumbers) {
+chequeNumbers = bulkNumbers.split(/[\n,]+/).map(n => n.trim()).filter(n => n);
 }
 
-// Close dropdowns when clicking outside
-document.addEventListener('click', (e) => {
-    // Don't close if clicking inside the compact-filters area or on the dropdown buttons
-    if (!e.target.closest('.compact-filters')) {
-        document.querySelectorAll('.dropdown-menu').forEach(menu => {
-            menu.style.display = 'none';
-            menu.classList.remove('show');
-        });
-    }
-});
+// Filter cheques
+let filtered = allCheques.filter(c => !c.deletedAt);
 
-// FIXED: Apply filters function that properly reads from dropdown inputs
-function applyFilters() {
-    const chequeNumberFilter = document.getElementById('filterChequeNumber').value.trim().toLowerCase();
-    const payeeFilter = document.getElementById('filterPayee').value.trim().toLowerCase();
-    const statusFilter = document.getElementById('filterStatus').value;
-    const bankFilter = document.getElementById('filterBank').value;
-    const sortBy = document.getElementById('sortBy').value;
-
-    let filtered = allCheques.filter(c => !c.deletedAt);
-
-    // Apply filters
-    if (chequeNumberFilter) {
-        filtered = filtered.filter(c => (c.number || '').toLowerCase().includes(chequeNumberFilter));
-    }
-    if (payeeFilter) {
-        filtered = filtered.filter(c => (c.payee || '').toLowerCase().includes(payeeFilter));
-    }
-    if (statusFilter) {
-        filtered = filtered.filter(c => c.status === statusFilter);
-    }
-    if (bankFilter) {
-        filtered = filtered.filter(c => c.bank === bankFilter);
-    }
-
-    // Apply sorting
-    filtered = sortCheques(filtered, sortBy);
-
-    bulkFilteredCheques = filtered;
-    renderBulkFilteredCheques();
-
-    // Update active filters display
-    let filterText = [];
-    if (chequeNumberFilter) filterText.push(`Number: ${chequeNumberFilter}`);
-    if (payeeFilter) filterText.push(`Payee: ${payeeFilter}`);
-    if (statusFilter) filterText.push(`Status: ${statusFilter}`);
-    if (bankFilter) filterText.push(`Bank: ${bankFilter}`);
-    document.getElementById('activeFilters').textContent = filterText.length > 0 ? `Active: ${filterText.join(', ')}` : '';
+if (chequeNumbers.length > 0) {
+filtered = filtered.filter(c => chequeNumbers.includes(c.number));
 }
 
-function clearFilters() {
-    document.getElementById('filterChequeNumber').value = '';
-    document.getElementById('filterPayee').value = '';
-    document.getElementById('filterStatus').value = '';
-    document.getElementById('filterBank').value = '';
-    document.getElementById('sortBy').value = 'chequeDate-desc';
-    document.getElementById('activeFilters').textContent = '';
-    bulkFilteredCheques = [];
-    renderAllCheques();
+if (payeeFilter) {
+filtered = filtered.filter(c => c.payee.toLowerCase().includes(payeeFilter));
+}
+
+if (statusFilter) {
+filtered = filtered.filter(c => c.status === statusFilter);
+}
+
+if (bankFilter) {
+filtered = filtered.filter(c => c.bank === bankFilter);
+}
+
+bulkFilteredCheques = filtered;
+renderBulkFilteredCheques();
+
+if (filtered.length > 0) {
+document.getElementById('bulkIssueBtn').style.display = 'inline-flex';
+showToast(`Found ${filtered.length} cheques`, 'success');
+} else {
+document.getElementById('bulkIssueBtn').style.display = 'none';
+showToast('No cheques found matching criteria', 'info');
+}
+}
+
+function clearBulkFilter() {
+document.getElementById('bulkChequeNumbers').value = '';
+document.getElementById('filterPayee').value = '';
+document.getElementById('filterStatus').value = '';
+document.getElementById('filterBank').value = '';
+bulkFilteredCheques = [];
+selectedCheques.clear();
+document.getElementById('bulkIssueBtn').style.display = 'none';
+renderAllCheques();
+showToast('Filters cleared', 'info');
 }
 
 function renderBulkFilteredCheques() {
@@ -2041,7 +1956,7 @@ paymentInfo = `<div style="min-width:100px">
 <div style="font-size:11px">
 <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
 <span style="color:var(--gray)">/</span>
-<span>${totalAmount.toLocaleString('en-IN')}</span>
+<span>₹${totalAmount.toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -2088,6 +2003,407 @@ ${c.status === 'returned' ? `
 </tr>`;
 }).join('');
 
+updateSelectedCount();
+}
+
+function openBulkIssueModal() {
+if (selectedCheques.size === 0) {
+showToast('Please select at least one cheque', 'error');
+return;
+}
+
+const selected = bulkFilteredCheques.filter(c => selectedCheques.has(c.id));
+document.getElementById('bulkIssueCount').textContent = selected.length;
+
+const listHtml = selected.map(c => `
+<div style="padding:8px;margin-bottom:8px;background:white;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
+<span><strong>#${c.number}</strong> - ${c.payee}</span>
+<span style="font-weight:600;color:var(--primary)">₹${Math.round(c.amount).toLocaleString('en-IN')}</span>
+</div>
+`).join('');
+
+document.getElementById('bulkIssueList').innerHTML = listHtml;
+document.getElementById('bulkIssueDate').valueAsDate = new Date();
+
+// Populate bank dropdown
+const bankSelect = document.getElementById('bulkIssueBank');
+const banks = [...new Set(allCheques.filter(c => !c.deletedAt).map(c => c.bank).filter(Boolean))];
+bankSelect.innerHTML = '<option value="">Select Bank</option>' + banks.map(b => `<option value="${b}">${b}</option>`).join('');
+
+openModal('bulkIssueModal');
+}
+
+async function confirmBulkIssue() {
+const payee = document.getElementById('bulkIssuePayee').value.trim();
+const date = document.getElementById('bulkIssueDate').value;
+const bank = document.getElementById('bulkIssueBank').value;
+const notes = document.getElementById('bulkIssueNotes').value.trim();
+
+if (!payee || !date || !bank) {
+showToast('Please fill all required fields', 'error');
+return;
+}
+
+const selected = bulkFilteredCheques.filter(c => selectedCheques.has(c.id));
+let successCount = 0;
+
+try {
+for (const cheque of selected) {
+const historyEntry = {
+action:'Bulk Issued',
+details:`Cheque #${cheque.number} issued to ${payee} via bulk operation`,
+timestamp:new Date().toISOString(),
+user:currentUser ? currentUser.email:'system'
+};
+
+await db.collection('cheques').doc(cheque.id).update({
+payee:payee,
+date:date,
+bank:bank,
+status:'issued',
+notes:notes,
+history:firebase.firestore.FieldValue.arrayUnion(historyEntry),
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+});
+
+successCount++;
+}
+
+showToast(`Successfully issued ${successCount} cheques to ${payee}`, 'success');
+closeModal('bulkIssueModal');
+selectedCheques.clear();
+bulkFilteredCheques = [];
+await loadAllChequesData();
+} catch (error) {
+console.error('Error in bulk issue:', error);
+showToast('Error: ' + error.message, 'error');
+}
+}
+
+function openEditModal(chequeId) {
+const cheque = allCheques.find(c => c.id === chequeId);
+if (!cheque) return;
+document.getElementById('editChequeId').value = cheque.id;
+document.getElementById('editChequeNumber').value = cheque.number;
+document.getElementById('editChequePayee').value = cheque.payee;
+document.getElementById('editChequeAmount').value = cheque.amount;
+document.getElementById('editChequeBank').value = cheque.bank;
+document.getElementById('editChequeDate').value = cheque.date;
+document.getElementById('editChequeStatus').value = cheque.status;
+document.getElementById('editChequeNotes').value = cheque.notes || '';
+openModal('editChequeModal');
+}
+
+async function saveEditCheque() {
+const id = document.getElementById('editChequeId').value;
+const number = document.getElementById('editChequeNumber').value.trim();
+const payee = document.getElementById('editChequePayee').value.trim();
+const amount = parseFloat(document.getElementById('editChequeAmount').value);
+const bank = document.getElementById('editChequeBank').value.trim();
+const date = document.getElementById('editChequeDate').value;
+const status = document.getElementById('editChequeStatus').value;
+const notes = document.getElementById('editChequeNotes').value.trim();
+if (!number || !payee || !amount || !bank || !date) {
+return showToast('Fill all required fields','error');
+}
+try {
+const historyEntry = {
+action:'Updated',
+details:`Cheque #${number} updated`,
+timestamp:new Date().toISOString(),
+user:currentUser ? currentUser.email:'system'
+};
+await db.collection('cheques').doc(id).update({
+number,payee,amount,bank,date,status,notes,
+history:firebase.firestore.FieldValue.arrayUnion(historyEntry),
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+});
+closeModal('editChequeModal');
+await loadAllChequesData();
+showToast('Cheque updated successfully','success');
+} catch (error) {
+showToast('Error: ' + error.message,'error');
+}
+}
+
+function openStatusModal(chequeId, currentStatus) {
+document.getElementById('statusChequeId').value = chequeId;
+document.getElementById('newStatusSelect').value = '';
+document.getElementById('statusRemarks').value = '';
+document.getElementById('dynamicStatusFields').innerHTML = '';
+openModal('statusChangeModal');
+}
+
+function renderStatusFields() {
+const status = document.getElementById('newStatusSelect').value;
+const container = document.getElementById('dynamicStatusFields');
+const config = statusFieldConfigs[status];
+if (!config) {
+container.innerHTML = '';
+return;
+}
+container.innerHTML = config.map(field => {
+let inputHtml = '';
+if (field.type === 'select') {
+inputHtml = `<select id="field_${field.id}" ${field.required?'required':''}>
+<option value="">Select...</option>
+${field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+</select>`;
+} else if (field.type === 'textarea') {
+inputHtml = `<textarea id="field_${field.id}" rows="2" ${field.required?'required':''}></textarea>`;
+} else {
+inputHtml = `<input type="${field.type}" id="field_${field.id}" ${field.required?'required':''}>`;
+}
+return `<div class="form-group">
+<label>${field.label} ${field.required?'*':''}</label>
+${inputHtml}
+</div>`;
+}).join('');
+}
+
+async function saveStatusChange() {
+const chequeId = document.getElementById('statusChequeId').value;
+const newStatus = document.getElementById('newStatusSelect').value;
+const remarks = document.getElementById('statusRemarks').value.trim();
+if (!newStatus) return showToast('Please select a new status','error');
+const config = statusFieldConfigs[newStatus];
+const fieldData = {};
+let isValid = true;
+if (config) {
+config.forEach(field => {
+const el = document.getElementById(`field_${field.id}`);
+if (field.required && !el.value) isValid = false;
+if (el.value) fieldData[field.id] = el.value;
+});
+}
+if (!isValid) return showToast('Please fill all required fields for this status','error');
+try {
+const cheque = allCheques.find(c => c.id === chequeId);
+if (!cheque) return showToast('Cheque not found','error');
+const updateData = {
+status:newStatus,
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+};
+Object.keys(fieldData).forEach(key => {
+updateData[key] = fieldData[key];
+});
+if (newStatus === 'returned') {
+updateData.returnDetails = {
+status:'returned',
+reason:fieldData.returnReason,
+date:fieldData.returnDate,
+charges:parseFloat(fieldData.bankCharges) || 0,
+notes:remarks
+};
+}
+const historyEntry = {
+action:newStatus.charAt(0).toUpperCase() + newStatus.slice(1).replace('-',' '),
+details:`Changed status to ${newStatus}. ${Object.entries(fieldData).map(([k,v])=>`${k}: ${v}`).join(', ')} ${remarks?'| Remarks: '+remarks:''}`,
+timestamp:new Date().toISOString(),
+user:currentUser ? currentUser.email:'system',
+previousStatus:cheque.status
+};
+updateData.history = firebase.firestore.FieldValue.arrayUnion(historyEntry);
+await db.collection('cheques').doc(chequeId).update(updateData);
+await db.collection('auditLog').add({
+action:'status_change',
+chequeNumber:cheque.number,
+details:historyEntry.details,
+timestamp:firebase.firestore.FieldValue.serverTimestamp(),
+user:currentUser ? currentUser.email:'system'
+});
+showToast(`Status changed to ${newStatus} successfully!`,'success');
+closeModal('statusChangeModal');
+await loadAllChequesData();
+} catch (error) {
+console.error('Error updating status:',error);
+showToast('Error: ' + error.message,'error');
+}
+}
+
+function viewHistory(chequeId) {
+const cheque = allCheques.find(c => c.id === chequeId);
+if (!cheque) return;
+const history = cheque.history || [];
+let html = `<div style="margin-bottom:20px;padding:15px;background:var(--light);border-radius:10px">
+<h3 style="margin-bottom:10px">Cheque #${cheque.number}</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px">
+<div><strong>Payee:</strong> ${cheque.payee}</div>
+<div><strong>Amount:</strong> ₹${(cheque.amount||0).toLocaleString('en-IN')}</div>
+<div><strong>Bank:</strong> ${cheque.bank}</div>
+<div><strong>Current Status:</strong> <span class="status-badge status-${cheque.status}">${cheque.status}</span></div>
+</div>
+</div>
+<h4 style="margin-bottom:15px;color:var(--gray);font-size:14px;text-transform:uppercase">Action Timeline</h4>
+<div class="history-timeline">`;
+if (history.length === 0) {
+html += '<p style="color:var(--gray)">No history recorded yet.</p>';
+} else {
+history.slice().reverse().forEach(h => {
+html += `
+<div class="history-item">
+<div class="history-header">
+<span class="history-action">${h.action}</span>
+<span class="history-time">${formatDate(h.timestamp)} by ${h.user?h.user.split('@')[0]:'System'}</span>
+</div>
+<div class="history-details">${h.details||'No details provided.'}</div>
+</div>`;
+});
+}
+html += '</div>';
+document.getElementById('historyModalBody').innerHTML = html;
+openModal('historyModal');
+}
+
+async function deleteCheque(id) {
+if (confirm('Move to Recycle Bin?')) {
+await db.collection('cheques').doc(id).update({deletedAt:firebase.firestore.FieldValue.serverTimestamp()});
+await loadAllChequesData();
+showToast('Moved to Recycle Bin','info');
+}
+}
+
+async function restoreCheque(id) {
+await db.collection('cheques').doc(id).update({deletedAt:null});
+await loadAllChequesData();
+showToast('Cheque restored','success');
+}
+
+function updateDashboard() {
+const active = allCheques.filter(c => !c.deletedAt);
+document.getElementById('totalCheques').textContent = active.length;
+document.getElementById('inHandCount').textContent = active.filter(c => c.status === 'in-hand').length;
+document.getElementById('returnedCount').textContent = active.filter(c => c.status === 'returned').length;
+const tv = active.reduce((s,c) => s + (parseFloat(c.amount)||0), 0);
+document.getElementById('totalValue').textContent = Math.round(tv).toLocaleString('en-IN');
+const returnedCheques = active.filter(c => c.status === 'returned');
+const totalReturnedAmount = returnedCheques.reduce((sum,c) => sum + (parseFloat(c.amount)||0), 0);
+const totalRecovered = returnedCheques.reduce((sum,c) => {
+const payments = c.payments || [];
+return sum + payments.reduce((pSum,p) => pSum + (parseFloat(p.amount)||0), 0);
+}, 0);
+const recoveryRate = totalReturnedAmount > 0 ? ((totalRecovered/totalReturnedAmount)*100).toFixed(1) : 0;
+const recent = active.slice(0,5);
+document.getElementById('recentActivity').innerHTML = recent.length ?
+`<div style="margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+<div style="background:linear-gradient(135deg,var(--success),#059669);color:white;padding:16px;border-radius:12px">
+<div style="font-size:11px;opacity:0.9">Total Recovered</div>
+<div style="font-size:24px;font-weight:800">${Math.round(totalRecovered).toLocaleString('en-IN')}</div>
+</div>
+<div style="background:linear-gradient(135deg,var(--warning),#d97706);color:white;padding:16px;border-radius:12px">
+<div style="font-size:11px;opacity:0.9">Outstanding</div>
+<div style="font-size:24px;font-weight:800">${Math.round(totalReturnedAmount-totalRecovered).toLocaleString('en-IN')}</div>
+</div>
+<div style="background:linear-gradient(135deg,var(--info),#2563eb);color:white;padding:16px;border-radius:12px">
+<div style="font-size:11px;opacity:0.9">Recovery Rate</div>
+<div style="font-size:24px;font-weight:800">${recoveryRate}%</div>
+</div>
+</div>
+<div class="table-container">
+<table>
+<thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Status</th></tr></thead>
+<tbody>${recent.map(c => `
+<tr>
+<td>${c.number}</td>
+<td>${c.payee}</td>
+<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+<td><span class="status-badge status-${c.status}">${c.status}</span></td>
+</tr>
+`).join('')}</tbody>
+</table>
+</div>` :
+'<div class="empty-state"><i class="fas fa-receipt"></i><h3>No recent activity</h3></div>';
+}
+
+function getPaymentStatusBadge(cheque) {
+if (cheque.status !== 'returned') return '';
+const payments = cheque.payments || [];
+const totalPaid = payments.reduce((sum,p) => sum + (parseFloat(p.amount)||0), 0);
+const totalAmount = parseFloat(cheque.amount) || 0;
+if (totalAmount === 0) return '';
+const percentage = (totalPaid/totalAmount)*100;
+if (percentage >= 100) return '<span class="payment-badge paid"><i class="fas fa-check-circle"></i> Fully Paid</span>';
+else if (percentage > 0) return `<span class="payment-badge partial"><i class="fas fa-clock"></i> ${percentage.toFixed(0)}%</span>`;
+else return '<span class="payment-badge unpaid"><i class="fas fa-exclamation-circle"></i> Unpaid</span>';
+}
+
+function renderAllCheques() {
+const tbody = document.getElementById('allChequesTable');
+const emptyState = document.getElementById('allChequesEmpty');
+const chequeNumberFilter = document.getElementById('filterChequeNumber') ? document.getElementById('filterChequeNumber').value.toLowerCase() : '';
+const payeeFilter = document.getElementById('filterPayee') ? document.getElementById('filterPayee').value.toLowerCase() : '';
+const statusFilter = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
+const bankFilter = document.getElementById('filterBank') ? document.getElementById('filterBank').value : '';
+let filtered = allCheques.filter(c => !c.deletedAt);
+if (chequeNumberFilter) filtered = filtered.filter(c => c.number.toLowerCase().includes(chequeNumberFilter));
+if (payeeFilter) filtered = filtered.filter(c => c.payee.toLowerCase().includes(payeeFilter));
+if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
+if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
+if (filtered.length === 0) {
+tbody.innerHTML = '';
+emptyState.classList.remove('hidden');
+document.getElementById('bulkActions').style.display = 'none';
+return;
+}
+emptyState.classList.add('hidden');
+document.getElementById('bulkActions').style.display = 'flex';
+tbody.innerHTML = filtered.map(c => {
+let paymentInfo = '-';
+if (c.status === 'returned') {
+const payments = c.payments || [];
+const totalPaid = payments.reduce((sum,p) => sum + (parseFloat(p.amount)||0), 0);
+const totalAmount = parseFloat(c.amount) || 0;
+const percentage = totalAmount > 0 ? Math.min((totalPaid/totalAmount)*100,100) : 0;
+paymentInfo = `<div style="min-width:100px">
+<div style="font-size:11px">
+<span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
+<span style="color:var(--gray)">/</span>
+<span>₹${totalAmount.toLocaleString('en-IN')}</span>
+</div>
+<div class="payment-progress-bar">
+<div class="payment-progress-fill" style="width:${percentage}%"></div>
+</div>
+</div>`;
+}
+const isSelected = selectedCheques.has(c.id);
+return `<tr>
+<td><input type="checkbox" class="cheque-checkbox" data-id="${c.id}" ${isSelected?'checked':''} onchange="toggleChequeSelection('${c.id}')"></td>
+<td>${c.number}</td>
+<td>${c.payee}</td>
+<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+<td>${c.bank}</td>
+<td>${formatDate(c.date)}</td>
+<td>
+<span class="status-badge status-${c.status}">${c.status}</span>
+${getPaymentStatusBadge(c)}
+</td>
+<td>${paymentInfo}</td>
+<td>
+<div class="cheque-actions">
+<button class="action-btn btn-edit" data-tooltip="Edit" onclick="openEditModal('${c.id}')">
+<i class="fas fa-edit"></i>
+</button>
+${c.status === 'returned' ? `
+<button class="action-btn btn-payment" data-tooltip="Add Payment" onclick="openAddPaymentModal('${c.id}')">
+<i class="fas fa-money-bill-wave"></i>
+</button>
+<button class="action-btn btn-view-payments" data-tooltip="View Payments" onclick="viewPaymentHistory('${c.id}')">
+<i class="fas fa-receipt"></i>
+</button>
+` : ''}
+<button class="action-btn btn-change" data-tooltip="Change Status" onclick="openStatusModal('${c.id}','${c.status}')">
+<i class="fas fa-exchange-alt"></i>
+</button>
+<button class="action-btn btn-history" data-tooltip="View History" onclick="viewHistory('${c.id}')">
+<i class="fas fa-history"></i>
+</button>
+<button class="action-btn btn-delete" data-tooltip="Delete" onclick="deleteCheque('${c.id}')">
+<i class="fas fa-trash"></i>
+</button>
+</div>
+</td>
+</tr>`;
+}).join('');
 updateSelectedCount();
 }
 
@@ -2153,92 +2469,6 @@ a.click();
 showToast('Exported selected cheques','success');
 }
 
-function renderAllCheques() {
-const tbody = document.getElementById('allChequesTable');
-const emptyState = document.getElementById('allChequesEmpty');
-const chequeNumberFilter = document.getElementById('filterChequeNumber') ? document.getElementById('filterChequeNumber').value.trim().toLowerCase() : '';
-const payeeFilter = document.getElementById('filterPayee') ? document.getElementById('filterPayee').value.trim().toLowerCase() : '';
-const statusFilter = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
-const bankFilter = document.getElementById('filterBank') ? document.getElementById('filterBank').value : '';
-const sortBy = document.getElementById('sortBy') ? document.getElementById('sortBy').value : 'chequeDate-desc';
-
-let filtered = allCheques.filter(c => !c.deletedAt);
-if (chequeNumberFilter) filtered = filtered.filter(c => (c.number || '').toLowerCase().includes(chequeNumberFilter));
-if (payeeFilter) filtered = filtered.filter(c => (c.payee || '').toLowerCase().includes(payeeFilter));
-if (statusFilter) filtered = filtered.filter(c => c.status === statusFilter);
-if (bankFilter) filtered = filtered.filter(c => c.bank === bankFilter);
-
-// Apply sorting
-filtered = sortCheques(filtered, sortBy);
-
-if (filtered.length === 0) {
-tbody.innerHTML = '';
-emptyState.classList.remove('hidden');
-document.getElementById('bulkActions').style.display = 'none';
-return;
-}
-emptyState.classList.add('hidden');
-document.getElementById('bulkActions').style.display = 'flex';
-tbody.innerHTML = filtered.map(c => {
-let paymentInfo = '-';
-if (c.status === 'returned') {
-const payments = c.payments || [];
-const totalPaid = payments.reduce((sum,p) => sum + (parseFloat(p.amount)||0), 0);
-const totalAmount = parseFloat(c.amount) || 0;
-const percentage = totalAmount > 0 ? Math.min((totalPaid/totalAmount)*100,100) : 0;
-paymentInfo = `<div style="min-width:100px">
-<div style="font-size:11px">
-<span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
-<span style="color:var(--gray)">/</span>
-<span>${totalAmount.toLocaleString('en-IN')}</span>
-</div>
-<div class="payment-progress-bar">
-<div class="payment-progress-fill" style="width:${percentage}%"></div>
-</div>
-</div>`;
-}
-const isSelected = selectedCheques.has(c.id);
-return `<tr>
-<td><input type="checkbox" class="cheque-checkbox" data-id="${c.id}" ${isSelected?'checked':''} onchange="toggleChequeSelection('${c.id}')"></td>
-<td>${c.number}</td>
-<td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
-<td>${c.bank}</td>
-<td>${formatDate(c.date)}</td>
-<td>
-<span class="status-badge status-${c.status}">${c.status}</span>
-${getPaymentStatusBadge(c)}
-</td>
-<td>${paymentInfo}</td>
-<td>
-<div class="cheque-actions">
-<button class="action-btn btn-edit" data-tooltip="Edit" onclick="openEditModal('${c.id}')">
-<i class="fas fa-edit"></i>
-</button>
-${c.status === 'returned' ? `
-<button class="action-btn btn-payment" data-tooltip="Add Payment" onclick="openAddPaymentModal('${c.id}')">
-<i class="fas fa-money-bill-wave"></i>
-</button>
-<button class="action-btn btn-view-payments" data-tooltip="View Payments" onclick="viewPaymentHistory('${c.id}')">
-<i class="fas fa-receipt"></i>
-</button>
-` : ''}
-<button class="action-btn btn-change" data-tooltip="Change Status" onclick="openStatusModal('${c.id}','${c.status}')">
-<i class="fas fa-exchange-alt"></i>
-</button>
-<button class="action-btn btn-history" data-tooltip="View History" onclick="viewHistory('${c.id}')">
-<i class="fas fa-history"></i>
-</button>
-<button class="action-btn btn-delete" data-tooltip="Delete" onclick="deleteCheque('${c.id}')">
-<i class="fas fa-trash"></i>
-</button>
-</div>
-</td>
-</tr>`;
-}).join('');
-updateSelectedCount();
-}
-
 function renderInHand() {
 const list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
 document.getElementById('inHandTable').innerHTML = list.map(c => `
@@ -2254,36 +2484,6 @@ document.getElementById('inHandTable').innerHTML = list.map(c => `
 document.getElementById('inHandEmpty').classList.toggle('hidden',list.length>0);
 }
 
-function applyInHandFilter() {
-const chequeNumberFilter = document.getElementById('filterInHandChequeNumber').value.trim().toLowerCase();
-const payeeFilter = document.getElementById('filterInHandPayee').value.trim().toLowerCase();
-const bankFilter = document.getElementById('filterInHandBank').value;
-
-let filtered = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
-
-if (chequeNumberFilter) {
-filtered = filtered.filter(c => (c.number || '').toLowerCase().includes(chequeNumberFilter));
-}
-if (payeeFilter) {
-filtered = filtered.filter(c => (c.payee || '').toLowerCase().includes(payeeFilter));
-}
-if (bankFilter) {
-filtered = filtered.filter(c => c.bank === bankFilter);
-}
-
-document.getElementById('inHandTable').innerHTML = filtered.map(c => `
-<tr>
-<td>${c.number}</td>
-<td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
-<td>${c.bank}</td>
-<td>${formatDate(c.date)}</td>
-<td><button class="btn btn-sm btn-primary" onclick="openStatusModal('${c.id}','${c.status}')">Issue</button></td>
-</tr>
-`).join('');
-document.getElementById('inHandEmpty').classList.toggle('hidden', filtered.length === 0);
-}
-
 function renderReturned() {
 const list = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
 const tbody = document.getElementById('returnedTable');
@@ -2295,71 +2495,6 @@ return;
 }
 emptyState.classList.add('hidden');
 tbody.innerHTML = list.map(c => {
-const payments = c.payments || [];
-const totalPaid = payments.reduce((sum,p) => sum + (parseFloat(p.amount)||0), 0);
-const totalAmount = parseFloat(c.amount) || 0;
-const remaining = totalAmount - totalPaid;
-const percentage = totalAmount > 0 ? Math.min((totalPaid/totalAmount)*100,100) : 0;
-return `<tr>
-<td>${c.number}</td>
-<td>${c.payee}</td>
-<td>
-<div style="font-weight:700">${totalAmount.toLocaleString('en-IN')}</div>
-<div style="font-size:11px;color:var(--gray)">
-Paid: <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span> |
-Due: <span style="color:var(--danger);font-weight:600">₹${Math.round(remaining).toLocaleString('en-IN')}</span>
-</div>
-<div class="payment-progress-bar" style="margin-top:4px">
-<div class="payment-progress-fill" style="width:${percentage}%"></div>
-</div>
-</td>
-<td>${c.bank}</td>
-<td>${c.returnDetails?.reason||'N/A'}</td>
-<td>
-<div style="display:flex;gap:5px;flex-wrap:wrap">
-<button class="btn btn-sm btn-success" onclick="openAddPaymentModal('${c.id}')">
-<i class="fas fa-plus"></i> Pay
-</button>
-<button class="btn btn-sm btn-info" onclick="viewPaymentHistory('${c.id}')" style="background:linear-gradient(135deg,var(--info),#2563eb);color:white">
-<i class="fas fa-receipt"></i> ${payments.length}
-</button>
-<button class="btn btn-sm btn-secondary" onclick="openStatusModal('${c.id}','${c.status}')">
-<i class="fas fa-exchange-alt"></i>
-</button>
-</div>
-</td>
-</tr>`;
-}).join('');
-}
-
-function applyReturnedFilter() {
-const chequeNumberFilter = document.getElementById('filterReturnedChequeNumber').value.trim().toLowerCase();
-const payeeFilter = document.getElementById('filterReturnedPayee').value.trim().toLowerCase();
-const bankFilter = document.getElementById('filterReturnedBank').value;
-
-let filtered = allCheques.filter(c => c.status === 'returned' && !c.deletedAt);
-
-if (chequeNumberFilter) {
-filtered = filtered.filter(c => (c.number || '').toLowerCase().includes(chequeNumberFilter));
-}
-if (payeeFilter) {
-filtered = filtered.filter(c => (c.payee || '').toLowerCase().includes(payeeFilter));
-}
-if (bankFilter) {
-filtered = filtered.filter(c => c.bank === bankFilter);
-}
-
-const tbody = document.getElementById('returnedTable');
-const emptyState = document.getElementById('returnedEmpty');
-
-if (filtered.length === 0) {
-tbody.innerHTML = '';
-emptyState.classList.remove('hidden');
-return;
-}
-emptyState.classList.add('hidden');
-
-tbody.innerHTML = filtered.map(c => {
 const payments = c.payments || [];
 const totalPaid = payments.reduce((sum,p) => sum + (parseFloat(p.amount)||0), 0);
 const totalAmount = parseFloat(c.amount) || 0;
@@ -2596,7 +2731,7 @@ function exportReport(format) {
         filtered.forEach(c => {
             const chequeDate = new Date(c.date);
             const daysOutstanding = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
-            html += `<tr><td>${c.number}</td><td>${c.payee}</td><td>${c.amount.toLocaleString('en-IN')}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td>${c.status}</td><td>${daysOutstanding}</td></tr>`;
+            html += `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${c.amount.toLocaleString('en-IN')}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td>${c.status}</td><td>${daysOutstanding}</td></tr>`;
         });
         html += `</tbody></table></body></html>`;
         printWindow.document.write(html);
@@ -2614,9 +2749,7 @@ function renderAging() {
     const emptyState = document.getElementById('agingEmpty');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
     const inHandCheques = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
-    
     if (inHandCheques.length === 0) {
         if(grid) grid.innerHTML = '';
         if(tbody) tbody.innerHTML = '';
@@ -2625,81 +2758,73 @@ function renderAging() {
         return;
     }
     if(emptyState) emptyState.classList.add('hidden');
-    
     const buckets = {
         current: { count: 0, amount: 0, cheques: [] },
         days30: { count: 0, amount: 0, cheques: [] },
         days60: { count: 0, amount: 0, cheques: [] },
         days90: { count: 0, amount: 0, cheques: [] }
     };
-    
     inHandCheques.forEach(cheque => {
         const chequeDate = new Date(cheque.date);
         chequeDate.setHours(0, 0, 0, 0);
-        const daysToChequeDate = Math.ceil((chequeDate - today) / (1000 * 60 * 60 * 24));
-        
+        const daysFromChequeDate = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
         let bucket;
-        if (daysToChequeDate <= 30) bucket = 'current';
-        else if (daysToChequeDate <= 60) bucket = 'days30';
-        else if (daysToChequeDate <= 90) bucket = 'days60';
+        if (daysFromChequeDate <= 30) bucket = 'current';
+        else if (daysFromChequeDate <= 60) bucket = 'days30';
+        else if (daysFromChequeDate <= 90) bucket = 'days60';
         else bucket = 'days90';
-        
         buckets[bucket].count++;
         buckets[bucket].amount += parseFloat(cheque.amount) || 0;
-        buckets[bucket].cheques.push({ ...cheque, daysToChequeDate });
+        buckets[bucket].cheques.push({ ...cheque, daysFromChequeDate });
     });
-    
     grid.innerHTML = `
     <div class="aging-card current">
-    <div class="aging-title">0-30 Days</div>
+    <div class="aging-title">Current (0-30 days)</div>
     <div class="aging-value">${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.current.count} cheques</div>
     </div>
     <div class="aging-card days30">
-    <div class="aging-title">31-60 Days</div>
+    <div class="aging-title">31-60 days</div>
     <div class="aging-value">${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days30.count} cheques</div>
     </div>
     <div class="aging-card days60">
-    <div class="aging-title">61-90 Days</div>
+    <div class="aging-title">61-90 days</div>
     <div class="aging-value">${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days60.count} cheques</div>
     </div>
     <div class="aging-card days90">
-    <div class="aging-title">90+ Days</div>
-    <div class="aging-value">${Math.round(buckets.days90.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-title">90+ days</div>
+    <div class="aging-value">₹${Math.round(buckets.days90.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days90.count} cheques</div>
     </div>
     `;
-    
     const allAgingCheques = [
     ...buckets.current.cheques,
     ...buckets.days30.cheques,
     ...buckets.days60.cheques,
     ...buckets.days90.cheques
     ];
-    
     tbody.innerHTML = allAgingCheques.map(c => {
     let bucketLabel;
-    if (c.daysToChequeDate <= 30) bucketLabel = '0-30 Days';
-    else if (c.daysToChequeDate <= 60) bucketLabel = '31-60 Days';
-    else if (c.daysToChequeDate <= 90) bucketLabel = '61-90 Days';
+    if (c.daysFromChequeDate <= 30) bucketLabel = '0-30 Days';
+    else if (c.daysFromChequeDate <= 60) bucketLabel = '31-60 Days';
+    else if (c.daysFromChequeDate <= 90) bucketLabel = '61-90 Days';
     else bucketLabel = '90+ Days';
     return `<tr>
     <td>${c.number}</td>
     <td>${c.payee}</td>
-    <td>${Math.round(c.amount).toLocaleString('en-IN')}</td>
+    <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
     <td>${c.bank}</td>
     <td>${formatDate(c.date)}</td>
-    <td><strong style="color:${c.daysToChequeDate>60?'var(--danger)':c.daysToChequeDate>30?'var(--warning)':'var(--success)'}">${c.daysToChequeDate} days</strong></td>
+    <td><strong style="color:${c.daysFromChequeDate>60?'var(--danger)':c.daysFromChequeDate>30?'var(--warning)':'var(--success)'}">${c.daysFromChequeDate} days</strong></td>
     <td>
-    <span class="status-badge" style="background:${c.daysToChequeDate>60?'#fee2e2':c.daysToChequeDate>30?'#fef3c7':'#d1fae5'};color:${c.daysToChequeDate>60?'#b91c1c':c.daysToChequeDate>30?'#b45309':'#065f46'}">
+    <span class="status-badge" style="background:${c.daysFromChequeDate>60?'#fee2e2':c.daysFromChequeDate>30?'#fef3c7':'#d1fae5'};color:${c.daysFromChequeDate>60?'#b91c1c':c.daysFromChequeDate>30?'#b45309':'#065f46'}">
     ${bucketLabel}
     </span>
     </td>
     </tr>`;
     }).join('');
-    
     updateAgingLastUpdate();
 }
 
@@ -2727,11 +2852,11 @@ const issuedValue = active.filter(c => c.status === 'issued').reduce((sum,c) => 
 document.getElementById('analyticsWidgets').innerHTML = `
 <div class="widget">
 <div class="widget-title">Total Value</div>
-<div class="widget-value">${Math.round(totalValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">₹${Math.round(totalValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">In Hand Value</div>
-<div class="widget-value">${Math.round(inHandValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">₹${Math.round(inHandValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">Issued Value</div>
@@ -2762,14 +2887,6 @@ select.value = currentValue;
 if (reportSelect) {
 reportSelect.innerHTML = options;
 reportSelect.value = reportCurrentValue;
-}
-const inHandBankSelect = document.getElementById('filterInHandBank');
-const returnedBankSelect = document.getElementById('filterReturnedBank');
-if (inHandBankSelect) {
-inHandBankSelect.innerHTML = options;
-}
-if (returnedBankSelect) {
-returnedBankSelect.innerHTML = options;
 }
 }
 
@@ -2884,7 +3001,7 @@ let html = `<div class="payment-summary-box">
 <div class="payment-summary-grid">
 <div class="payment-summary-item">
 <div class="payment-summary-label">Total Amount</div>
-<div class="payment-summary-value">${totalAmount.toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">₹${totalAmount.toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Total Paid</div>
