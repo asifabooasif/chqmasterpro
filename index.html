@@ -194,8 +194,11 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 .timeline-item::before{content:'';position:absolute;left:-9px;top:0;width:16px;height:16px;border-radius:50%;background:var(--primary);border:3px solid white;box-shadow:0 0 0 2px var(--primary);transition:all 0.3s ease;animation:pulse 2s ease-in-out infinite}
 .timeline-item:hover::before{transform:scale(1.3)}
 .timeline-date{font-weight:700;color:var(--dark);margin-bottom:8px;font-size:14px}
-.timeline-content{background:white;padding:16px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.05);transition:all 0.3s ease}
+.timeline-content{background:white;padding:16px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.05);transition:all 0.3s ease;margin-bottom:12px}
 .timeline-content:hover{transform:translateY(-3px);box-shadow:0 6px 15px rgba(0,0,0,0.1)}
+.timeline-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px;font-size:12px}
+.timeline-detail-item{background:var(--light);padding:8px 12px;border-radius:6px}
+.timeline-detail-item strong{color:var(--gray);font-weight:600;display:block;font-size:10px;text-transform:uppercase;margin-bottom:2px}
 .aging-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-bottom:24px}
 .aging-card{background:white;border-radius:14px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.04);border-top:4px solid var(--primary);transition:all 0.3s ease;animation:scaleIn 0.5s ease backwards}
 .aging-card:nth-child(1){animation-delay:0.1s}
@@ -593,6 +596,36 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <option value="">All Banks</option>
 </select>
 </div>
+<div class="filter-group">
+<label>Issued Party</label>
+<input type="text" id="filterIssuedParty" placeholder="Search issued party...">
+</div>
+<div class="filter-group">
+<label>Delivery Mode</label>
+<select id="filterDeliveryMode">
+<option value="">All Modes</option>
+<option value="Hand Delivered">Hand Delivered</option>
+<option value="Courier">Courier</option>
+<option value="Registered Post">Registered Post</option>
+<option value="Email/Scan">Email/Scan</option>
+</select>
+</div>
+<div class="filter-group">
+<label>Date From</label>
+<input type="date" id="filterDateFrom">
+</div>
+<div class="filter-group">
+<label>Date To</label>
+<input type="date" id="filterDateTo">
+</div>
+<div class="filter-group">
+<label>Amount Min</label>
+<input type="number" id="filterAmountMin" placeholder="Min amount">
+</div>
+<div class="filter-group">
+<label>Amount Max</label>
+<input type="number" id="filterAmountMax" placeholder="Max amount">
+</div>
 </div>
 </div>
 
@@ -623,6 +656,9 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </button>
 <button class="btn btn-secondary btn-sm" onclick="bulkExport()">
 <i class="fas fa-download"></i> Export Selected
+</button>
+<button class="btn btn-primary btn-sm" onclick="openBulkStatusModal()">
+<i class="fas fa-exchange-alt"></i> Bulk Change Status
 </button>
 <span id="selectedCount">0 selected</span>
 </div>
@@ -687,10 +723,19 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </select>
 </div>
 </div>
+<div class="bulk-actions" id="inHandBulkActions" style="display:none">
+<input type="checkbox" id="inHandSelectAll" onchange="toggleInHandSelectAll()">
+<label for="inHandSelectAll">Select All</label>
+<button class="btn btn-primary btn-sm" onclick="openBulkStatusModal('in-hand')">
+<i class="fas fa-exchange-alt"></i> Bulk Change Status
+</button>
+<span id="inHandSelectedCount">0 selected</span>
+</div>
 <div class="table-container">
 <table>
 <thead>
 <tr>
+<th><input type="checkbox" id="inHandHeaderCheckbox" onchange="toggleInHandSelectAll()"></th>
 <th>#</th>
 <th>Payee</th>
 <th>Amount</th>
@@ -994,7 +1039,7 @@ Settings & Administration
 </div>
 <div class="form-group">
 <label>Currency Symbol</label>
-<input type="text" id="currencySymbol" value="">
+<input type="text" id="currencySymbol" value="₹">
 </div>
 <button class="btn btn-primary" onclick="showToast('Settings saved','success')">
 <i class="fas fa-save"></i> Save
@@ -1286,6 +1331,47 @@ Settings & Administration
 <button class="btn btn-secondary" onclick="closeModal('bulkIssueModal')">Cancel</button>
 <button class="btn btn-primary" onclick="confirmBulkIssue()">
 <i class="fas fa-paper-plane"></i> Issue All Selected
+</button>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="bulkStatusModal">
+<div class="modal" style="max-width:700px">
+<div class="modal-header">
+<h2 class="modal-title">Bulk Change Status</h2>
+<button class="modal-close" onclick="closeModal('bulkStatusModal')">
+<i class="fas fa-times"></i>
+</button>
+</div>
+<div class="modal-body">
+<div class="form-group">
+<label>Selected Cheques (<span id="bulkStatusCount">0</span>)</label>
+<div id="bulkStatusList" style="max-height:150px;overflow-y:auto;background:var(--light);padding:12px;border-radius:8px;margin-bottom:15px"></div>
+</div>
+<div class="form-group">
+<label>Select New Status *</label>
+<select id="bulkNewStatus" onchange="renderBulkStatusFields()">
+<option value="">-- Select Action --</option>
+<option value="in-hand">Move to In Hand</option>
+<option value="issued">Issue Cheque</option>
+<option value="deposited">Deposit Cheque</option>
+<option value="cleared">Mark as Cleared</option>
+<option value="returned">Mark as Returned (Bounced)</option>
+<option value="stopped">Stop Payment</option>
+<option value="draft">Revert to Draft</option>
+</select>
+</div>
+<div id="bulkDynamicStatusFields"></div>
+<div class="form-group">
+<label>General Remarks / Notes</label>
+<textarea id="bulkStatusRemarks" rows="2" placeholder="Any additional notes for all cheques..."></textarea>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" onclick="closeModal('bulkStatusModal')">Cancel</button>
+<button class="btn btn-primary" onclick="confirmBulkStatusChange()">
+<i class="fas fa-check"></i> Change Status for All
 </button>
 </div>
 </div>
@@ -1758,7 +1844,9 @@ let allCheques = [];
 let currentUser = null;
 let lastAgingUpdateDate = null;
 let selectedCheques = new Set();
+let inHandSelectedCheques = new Set();
 let bulkFilteredCheques = [];
+let bulkStatusContext = 'all'; // 'all' or 'in-hand'
 
 window.addEventListener('scroll', () => {
 const scrolled = window.pageYOffset;
@@ -2024,6 +2112,12 @@ const bulkNumbers = document.getElementById('bulkChequeNumbers').value.trim();
 const payeeFilter = document.getElementById('filterPayee').value.toLowerCase();
 const statusFilter = document.getElementById('filterStatus').value;
 const bankFilter = document.getElementById('filterBank').value;
+const issuedPartyFilter = document.getElementById('filterIssuedParty').value.toLowerCase();
+const deliveryModeFilter = document.getElementById('filterDeliveryMode').value;
+const dateFrom = document.getElementById('filterDateFrom').value;
+const dateTo = document.getElementById('filterDateTo').value;
+const amountMin = parseFloat(document.getElementById('filterAmountMin').value) || 0;
+const amountMax = parseFloat(document.getElementById('filterAmountMax').value) || Infinity;
 const sortBy = document.getElementById('sortBy').value;
 
 let filtered = allCheques.filter(c => !c.deletedAt);
@@ -2047,6 +2141,33 @@ if (bankFilter) {
 filtered = filtered.filter(c => c.bank === bankFilter);
 }
 
+if (issuedPartyFilter) {
+    filtered = filtered.filter(c => {
+        const issuedTo = (c.issuedTo || '').toLowerCase();
+        return issuedTo.includes(issuedPartyFilter);
+    });
+}
+
+if (deliveryModeFilter) {
+    filtered = filtered.filter(c => c.deliveryMode === deliveryModeFilter);
+}
+
+if (dateFrom) {
+    filtered = filtered.filter(c => c.date >= dateFrom);
+}
+
+if (dateTo) {
+    filtered = filtered.filter(c => c.date <= dateTo);
+}
+
+if (amountMin > 0) {
+    filtered = filtered.filter(c => parseFloat(c.amount) >= amountMin);
+}
+
+if (amountMax < Infinity) {
+    filtered = filtered.filter(c => parseFloat(c.amount) <= amountMax);
+}
+
 // Apply sorting
 filtered = sortCheques(filtered, sortBy);
 
@@ -2054,10 +2175,8 @@ bulkFilteredCheques = filtered;
 renderBulkFilteredCheques();
 
 if (filtered.length > 0) {
-document.getElementById('bulkIssueBtn').style.display = 'inline-flex';
 showToast(`Found ${filtered.length} cheques`, 'success');
 } else {
-document.getElementById('bulkIssueBtn').style.display = 'none';
 showToast('No cheques found matching criteria', 'info');
 }
 
@@ -2070,10 +2189,15 @@ document.getElementById('bulkChequeNumbers').value = '';
 document.getElementById('filterPayee').value = '';
 document.getElementById('filterStatus').value = '';
 document.getElementById('filterBank').value = '';
+document.getElementById('filterIssuedParty').value = '';
+document.getElementById('filterDeliveryMode').value = '';
+document.getElementById('filterDateFrom').value = '';
+document.getElementById('filterDateTo').value = '';
+document.getElementById('filterAmountMin').value = '';
+document.getElementById('filterAmountMax').value = '';
 document.getElementById('sortBy').value = 'chequeDate-desc';
 bulkFilteredCheques = [];
 selectedCheques.clear();
-document.getElementById('bulkIssueBtn').style.display = 'none';
 document.getElementById('filterSection').style.display = 'none';
 document.getElementById('sortSection').style.display = 'none';
 renderAllCheques();
@@ -2106,7 +2230,7 @@ paymentInfo = `<div style="min-width:100px">
 <div style="font-size:11px">
 <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
 <span style="color:var(--gray)">/</span>
-<span>${totalAmount.toLocaleString('en-IN')}</span>
+<span>₹${totalAmount.toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -2249,6 +2373,165 @@ await loadAllChequesData();
 console.error('Error in bulk issue:', error);
 showToast('Error: ' + error.message, 'error');
 }
+}
+
+function openBulkStatusModal(context = 'all') {
+    bulkStatusContext = context;
+    let selected = [];
+    
+    if (context === 'all') {
+        if (selectedCheques.size === 0) {
+            showToast('Please select at least one cheque', 'error');
+            return;
+        }
+        selected = bulkFilteredCheques.filter(c => selectedCheques.has(c.id));
+        document.getElementById('bulkStatusCount').textContent = selected.length;
+    } else if (context === 'in-hand') {
+        if (inHandSelectedCheques.size === 0) {
+            showToast('Please select at least one cheque', 'error');
+            return;
+        }
+        const inHandCheques = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
+        selected = inHandCheques.filter(c => inHandSelectedCheques.has(c.id));
+        document.getElementById('bulkStatusCount').textContent = selected.length;
+    }
+    
+    const listHtml = selected.map(c => `
+    <div style="padding:8px;margin-bottom:8px;background:white;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
+    <span><strong>#${c.number}</strong> - ${c.payee}</span>
+    <span style="font-weight:600;color:var(--primary)">₹${Math.round(c.amount).toLocaleString('en-IN')}</span>
+    </div>
+    `).join('');
+    
+    document.getElementById('bulkStatusList').innerHTML = listHtml;
+    document.getElementById('bulkNewStatus').value = '';
+    document.getElementById('bulkStatusRemarks').value = '';
+    document.getElementById('bulkDynamicStatusFields').innerHTML = '';
+    
+    openModal('bulkStatusModal');
+}
+
+function renderBulkStatusFields() {
+    const status = document.getElementById('bulkNewStatus').value;
+    const container = document.getElementById('bulkDynamicStatusFields');
+    const config = statusFieldConfigs[status];
+    if (!config) {
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = config.map(field => {
+        let inputHtml = '';
+        if (field.type === 'select') {
+            inputHtml = `<select id="bulk_field_${field.id}" ${field.required?'required':''}>
+            <option value="">Select...</option>
+            ${field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+            </select>`;
+        } else if (field.type === 'textarea') {
+            inputHtml = `<textarea id="bulk_field_${field.id}" rows="2" ${field.required?'required':''}></textarea>`;
+        } else {
+            inputHtml = `<input type="${field.type}" id="bulk_field_${field.id}" ${field.required?'required':''}>`;
+        }
+        return `<div class="form-group">
+        <label>${field.label} ${field.required?'*':''}</label>
+        ${inputHtml}
+        </div>`;
+    }).join('');
+}
+
+async function confirmBulkStatusChange() {
+    const newStatus = document.getElementById('bulkNewStatus').value;
+    const remarks = document.getElementById('bulkStatusRemarks').value.trim();
+    
+    if (!newStatus) {
+        showToast('Please select a new status', 'error');
+        return;
+    }
+    
+    const config = statusFieldConfigs[newStatus];
+    const fieldData = {};
+    let isValid = true;
+    
+    if (config) {
+        config.forEach(field => {
+            const el = document.getElementById(`bulk_field_${field.id}`);
+            if (field.required && !el.value) isValid = false;
+            if (el.value) fieldData[field.id] = el.value;
+        });
+    }
+    
+    if (!isValid) {
+        showToast('Please fill all required fields for this status', 'error');
+        return;
+    }
+    
+    let selected = [];
+    if (bulkStatusContext === 'all') {
+        selected = bulkFilteredCheques.filter(c => selectedCheques.has(c.id));
+    } else if (bulkStatusContext === 'in-hand') {
+        const inHandCheques = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
+        selected = inHandCheques.filter(c => inHandSelectedCheques.has(c.id));
+    }
+    
+    let successCount = 0;
+    
+    try {
+        for (const cheque of selected) {
+            const updateData = {
+                status: newStatus,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            Object.keys(fieldData).forEach(key => {
+                updateData[key] = fieldData[key];
+            });
+            
+            if (newStatus === 'returned') {
+                updateData.returnDetails = {
+                    status: 'returned',
+                    reason: fieldData.returnReason,
+                    date: fieldData.returnDate,
+                    charges: parseFloat(fieldData.bankCharges) || 0,
+                    notes: remarks
+                };
+            }
+            
+            const historyEntry = {
+                action: newStatus.charAt(0).toUpperCase() + newStatus.slice(1).replace('-', ' '),
+                details: `Bulk status change to ${newStatus}. ${Object.entries(fieldData).map(([k, v]) => `${k}: ${v}`).join(', ')} ${remarks ? '| Remarks: ' + remarks : ''}`,
+                timestamp: new Date().toISOString(),
+                user: currentUser ? currentUser.email : 'system',
+                previousStatus: cheque.status
+            };
+            
+            updateData.history = firebase.firestore.FieldValue.arrayUnion(historyEntry);
+            
+            await db.collection('cheques').doc(cheque.id).update(updateData);
+            
+            await db.collection('auditLog').add({
+                action: 'bulk_status_change',
+                chequeNumber: cheque.number,
+                details: historyEntry.details,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                user: currentUser ? currentUser.email : 'system'
+            });
+            
+            successCount++;
+        }
+        
+        showToast(`Successfully changed status for ${successCount} cheques`, 'success');
+        closeModal('bulkStatusModal');
+        
+        if (bulkStatusContext === 'all') {
+            selectedCheques.clear();
+        } else if (bulkStatusContext === 'in-hand') {
+            inHandSelectedCheques.clear();
+        }
+        
+        await loadAllChequesData();
+    } catch (error) {
+        console.error('Error in bulk status change:', error);
+        showToast('Error: ' + error.message, 'error');
+    }
 }
 
 function openEditModal(chequeId) {
@@ -2527,20 +2810,29 @@ const emptyState = document.getElementById('inHandEmpty');
 if (filtered.length === 0) {
 tbody.innerHTML = '';
 emptyState.classList.remove('hidden');
+document.getElementById('inHandBulkActions').style.display = 'none';
 return;
 }
 
 emptyState.classList.add('hidden');
-tbody.innerHTML = filtered.map(c => `
-<tr>
-<td>${c.number}</td>
-<td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
-<td>${c.bank}</td>
-<td>${formatDate(c.date)}</td>
-<td><button class="btn btn-sm btn-primary" onclick="openStatusModal('${c.id}','${c.status}')">Issue</button></td>
-</tr>
-`).join('');
+document.getElementById('inHandBulkActions').style.display = 'flex';
+
+tbody.innerHTML = filtered.map(c => {
+    const isSelected = inHandSelectedCheques.has(c.id);
+    return `
+    <tr>
+    <td><input type="checkbox" class="in-hand-checkbox" data-id="${c.id}" ${isSelected?'checked':''} onchange="toggleInHandChequeSelection('${c.id}')"></td>
+    <td>${c.number}</td>
+    <td>${c.payee}</td>
+    <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+    <td>${c.bank}</td>
+    <td>${formatDate(c.date)}</td>
+    <td><button class="btn btn-sm btn-primary" onclick="openStatusModal('${c.id}','${c.status}')">Issue</button></td>
+    </tr>
+    `;
+}).join('');
+
+updateInHandSelectedCount();
 }
 
 function applyReturnedFilter() {
@@ -2714,6 +3006,15 @@ selectedCheques.add(id);
 updateSelectedCount();
 }
 
+function toggleInHandChequeSelection(id) {
+    if (inHandSelectedCheques.has(id)) {
+        inHandSelectedCheques.delete(id);
+    } else {
+        inHandSelectedCheques.add(id);
+    }
+    updateInHandSelectedCount();
+}
+
 function toggleSelectAll() {
 const headerCheckbox = document.getElementById('headerCheckbox');
 const checkboxes = document.querySelectorAll('.cheque-checkbox');
@@ -2728,9 +3029,29 @@ checkboxes.forEach(cb => cb.checked = false);
 updateSelectedCount();
 }
 
+function toggleInHandSelectAll() {
+    const headerCheckbox = document.getElementById('inHandHeaderCheckbox');
+    const checkboxes = document.querySelectorAll('.in-hand-checkbox');
+    const inHandCheques = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
+    
+    if (headerCheckbox.checked) {
+        inHandCheques.forEach(c => inHandSelectedCheques.add(c.id));
+        checkboxes.forEach(cb => cb.checked = true);
+    } else {
+        inHandSelectedCheques.clear();
+        checkboxes.forEach(cb => cb.checked = false);
+    }
+    updateInHandSelectedCount();
+}
+
 function updateSelectedCount() {
 document.getElementById('selectedCount').textContent = `${selectedCheques.size} selected`;
 document.getElementById('headerCheckbox').checked = selectedCheques.size > 0;
+}
+
+function updateInHandSelectedCount() {
+    document.getElementById('inHandSelectedCount').textContent = `${inHandSelectedCheques.size} selected`;
+    document.getElementById('inHandHeaderCheckbox').checked = inHandSelectedCheques.size > 0;
 }
 
 function bulkDelete() {
@@ -2771,6 +3092,7 @@ function renderInHand() {
 const list = allCheques.filter(c => c.status === 'in-hand' && !c.deletedAt);
 document.getElementById('inHandTable').innerHTML = list.map(c => `
 <tr>
+<td><input type="checkbox" class="in-hand-checkbox" data-id="${c.id}" onchange="toggleInHandChequeSelection('${c.id}')"></td>
 <td>${c.number}</td>
 <td>${c.payee}</td>
 <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
@@ -2780,6 +3102,11 @@ document.getElementById('inHandTable').innerHTML = list.map(c => `
 </tr>
 `).join('');
 document.getElementById('inHandEmpty').classList.toggle('hidden',list.length>0);
+if (list.length > 0) {
+    document.getElementById('inHandBulkActions').style.display = 'flex';
+} else {
+    document.getElementById('inHandBulkActions').style.display = 'none';
+}
 }
 
 function renderReturned() {
@@ -2894,38 +3221,171 @@ board.innerHTML = html;
 }
 
 function renderTimeline() {
-const container = document.getElementById('timelineContainer');
-const groupedByDate = {};
-allCheques.filter(c => !c.deletedAt).forEach(cheque => {
-const dateStr = formatDate(cheque.date);
-if (!groupedByDate[dateStr]) groupedByDate[dateStr] = [];
-groupedByDate[dateStr].push(cheque);
-});
-const sortedDates = Object.keys(groupedByDate).sort((a,b) => new Date(b)-new Date(a));
-if (sortedDates.length === 0) {
-container.innerHTML = '<div class="empty-state"><i class="fas fa-stream"></i><h3>No timeline data</h3></div>';
-return;
-}
-let html = '';
-sortedDates.forEach(date => {
-const cheques = groupedByDate[date];
-html += `<div class="timeline-item">
-<div class="timeline-date">${date}</div>
-${cheques.map(c => `
-<div class="timeline-content">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-<span style="font-weight:700;font-size:14px">#${c.number} - ${c.payee}</span>
-<span style="font-weight:700;color:var(--primary)">₹${Math.round(c.amount).toLocaleString('en-IN')}</span>
-</div>
-<div style="font-size:13px;color:var(--gray)">
-<strong>Bank:</strong> ${c.bank} |
-<strong>Status:</strong> <span class="status-badge status-${c.status}">${c.status}</span>
-</div>
-</div>
-`).join('')}
-</div>`;
-});
-container.innerHTML = html;
+    const container = document.getElementById('timelineContainer');
+    
+    // Collect all events from all cheques
+    const allEvents = [];
+    
+    allCheques.filter(c => !c.deletedAt).forEach(cheque => {
+        // Add creation event
+        if (cheque.createdAt) {
+            const createdDate = cheque.createdAt.toDate ? cheque.createdAt.toDate() : new Date(cheque.createdAt);
+            allEvents.push({
+                date: createdDate,
+                type: 'created',
+                cheque: cheque,
+                title: `Cheque #${cheque.number} Created`,
+                description: `Created for ${cheque.payee} - ₹${Math.round(cheque.amount).toLocaleString('en-IN')}`,
+                icon: 'plus-circle',
+                color: 'var(--success)'
+            });
+        }
+        
+        // Add history events
+        if (cheque.history && cheque.history.length > 0) {
+            cheque.history.forEach(h => {
+                const eventDate = h.timestamp ? new Date(h.timestamp) : new Date();
+                let icon = 'history';
+                let color = 'var(--primary)';
+                
+                if (h.action.includes('Created')) {
+                    icon = 'plus-circle';
+                    color = 'var(--success)';
+                } else if (h.action.includes('Updated')) {
+                    icon = 'edit';
+                    color = 'var(--info)';
+                } else if (h.action.includes('Issued')) {
+                    icon = 'paper-plane';
+                    color = 'var(--warning)';
+                } else if (h.action.includes('Deposited')) {
+                    icon = 'university';
+                    color = 'var(--info)';
+                } else if (h.action.includes('Cleared')) {
+                    icon = 'check-circle';
+                    color = 'var(--success)';
+                } else if (h.action.includes('Returned')) {
+                    icon = 'undo';
+                    color = 'var(--danger)';
+                } else if (h.action.includes('Stopped')) {
+                    icon = 'ban';
+                    color = 'var(--danger)';
+                } else if (h.action.includes('Payment')) {
+                    icon = 'money-bill-wave';
+                    color = 'var(--success)';
+                }
+                
+                allEvents.push({
+                    date: eventDate,
+                    type: 'history',
+                    cheque: cheque,
+                    title: `${h.action} - Cheque #${cheque.number}`,
+                    description: h.details || 'No details',
+                    user: h.user || 'System',
+                    icon: icon,
+                    color: color
+                });
+            });
+        }
+        
+        // Add payment events
+        if (cheque.payments && cheque.payments.length > 0) {
+            cheque.payments.forEach(p => {
+                const paymentDate = new Date(p.date);
+                allEvents.push({
+                    date: paymentDate,
+                    type: 'payment',
+                    cheque: cheque,
+                    title: `Payment Received - Cheque #${cheque.number}`,
+                    description: `₹${Math.round(p.amount).toLocaleString('en-IN')} via ${p.method || 'Unknown'}`,
+                    user: p.user || 'System',
+                    icon: 'money-bill-wave',
+                    color: 'var(--success)'
+                });
+            });
+        }
+    });
+    
+    // Sort events by date (newest first)
+    allEvents.sort((a, b) => b.date - a.date);
+    
+    if (allEvents.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-stream"></i><h3>No timeline data</h3></div>';
+        return;
+    }
+    
+    // Group by date
+    const groupedByDate = {};
+    allEvents.forEach(event => {
+        const dateKey = event.date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        if (!groupedByDate[dateKey]) {
+            groupedByDate[dateKey] = [];
+        }
+        groupedByDate[dateKey].push(event);
+    });
+    
+    const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
+        return new Date(groupedByDate[b][0].date) - new Date(groupedByDate[a][0].date);
+    });
+    
+    let html = '';
+    sortedDates.forEach(date => {
+        const events = groupedByDate[date];
+        html += `<div class="timeline-item">
+        <div class="timeline-date">${date} <span style="font-size:11px;color:var(--gray);font-weight:400">(${events.length} events)</span></div>`;
+        
+        events.forEach(event => {
+            html += `
+            <div class="timeline-content" style="border-left:4px solid ${event.color}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+            <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <i class="fas fa-${event.icon}" style="color:${event.color};font-size:16px"></i>
+            <span style="font-weight:700;font-size:14px;color:var(--dark)">${event.title}</span>
+            </div>
+            <div style="font-size:13px;color:var(--gray);margin-bottom:8px">${event.description}</div>
+            </div>
+            <div style="text-align:right">
+            <div style="font-weight:700;color:var(--primary);font-size:14px">₹${Math.round(event.cheque.amount).toLocaleString('en-IN')}</div>
+            <div style="font-size:11px;color:var(--gray)">${event.cheque.payee}</div>
+            </div>
+            </div>
+            <div class="timeline-details">
+            <div class="timeline-detail-item">
+            <strong>Cheque Number</strong>
+            #${event.cheque.number}
+            </div>
+            <div class="timeline-detail-item">
+            <strong>Bank</strong>
+            ${event.cheque.bank}
+            </div>
+            <div class="timeline-detail-item">
+            <strong>Status</strong>
+            <span class="status-badge status-${event.cheque.status}" style="font-size:10px">${event.cheque.status}</span>
+            </div>
+            ${event.user ? `
+            <div class="timeline-detail-item">
+            <strong>By</strong>
+            ${event.user.split('@')[0]}
+            </div>
+            ` : ''}
+            <div class="timeline-detail-item">
+            <strong>Time</strong>
+            ${event.date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            </div>
+            <div style="margin-top:10px">
+            <button class="btn btn-sm btn-secondary" onclick="viewHistory('${event.cheque.id}')" style="padding:4px 10px;font-size:11px">
+            <i class="fas fa-history"></i> View Full History
+            </button>
+            </div>
+            </div>
+            `;
+        });
+        
+        html += `</div>`;
+    });
+    
+    container.innerHTML = html;
 }
 
 function initReportFilters() {
@@ -3097,7 +3557,7 @@ function renderAging() {
     </div>
     <div class="aging-card days60">
     <div class="aging-title">61-90 days</div>
-    <div class="aging-value">${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">₹${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days60.count} cheques</div>
     </div>
     <div class="aging-card days90">
@@ -3170,7 +3630,7 @@ document.getElementById('analyticsWidgets').innerHTML = `
 </div>
 <div class="widget">
 <div class="widget-title">Issued Value</div>
-<div class="widget-value">${Math.round(issuedValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">₹${Math.round(issuedValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">Average Cheque Amount</div>
@@ -3218,10 +3678,10 @@ const percentage = cheque.amount > 0 ? Math.min((totalPaid/cheque.amount)*100,10
 document.getElementById('paymentChequeId').value = chequeId;
 document.getElementById('payChequeNumber').textContent = cheque.number;
 document.getElementById('payChequePayee').textContent = cheque.payee;
-document.getElementById('payChequeAmount').textContent = '' + (parseFloat(cheque.amount)||0).toLocaleString('en-IN');
+document.getElementById('payChequeAmount').textContent = '₹' + (parseFloat(cheque.amount)||0).toLocaleString('en-IN');
 document.getElementById('payTotalPaid').textContent = '₹' + Math.round(totalPaid).toLocaleString('en-IN');
-document.getElementById('payRemainingBalance').textContent = '' + Math.round(remaining).toLocaleString('en-IN');
-document.getElementById('payMaxAmount').textContent = '' + Math.round(remaining).toLocaleString('en-IN');
+document.getElementById('payRemainingBalance').textContent = '₹' + Math.round(remaining).toLocaleString('en-IN');
+document.getElementById('payMaxAmount').textContent = '₹' + Math.round(remaining).toLocaleString('en-IN');
 document.getElementById('payProgressPercent').textContent = percentage.toFixed(1) + '%';
 document.getElementById('payProgressBar').style.width = percentage + '%';
 document.getElementById('paymentAmount').value = '';
@@ -3323,11 +3783,11 @@ let html = `<div class="payment-summary-box">
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Total Paid</div>
-<div class="payment-summary-value">${Math.round(totalPaid).toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">₹${Math.round(totalPaid).toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Remaining</div>
-<div class="payment-summary-value">${Math.round(remaining).toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">₹${Math.round(remaining).toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Progress</div>
@@ -3360,7 +3820,7 @@ html += `
 <span class="payment-badge paid" style="margin-left:8px">${methodLabels[p.method]||p.method}</span>
 </div>
 <div style="display:flex;align-items:center">
-<span class="payment-history-amount">${(parseFloat(p.amount)||0).toLocaleString('en-IN')}</span>
+<span class="payment-history-amount">₹${(parseFloat(p.amount)||0).toLocaleString('en-IN')}</span>
 <button class="btn-delete-payment" onclick="deletePayment('${chequeId}','${p.id}')" title="Delete Payment">
 <i class="fas fa-trash"></i>
 </button>
