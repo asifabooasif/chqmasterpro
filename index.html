@@ -606,8 +606,8 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </select>
 </div>
 <div class="filter-group">
-<label>Issued Party</label>
-<input type="text" id="filterIssuedParty" placeholder="Search issued party...">
+<label>Issued To</label>
+<input type="text" id="filterIssuedTo" placeholder="Search issued to...">
 </div>
 <div class="filter-group">
 <label>Delivery Mode</label>
@@ -2262,7 +2262,7 @@ const bulkNumbers = document.getElementById('bulkChequeNumbers').value.trim();
 const payeeFilter = document.getElementById('filterPayee').value.toLowerCase();
 const statusFilter = document.getElementById('filterStatus').value;
 const bankFilter = document.getElementById('filterBank').value;
-const issuedPartyFilter = document.getElementById('filterIssuedParty').value.toLowerCase();
+const issuedToFilter = document.getElementById('filterIssuedTo').value.toLowerCase();
 const deliveryModeFilter = document.getElementById('filterDeliveryMode').value;
 const dateFrom = document.getElementById('filterDateFrom').value;
 const dateTo = document.getElementById('filterDateTo').value;
@@ -2291,10 +2291,10 @@ if (bankFilter) {
 filtered = filtered.filter(c => c.bank === bankFilter);
 }
 
-if (issuedPartyFilter) {
+if (issuedToFilter) {
     filtered = filtered.filter(c => {
         const issuedTo = (c.issuedTo || '').toLowerCase();
-        return issuedTo.includes(issuedPartyFilter);
+        return issuedTo.includes(issuedToFilter);
     });
 }
 
@@ -2339,7 +2339,7 @@ document.getElementById('bulkChequeNumbers').value = '';
 document.getElementById('filterPayee').value = '';
 document.getElementById('filterStatus').value = '';
 document.getElementById('filterBank').value = '';
-document.getElementById('filterIssuedParty').value = '';
+document.getElementById('filterIssuedTo').value = '';
 document.getElementById('filterDeliveryMode').value = '';
 document.getElementById('filterDateFrom').value = '';
 document.getElementById('filterDateTo').value = '';
@@ -3404,13 +3404,13 @@ function renderIssuers() {
     const searchFilter = document.getElementById('filterIssuerSearch').value.toLowerCase();
     const sortBy = document.getElementById('sortIssuersBy').value;
     
-    // Aggregate data by issuer
+    // Aggregate data by issuer - FIXED: Now using issuedTo field from cheques
     const issuers = {};
-    allCheques.filter(c => !c.deletedAt && c.issuer).forEach(c => {
-        const key = c.issuer.toLowerCase();
+    allCheques.filter(c => !c.deletedAt && c.issuedTo).forEach(c => {
+        const key = c.issuedTo.toLowerCase();
         if (!issuers[key]) {
             issuers[key] = { 
-                name: c.issuer, 
+                name: c.issuedTo, 
                 count: 0, 
                 total: 0, 
                 paid: 0, 
@@ -3473,7 +3473,7 @@ function openPartyDetails(name, type) {
     document.getElementById('partyDetailsTitle').textContent = `${type === 'payee' ? 'Payee' : 'Issuing Party'} Details: ${name}`;
     
     // Filter cheques by party name
-    const field = type === 'payee' ? 'payee' : 'issuer';
+    const field = type === 'payee' ? 'payee' : 'issuedTo';
     const partyCheques = allCheques.filter(c => !c.deletedAt && c[field] && c[field].toLowerCase() === name.toLowerCase());
     
     const tbody = document.getElementById('partyDetailsTable');
