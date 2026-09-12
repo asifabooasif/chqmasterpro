@@ -430,6 +430,15 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 <div class="nav-section">
+<div class="nav-title">Parties</div>
+<div class="nav-item" onclick="showView('payees',this)">
+<i class="fas fa-users"></i><span>Payees</span>
+</div>
+<div class="nav-item" onclick="showView('issuers',this)">
+<i class="fas fa-user-tie"></i><span>Issuing Parties</span>
+</div>
+</div>
+<div class="nav-section">
 <div class="nav-title">Views</div>
 <div class="nav-item" onclick="showView('kanban',this)">
 <i class="fas fa-columns"></i><span>Kanban</span>
@@ -506,7 +515,7 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 <div class="widget-header">
 <div>
 <div class="widget-title">Total Value</div>
-<div class="widget-value"><span id="totalValue">0</span></div>
+<div class="widget-value">Rs. <span id="totalValue">0</span></div>
 </div>
 <div class="widget-icon warning"><i class="fas fa-rupee-sign"></i></div>
 </div>
@@ -838,6 +847,98 @@ tr:hover{background:var(--light);transform:scale(1.01)}
 </div>
 </div>
 
+<!-- NEW PAYEES VIEW -->
+<div id="payeesView" class="view-content">
+<div class="card">
+<div class="card-header">
+<h2 class="card-title">Payees Analysis</h2>
+</div>
+<div class="filters">
+<div class="filter-group">
+<label>Search Payee</label>
+<input type="text" id="filterPayeeSearch" placeholder="Search by name..." onkeyup="renderPayees()">
+</div>
+<div class="filter-group">
+<label>Sort By</label>
+<select id="sortPayeesBy" onchange="renderPayees()">
+<option value="total-desc">Total Amount (High to Low)</option>
+<option value="total-asc">Total Amount (Low to High)</option>
+<option value="count-desc">Total Cheques (High to Low)</option>
+<option value="name-asc">Name (A-Z)</option>
+<option value="name-desc">Name (Z-A)</option>
+</select>
+</div>
+</div>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>Payee Name</th>
+<th>Total Cheques</th>
+<th>Total Amount</th>
+<th>Paid Amount</th>
+<th>Pending Amount</th>
+<th>Cleared</th>
+<th>Returned</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody id="payeesTable"></tbody>
+</table>
+</div>
+<div id="payeesEmpty" class="empty-state hidden">
+<i class="fas fa-users"></i>
+<h3>No payees found</h3>
+</div>
+</div>
+</div>
+
+<!-- NEW ISSUING PARTIES VIEW -->
+<div id="issuersView" class="view-content">
+<div class="card">
+<div class="card-header">
+<h2 class="card-title">Issuing Parties Analysis</h2>
+</div>
+<div class="filters">
+<div class="filter-group">
+<label>Search Issuer</label>
+<input type="text" id="filterIssuerSearch" placeholder="Search by name..." onkeyup="renderIssuers()">
+</div>
+<div class="filter-group">
+<label>Sort By</label>
+<select id="sortIssuersBy" onchange="renderIssuers()">
+<option value="total-desc">Total Amount (High to Low)</option>
+<option value="total-asc">Total Amount (Low to High)</option>
+<option value="count-desc">Total Cheques (High to Low)</option>
+<option value="name-asc">Name (A-Z)</option>
+<option value="name-desc">Name (Z-A)</option>
+</select>
+</div>
+</div>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>Issuing Party</th>
+<th>Total Cheques</th>
+<th>Total Amount</th>
+<th>Paid Amount</th>
+<th>Pending Amount</th>
+<th>Cleared</th>
+<th>Returned</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody id="issuersTable"></tbody>
+</table>
+</div>
+<div id="issuersEmpty" class="empty-state hidden">
+<i class="fas fa-user-tie"></i>
+<h3>No issuing parties found</h3>
+</div>
+</div>
+</div>
+
 <div id="kanbanView" class="view-content dashboard-bg">
 <div class="floating-ui-element ui-element-1"></div>
 <div class="floating-ui-element ui-element-2"></div>
@@ -1039,7 +1140,7 @@ Settings & Administration
 </div>
 <div class="form-group">
 <label>Currency Symbol</label>
-<input type="text" id="currencySymbol" value="₹">
+<input type="text" id="currencySymbol" value="Rs. ">
 </div>
 <button class="btn btn-primary" onclick="showToast('Settings saved','success')">
 <i class="fas fa-save"></i> Save
@@ -1250,13 +1351,17 @@ Settings & Administration
 <input type="text" id="chequeNumber" required>
 </div>
 <div class="form-group">
-<label>Amount (₹) *</label>
+<label>Amount (Rs.) *</label>
 <input type="number" id="chequeAmount" required step="0.01">
 </div>
 </div>
 <div class="form-group">
 <label>Payee *</label>
 <input type="text" id="chequePayee" required>
+</div>
+<div class="form-group">
+<label>Issuing Party / Drawer</label>
+<input type="text" id="chequeIssuer" placeholder="Optional (for received cheques)">
 </div>
 <div class="form-row">
 <div class="form-group">
@@ -1394,13 +1499,17 @@ Settings & Administration
 <input type="text" id="editChequeNumber" required>
 </div>
 <div class="form-group">
-<label>Amount (₹) *</label>
+<label>Amount (Rs.) *</label>
 <input type="number" id="editChequeAmount" required step="0.01">
 </div>
 </div>
 <div class="form-group">
 <label>Payee *</label>
 <input type="text" id="editChequePayee" required>
+</div>
+<div class="form-group">
+<label>Issuing Party / Drawer</label>
+<input type="text" id="editChequeIssuer" placeholder="Optional">
 </div>
 <div class="form-row">
 <div class="form-group">
@@ -1525,7 +1634,7 @@ Settings & Administration
 </div>
 <div class="form-row">
 <div class="form-group">
-<label>Payment Amount (₹) *</label>
+<label>Payment Amount (Rs.) *</label>
 <input type="number" id="paymentAmount" required step="0.01" min="0.01" placeholder="0.00">
 <small style="color:var(--gray);font-size:11px">Max: <span id="payMaxAmount">0</span></small>
 </div>
@@ -1577,6 +1686,39 @@ Settings & Administration
 <div class="modal-body" id="viewPaymentsBody"></div>
 <div class="modal-footer">
 <button class="btn btn-secondary" onclick="closeModal('viewPaymentsModal')">Close</button>
+</div>
+</div>
+</div>
+
+<!-- NEW PARTY DETAILS MODAL -->
+<div class="modal-overlay" id="partyDetailsModal">
+<div class="modal" style="max-width:900px">
+<div class="modal-header">
+<h2 class="modal-title" id="partyDetailsTitle">Party Details</h2>
+<button class="modal-close" onclick="closeModal('partyDetailsModal')">
+<i class="fas fa-times"></i>
+</button>
+</div>
+<div class="modal-body">
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Payee</th>
+<th>Amount</th>
+<th>Bank</th>
+<th>Date</th>
+<th>Status</th>
+<th>Days Outstanding</th>
+</tr>
+</thead>
+<tbody id="partyDetailsTable"></tbody>
+</table>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" onclick="closeModal('partyDetailsModal')">Close</button>
 </div>
 </div>
 </div>
@@ -1881,7 +2023,7 @@ const statusFieldConfigs = {
 'returned': [
 {id:'returnDate',label:'Return Date',type:'date',required:true},
 {id:'returnReason',label:'Bank Reason Code',type:'select',options:['Insufficient Funds (NSF)','Signature Mismatch','Account Closed','Stop Payment','Stale Dated','Other'],required:true},
-{id:'bankCharges',label:'Bank Charges (₹)',type:'number',required:false}
+{id:'bankCharges',label:'Bank Charges (Rs.)',type:'number',required:false}
 ],
 'stopped': [
 {id:'stopDate',label:'Stop Date',type:'date',required:true},
@@ -1959,6 +2101,8 @@ const viewMap = {
 'in-hand':'inHandView',
 'returned':'returnedView',
 'recycle':'recycleView',
+'payees':'payeesView',
+'issuers':'issuersView',
 'kanban':'kanbanView',
 'timeline':'timelineView',
 'analytics':'analyticsView',
@@ -1982,6 +2126,8 @@ if (viewName === 'all-cheques') renderAllCheques();
 if (viewName === 'in-hand') renderInHand();
 if (viewName === 'returned') renderReturned();
 if (viewName === 'recycle') renderRecycle();
+if (viewName === 'payees') renderPayees();
+if (viewName === 'issuers') renderIssuers();
 if (viewName === 'kanban') renderKanban();
 if (viewName === 'timeline') renderTimeline();
 if (viewName === 'analytics') renderAnalytics();
@@ -2022,6 +2168,7 @@ showToast('Error loading data','error');
 async function saveCheque() {
 const number = document.getElementById('chequeNumber').value.trim();
 const payee = document.getElementById('chequePayee').value.trim();
+const issuer = document.getElementById('chequeIssuer').value.trim();
 const amount = parseFloat(document.getElementById('chequeAmount').value);
 const bank = document.getElementById('chequeBank').value.trim();
 const date = document.getElementById('chequeDate').value;
@@ -2038,7 +2185,7 @@ timestamp:new Date().toISOString(),
 user:currentUser ? currentUser.email:'system'
 };
 await db.collection('cheques').add({
-number,payee,amount,bank,date,status,notes,
+number,payee,issuer,amount,bank,date,status,notes,
 history:[historyEntry],
 payments:[],
 createdAt:firebase.firestore.FieldValue.serverTimestamp(),
@@ -2143,7 +2290,7 @@ filtered = filtered.filter(c => c.bank === bankFilter);
 
 if (issuedPartyFilter) {
     filtered = filtered.filter(c => {
-        const issuedTo = (c.issuedTo || '').toLowerCase();
+        const issuedTo = (c.issuer || '').toLowerCase();
         return issuedTo.includes(issuedPartyFilter);
     });
 }
@@ -2230,7 +2377,7 @@ paymentInfo = `<div style="min-width:100px">
 <div style="font-size:11px">
 <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
 <span style="color:var(--gray)">/</span>
-<span>₹${totalAmount.toLocaleString('en-IN')}</span>
+<span>Rs. ${totalAmount.toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -2242,7 +2389,7 @@ return `<tr>
 <td><input type="checkbox" class="cheque-checkbox" data-id="${c.id}" ${isSelected?'checked':''} onchange="toggleChequeSelection('${c.id}')"></td>
 <td>${c.number}</td>
 <td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+<td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
 <td>${c.bank}</td>
 <td>${formatDate(c.date)}</td>
 <td>
@@ -2314,7 +2461,7 @@ document.getElementById('bulkIssueCount').textContent = selected.length;
 const listHtml = selected.map(c => `
 <div style="padding:8px;margin-bottom:8px;background:white;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
 <span><strong>#${c.number}</strong> - ${c.payee}</span>
-<span style="font-weight:600;color:var(--primary)">₹${Math.round(c.amount).toLocaleString('en-IN')}</span>
+<span style="font-weight:600;color:var(--primary)">Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</span>
 </div>
 `).join('');
 
@@ -2399,7 +2546,7 @@ function openBulkStatusModal(context = 'all') {
     const listHtml = selected.map(c => `
     <div style="padding:8px;margin-bottom:8px;background:white;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
     <span><strong>#${c.number}</strong> - ${c.payee}</span>
-    <span style="font-weight:600;color:var(--primary)">₹${Math.round(c.amount).toLocaleString('en-IN')}</span>
+    <span style="font-weight:600;color:var(--primary)">Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</span>
     </div>
     `).join('');
     
@@ -2540,6 +2687,7 @@ if (!cheque) return;
 document.getElementById('editChequeId').value = cheque.id;
 document.getElementById('editChequeNumber').value = cheque.number;
 document.getElementById('editChequePayee').value = cheque.payee;
+document.getElementById('editChequeIssuer').value = cheque.issuer || '';
 document.getElementById('editChequeAmount').value = cheque.amount;
 document.getElementById('editChequeBank').value = cheque.bank;
 document.getElementById('editChequeDate').value = cheque.date;
@@ -2552,6 +2700,7 @@ async function saveEditCheque() {
 const id = document.getElementById('editChequeId').value;
 const number = document.getElementById('editChequeNumber').value.trim();
 const payee = document.getElementById('editChequePayee').value.trim();
+const issuer = document.getElementById('editChequeIssuer').value.trim();
 const amount = parseFloat(document.getElementById('editChequeAmount').value);
 const bank = document.getElementById('editChequeBank').value.trim();
 const date = document.getElementById('editChequeDate').value;
@@ -2568,7 +2717,7 @@ timestamp:new Date().toISOString(),
 user:currentUser ? currentUser.email:'system'
 };
 await db.collection('cheques').doc(id).update({
-number,payee,amount,bank,date,status,notes,
+number,payee,issuer,amount,bank,date,status,notes,
 history:firebase.firestore.FieldValue.arrayUnion(historyEntry),
 updatedAt:firebase.firestore.FieldValue.serverTimestamp()
 });
@@ -2683,7 +2832,7 @@ let html = `<div style="margin-bottom:20px;padding:15px;background:var(--light);
 <h3 style="margin-bottom:10px">Cheque #${cheque.number}</h3>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px">
 <div><strong>Payee:</strong> ${cheque.payee}</div>
-<div><strong>Amount:</strong> ₹${(cheque.amount||0).toLocaleString('en-IN')}</div>
+<div><strong>Amount:</strong> Rs. ${(cheque.amount||0).toLocaleString('en-IN')}</div>
 <div><strong>Bank:</strong> ${cheque.bank}</div>
 <div><strong>Current Status:</strong> <span class="status-badge status-${cheque.status}">${cheque.status}</span></div>
 </div>
@@ -2742,11 +2891,11 @@ document.getElementById('recentActivity').innerHTML = recent.length ?
 `<div style="margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
 <div style="background:linear-gradient(135deg,var(--success),#059669);color:white;padding:16px;border-radius:12px">
 <div style="font-size:11px;opacity:0.9">Total Recovered</div>
-<div style="font-size:24px;font-weight:800">${Math.round(totalRecovered).toLocaleString('en-IN')}</div>
+<div style="font-size:24px;font-weight:800">Rs. ${Math.round(totalRecovered).toLocaleString('en-IN')}</div>
 </div>
 <div style="background:linear-gradient(135deg,var(--warning),#d97706);color:white;padding:16px;border-radius:12px">
 <div style="font-size:11px;opacity:0.9">Outstanding</div>
-<div style="font-size:24px;font-weight:800">${Math.round(totalReturnedAmount-totalRecovered).toLocaleString('en-IN')}</div>
+<div style="font-size:24px;font-weight:800">Rs. ${Math.round(totalReturnedAmount-totalRecovered).toLocaleString('en-IN')}</div>
 </div>
 <div style="background:linear-gradient(135deg,var(--info),#2563eb);color:white;padding:16px;border-radius:12px">
 <div style="font-size:11px;opacity:0.9">Recovery Rate</div>
@@ -2760,7 +2909,7 @@ document.getElementById('recentActivity').innerHTML = recent.length ?
 <tr>
 <td>${c.number}</td>
 <td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+<td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
 <td><span class="status-badge status-${c.status}">${c.status}</span></td>
 </tr>
 `).join('')}</tbody>
@@ -2824,7 +2973,7 @@ tbody.innerHTML = filtered.map(c => {
     <td><input type="checkbox" class="in-hand-checkbox" data-id="${c.id}" ${isSelected?'checked':''} onchange="toggleInHandChequeSelection('${c.id}')"></td>
     <td>${c.number}</td>
     <td>${c.payee}</td>
-    <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+    <td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
     <td>${c.bank}</td>
     <td>${formatDate(c.date)}</td>
     <td><button class="btn btn-sm btn-primary" onclick="openStatusModal('${c.id}','${c.status}')">Issue</button></td>
@@ -2878,10 +3027,10 @@ return `<tr>
 <td>${c.number}</td>
 <td>${c.payee}</td>
 <td>
-<div style="font-weight:700">₹${totalAmount.toLocaleString('en-IN')}</div>
+<div style="font-weight:700">Rs. ${totalAmount.toLocaleString('en-IN')}</div>
 <div style="font-size:11px;color:var(--gray)">
-Paid: <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span> |
-Due: <span style="color:var(--danger);font-weight:600">₹${Math.round(remaining).toLocaleString('en-IN')}</span>
+Paid: <span style="color:var(--success);font-weight:600">Rs. ${Math.round(totalPaid).toLocaleString('en-IN')}</span> |
+Due: <span style="color:var(--danger);font-weight:600">Rs. ${Math.round(remaining).toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar" style="margin-top:4px">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -2943,7 +3092,7 @@ paymentInfo = `<div style="min-width:100px">
 <div style="font-size:11px">
 <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span>
 <span style="color:var(--gray)">/</span>
-<span>₹${totalAmount.toLocaleString('en-IN')}</span>
+<span>Rs. ${totalAmount.toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -2955,7 +3104,7 @@ return `<tr>
 <td><input type="checkbox" class="cheque-checkbox" data-id="${c.id}" ${isSelected?'checked':''} onchange="toggleChequeSelection('${c.id}')"></td>
 <td>${c.number}</td>
 <td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+<td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
 <td>${c.bank}</td>
 <td>${formatDate(c.date)}</td>
 <td>
@@ -3095,7 +3244,7 @@ document.getElementById('inHandTable').innerHTML = list.map(c => `
 <td><input type="checkbox" class="in-hand-checkbox" data-id="${c.id}" onchange="toggleInHandChequeSelection('${c.id}')"></td>
 <td>${c.number}</td>
 <td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+<td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
 <td>${c.bank}</td>
 <td>${formatDate(c.date)}</td>
 <td><button class="btn btn-sm btn-primary" onclick="openStatusModal('${c.id}','${c.status}')">Issue</button></td>
@@ -3129,10 +3278,10 @@ return `<tr>
 <td>${c.number}</td>
 <td>${c.payee}</td>
 <td>
-<div style="font-weight:700">₹${totalAmount.toLocaleString('en-IN')}</div>
+<div style="font-weight:700">Rs. ${totalAmount.toLocaleString('en-IN')}</div>
 <div style="font-size:11px;color:var(--gray)">
-Paid: <span style="color:var(--success);font-weight:600">${Math.round(totalPaid).toLocaleString('en-IN')}</span> |
-Due: <span style="color:var(--danger);font-weight:600">₹${Math.round(remaining).toLocaleString('en-IN')}</span>
+Paid: <span style="color:var(--success);font-weight:600">Rs. ${Math.round(totalPaid).toLocaleString('en-IN')}</span> |
+Due: <span style="color:var(--danger);font-weight:600">Rs. ${Math.round(remaining).toLocaleString('en-IN')}</span>
 </div>
 <div class="payment-progress-bar" style="margin-top:4px">
 <div class="payment-progress-fill" style="width:${percentage}%"></div>
@@ -3163,7 +3312,7 @@ document.getElementById('recycleTable').innerHTML = list.map(c => `
 <tr>
 <td>${c.number}</td>
 <td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+<td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
 <td>${formatDate(c.deletedAt)}</td>
 <td>
 <button class="btn btn-sm btn-success" onclick="restoreCheque('${c.id}')">Restore</button>
@@ -3180,6 +3329,173 @@ await db.collection('cheques').doc(id).delete();
 await loadAllChequesData();
 showToast('Permanently deleted','info');
 }
+}
+
+// NEW FUNCTION: Render Payees
+function renderPayees() {
+    const searchFilter = document.getElementById('filterPayeeSearch').value.toLowerCase();
+    const sortBy = document.getElementById('sortPayeesBy').value;
+    
+    // Aggregate data by payee
+    const payees = {};
+    allCheques.filter(c => !c.deletedAt && c.payee).forEach(c => {
+        const key = c.payee.toLowerCase();
+        if (!payees[key]) {
+            payees[key] = { 
+                name: c.payee, 
+                count: 0, 
+                total: 0, 
+                paid: 0, 
+                pending: 0, 
+                cleared: 0, 
+                returned: 0 
+            };
+        }
+        payees[key].count++;
+        payees[key].total += parseFloat(c.amount) || 0;
+        if (c.status === 'cleared') payees[key].cleared += parseFloat(c.amount) || 0;
+        if (c.status === 'returned') payees[key].returned += parseFloat(c.amount) || 0;
+        if (c.status !== 'cleared' && c.status !== 'stopped') payees[key].pending += parseFloat(c.amount) || 0;
+    });
+    
+    // Convert to array and filter
+    let payeeArray = Object.values(payees);
+    if (searchFilter) {
+        payeeArray = payeeArray.filter(p => p.name.toLowerCase().includes(searchFilter));
+    }
+    
+    // Sort
+    const [sortField, sortDir] = sortBy.split('-');
+    payeeArray.sort((a, b) => {
+        let valA, valB;
+        if (sortField === 'total') { valA = a.total; valB = b.total; }
+        else if (sortField === 'count') { valA = a.count; valB = b.count; }
+        else { valA = a.name.toLowerCase(); valB = b.name.toLowerCase(); }
+        
+        if (sortDir === 'asc') return valA > valB ? 1 : valA < valB ? -1 : 0;
+        else return valA < valB ? 1 : valA > valB ? -1 : 0;
+    });
+    
+    const tbody = document.getElementById('payeesTable');
+    const emptyState = document.getElementById('payeesEmpty');
+    
+    if (payeeArray.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+    }
+    
+    emptyState.classList.add('hidden');
+    tbody.innerHTML = payeeArray.map(p => `
+        <tr>
+            <td>${p.name}</td>
+            <td>${p.count}</td>
+            <td>Rs. ${Math.round(p.total).toLocaleString('en-IN')}</td>
+            <td>Rs. ${Math.round(p.paid).toLocaleString('en-IN')}</td>
+            <td>Rs. ${Math.round(p.pending).toLocaleString('en-IN')}</td>
+            <td>Rs. ${Math.round(p.cleared).toLocaleString('en-IN')}</td>
+            <td>Rs. ${Math.round(p.returned).toLocaleString('en-IN')}</td>
+            <td><button class="btn btn-sm btn-primary" onclick="openPartyDetails('${p.name}', 'payee')"><i class="fas fa-eye"></i> View Details</button></td>
+        </tr>
+    `).join('');
+}
+
+// NEW FUNCTION: Render Issuing Parties
+function renderIssuers() {
+    const searchFilter = document.getElementById('filterIssuerSearch').value.toLowerCase();
+    const sortBy = document.getElementById('sortIssuersBy').value;
+    
+    // Aggregate data by issuer
+    const issuers = {};
+    allCheques.filter(c => !c.deletedAt && c.issuer).forEach(c => {
+        const key = c.issuer.toLowerCase();
+        if (!issuers[key]) {
+            issuers[key] = { 
+                name: c.issuer, 
+                count: 0, 
+                total: 0, 
+                paid: 0, 
+                pending: 0, 
+                cleared: 0, 
+                returned: 0 
+            };
+        }
+        issuers[key].count++;
+        issuers[key].total += parseFloat(c.amount) || 0;
+        if (c.status === 'cleared') issuers[key].cleared += parseFloat(c.amount) || 0;
+        if (c.status === 'returned') issuers[key].returned += parseFloat(c.amount) || 0;
+        if (c.status !== 'cleared' && c.status !== 'stopped') issuers[key].pending += parseFloat(c.amount) || 0;
+    });
+    
+    // Convert to array and filter
+    let issuerArray = Object.values(issuers);
+    if (searchFilter) {
+        issuerArray = issuerArray.filter(p => p.name.toLowerCase().includes(searchFilter));
+    }
+    
+    // Sort
+    const [sortField, sortDir] = sortBy.split('-');
+    issuerArray.sort((a, b) => {
+        let valA, valB;
+        if (sortField === 'total') { valA = a.total; valB = b.total; }
+        else if (sortField === 'count') { valA = a.count; valB = b.count; }
+        else { valA = a.name.toLowerCase(); valB = b.name.toLowerCase(); }
+        
+        if (sortDir === 'asc') return valA > valB ? 1 : valA < valB ? -1 : 0;
+        else return valA < valB ? 1 : valA > valB ? -1 : 0;
+    });
+    
+    const tbody = document.getElementById('issuersTable');
+    const emptyState = document.getElementById('issuersEmpty');
+    
+    if (issuerArray.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+    }
+    
+    emptyState.classList.add('hidden');
+    tbody.innerHTML = issuerArray.map(p => `
+        <tr>
+            <td>${p.name}</td>
+            <td>${p.count}</td>
+            <td>Rs. ${Math.round(p.total).toLocaleString('en-IN')}</td>
+            <td>Rs. ${Math.round(p.paid).toLocaleString('en-IN')}</td>
+            <td>Rs. ${Math.round(p.pending).toLocaleString('en-IN')}</td>
+            <td>Rs. ${Math.round(p.cleared).toLocaleString('en-IN')}</td>
+            <td>Rs. ${Math.round(p.returned).toLocaleString('en-IN')}</td>
+            <td><button class="btn btn-sm btn-primary" onclick="openPartyDetails('${p.name}', 'issuer')"><i class="fas fa-eye"></i> View Details</button></td>
+        </tr>
+    `).join('');
+}
+
+// NEW FUNCTION: Open Party Details Modal
+function openPartyDetails(name, type) {
+    document.getElementById('partyDetailsTitle').textContent = `${type === 'payee' ? 'Payee' : 'Issuing Party'} Details: ${name}`;
+    
+    // Filter cheques by party name
+    const field = type === 'payee' ? 'payee' : 'issuer';
+    const partyCheques = allCheques.filter(c => !c.deletedAt && c[field] && c[field].toLowerCase() === name.toLowerCase());
+    
+    const tbody = document.getElementById('partyDetailsTable');
+    tbody.innerHTML = partyCheques.map(c => {
+        const cd = new Date(c.date);
+        const today = new Date();
+        const daysOutstanding = Math.floor((today - cd) / (1000 * 60 * 60 * 24));
+        return `
+            <tr>
+                <td>${c.number}</td>
+                <td>${c.payee}</td>
+                <td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
+                <td>${c.bank}</td>
+                <td>${formatDate(c.date)}</td>
+                <td><span class="status-badge status-${c.status}">${c.status}</span></td>
+                <td>${daysOutstanding} days</td>
+            </tr>
+        `;
+    }).join('');
+    
+    openModal('partyDetailsModal');
 }
 
 function renderKanban() {
@@ -3212,7 +3528,7 @@ ${cheques.map(c => `
 <span class="status-badge status-${c.status}" style="font-size:9px">${c.status}</span>
 </div>
 <div style="font-size:12px;color:var(--gray);margin-bottom:6px">${c.payee}</div>
-<div style="font-weight:800;color:var(--primary)">₹${Math.round(c.amount).toLocaleString('en-IN')}</div>
+<div style="font-weight:800;color:var(--primary)">Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</div>
 </div>
 `).join('')}
 </div>`;
@@ -3235,7 +3551,7 @@ function renderTimeline() {
                 type: 'created',
                 cheque: cheque,
                 title: `Cheque #${cheque.number} Created`,
-                description: `Created for ${cheque.payee} - ₹${Math.round(cheque.amount).toLocaleString('en-IN')}`,
+                description: `Created for ${cheque.payee} - Rs. ${Math.round(cheque.amount).toLocaleString('en-IN')}`,
                 icon: 'plus-circle',
                 color: 'var(--success)'
             });
@@ -3296,7 +3612,7 @@ function renderTimeline() {
                     type: 'payment',
                     cheque: cheque,
                     title: `Payment Received - Cheque #${cheque.number}`,
-                    description: `₹${Math.round(p.amount).toLocaleString('en-IN')} via ${p.method || 'Unknown'}`,
+                    description: `Rs. ${Math.round(p.amount).toLocaleString('en-IN')} via ${p.method || 'Unknown'}`,
                     user: p.user || 'System',
                     icon: 'money-bill-wave',
                     color: 'var(--success)'
@@ -3345,7 +3661,7 @@ function renderTimeline() {
             <div style="font-size:13px;color:var(--gray);margin-bottom:8px">${event.description}</div>
             </div>
             <div style="text-align:right">
-            <div style="font-weight:700;color:var(--primary);font-size:14px">₹${Math.round(event.cheque.amount).toLocaleString('en-IN')}</div>
+            <div style="font-weight:700;color:var(--primary);font-size:14px">Rs. ${Math.round(event.cheque.amount).toLocaleString('en-IN')}</div>
             <div style="font-size:11px;color:var(--gray)">${event.cheque.payee}</div>
             </div>
             </div>
@@ -3416,7 +3732,7 @@ const daysOutstanding = Math.floor((today-chequeDate)/(1000*60*60*24));
 return `<tr>
 <td>${c.number}</td>
 <td>${c.payee}</td>
-<td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+<td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
 <td>${c.bank}</td>
 <td>${formatDate(c.date)}</td>
 <td><span class="status-badge status-${c.status}">${c.status}</span></td>
@@ -3489,7 +3805,7 @@ function exportReport(format) {
         filtered.forEach(c => {
             const chequeDate = new Date(c.date);
             const daysOutstanding = Math.floor((today - chequeDate) / (1000 * 60 * 60 * 24));
-            html += `<tr><td>${c.number}</td><td>${c.payee}</td><td>₹${c.amount.toLocaleString('en-IN')}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td>${c.status}</td><td>${daysOutstanding}</td></tr>`;
+            html += `<tr><td>${c.number}</td><td>${c.payee}</td><td>Rs. ${c.amount.toLocaleString('en-IN')}</td><td>${c.bank}</td><td>${formatDate(c.date)}</td><td>${c.status}</td><td>${daysOutstanding}</td></tr>`;
         });
         html += `</tbody></table></body></html>`;
         printWindow.document.write(html);
@@ -3547,22 +3863,22 @@ function renderAging() {
     grid.innerHTML = `
     <div class="aging-card current">
     <div class="aging-title">Current (0-30 days)</div>
-    <div class="aging-value">₹${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">Rs. ${Math.round(buckets.current.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.current.count} cheques</div>
     </div>
     <div class="aging-card days30">
     <div class="aging-title">31-60 days</div>
-    <div class="aging-value">₹${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">Rs. ${Math.round(buckets.days30.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days30.count} cheques</div>
     </div>
     <div class="aging-card days60">
     <div class="aging-title">61-90 days</div>
-    <div class="aging-value">₹${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">Rs. ${Math.round(buckets.days60.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days60.count} cheques</div>
     </div>
     <div class="aging-card days90">
     <div class="aging-title">90+ days</div>
-    <div class="aging-value">₹${Math.round(buckets.days90.amount).toLocaleString('en-IN')}</div>
+    <div class="aging-value">Rs. ${Math.round(buckets.days90.amount).toLocaleString('en-IN')}</div>
     <div class="aging-count">${buckets.days90.count} cheques</div>
     </div>
     `;
@@ -3583,7 +3899,7 @@ function renderAging() {
     return `<tr>
     <td>${c.number}</td>
     <td>${c.payee}</td>
-    <td>₹${Math.round(c.amount).toLocaleString('en-IN')}</td>
+    <td>Rs. ${Math.round(c.amount).toLocaleString('en-IN')}</td>
     <td>${c.bank}</td>
     <td>${formatDate(c.date)}</td>
     <td><strong style="color:${c.daysFromTodayToCheque>60?'var(--danger)':c.daysFromTodayToCheque>30?'var(--warning)':'var(--success)'}">${c.daysFromTodayToCheque} days</strong></td>
@@ -3622,15 +3938,15 @@ const issuedValue = active.filter(c => c.status === 'issued').reduce((sum,c) => 
 document.getElementById('analyticsWidgets').innerHTML = `
 <div class="widget">
 <div class="widget-title">Total Value</div>
-<div class="widget-value">₹${Math.round(totalValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">Rs. ${Math.round(totalValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">In Hand Value</div>
-<div class="widget-value">₹${Math.round(inHandValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">Rs. ${Math.round(inHandValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">Issued Value</div>
-<div class="widget-value">₹${Math.round(issuedValue).toLocaleString('en-IN')}</div>
+<div class="widget-value">Rs. ${Math.round(issuedValue).toLocaleString('en-IN')}</div>
 </div>
 <div class="widget">
 <div class="widget-title">Average Cheque Amount</div>
@@ -3678,10 +3994,10 @@ const percentage = cheque.amount > 0 ? Math.min((totalPaid/cheque.amount)*100,10
 document.getElementById('paymentChequeId').value = chequeId;
 document.getElementById('payChequeNumber').textContent = cheque.number;
 document.getElementById('payChequePayee').textContent = cheque.payee;
-document.getElementById('payChequeAmount').textContent = '₹' + (parseFloat(cheque.amount)||0).toLocaleString('en-IN');
-document.getElementById('payTotalPaid').textContent = '₹' + Math.round(totalPaid).toLocaleString('en-IN');
-document.getElementById('payRemainingBalance').textContent = '₹' + Math.round(remaining).toLocaleString('en-IN');
-document.getElementById('payMaxAmount').textContent = '₹' + Math.round(remaining).toLocaleString('en-IN');
+document.getElementById('payChequeAmount').textContent = 'Rs. ' + (parseFloat(cheque.amount)||0).toLocaleString('en-IN');
+document.getElementById('payTotalPaid').textContent = 'Rs. ' + Math.round(totalPaid).toLocaleString('en-IN');
+document.getElementById('payRemainingBalance').textContent = 'Rs. ' + Math.round(remaining).toLocaleString('en-IN');
+document.getElementById('payMaxAmount').textContent = 'Rs. ' + Math.round(remaining).toLocaleString('en-IN');
 document.getElementById('payProgressPercent').textContent = percentage.toFixed(1) + '%';
 document.getElementById('payProgressBar').style.width = percentage + '%';
 document.getElementById('paymentAmount').value = '';
@@ -3709,7 +4025,7 @@ const payments = cheque.payments || [];
 const totalPaid = payments.reduce((sum,p) => sum + (parseFloat(p.amount)||0), 0);
 const remaining = (parseFloat(cheque.amount)||0) - totalPaid;
 if (amount > remaining + 0.01) {
-return showToast(`Amount exceeds remaining balance of ₹${Math.round(remaining).toLocaleString('en-IN')}`,'error');
+return showToast(`Amount exceeds remaining balance of Rs. ${Math.round(remaining).toLocaleString('en-IN')}`,'error');
 }
 try {
 const payment = {
@@ -3731,7 +4047,7 @@ const newRemaining = (parseFloat(cheque.amount)||0) - newTotalPaid;
 const paymentPercentage = cheque.amount > 0 ? (newTotalPaid/cheque.amount)*100 : 0;
 const historyEntry = {
 action:'Payment Received',
-details:`Received ₹${amount.toLocaleString('en-IN')} via ${method}. Remaining: ₹${Math.round(newRemaining).toLocaleString('en-IN')} (${paymentPercentage.toFixed(1)}% paid)`,
+details:`Received Rs. ${amount.toLocaleString('en-IN')} via ${method}. Remaining: Rs. ${Math.round(newRemaining).toLocaleString('en-IN')} (${paymentPercentage.toFixed(1)}% paid)`,
 timestamp:new Date().toISOString(),
 user:currentUser ? currentUser.email:'system',
 paymentId:payment.id
@@ -3741,7 +4057,7 @@ if (newRemaining <= 0.01) {
 updateData.paymentStatus = 'fully-paid';
 const fullPaidEntry = {
 action:'Fully Recovered',
-details:`Cheque #${cheque.number} fully recovered. Total: ₹${(parseFloat(cheque.amount)||0).toLocaleString('en-IN')}`,
+details:`Cheque #${cheque.number} fully recovered. Total: Rs. ${(parseFloat(cheque.amount)||0).toLocaleString('en-IN')}`,
 timestamp:new Date().toISOString(),
 user:currentUser ? currentUser.email:'system'
 };
@@ -3753,11 +4069,11 @@ await db.collection('cheques').doc(chequeId).update(updateData);
 await db.collection('auditLog').add({
 action:'payment_recorded',
 chequeNumber:cheque.number,
-details:`Payment of ₹${amount.toLocaleString('en-IN')} recorded via ${method}`,
+details:`Payment of Rs. ${amount.toLocaleString('en-IN')} recorded via ${method}`,
 timestamp:firebase.firestore.FieldValue.serverTimestamp(),
 user:currentUser ? currentUser.email:'system'
 });
-showToast(`Payment of ₹${amount.toLocaleString('en-IN')} recorded successfully!`,'success');
+showToast(`Payment of Rs. ${amount.toLocaleString('en-IN')} recorded successfully!`,'success');
 closeModal('addPaymentModal');
 await loadAllChequesData();
 } catch (error) {
@@ -3779,15 +4095,15 @@ let html = `<div class="payment-summary-box">
 <div class="payment-summary-grid">
 <div class="payment-summary-item">
 <div class="payment-summary-label">Total Amount</div>
-<div class="payment-summary-value">₹${totalAmount.toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">Rs. ${totalAmount.toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Total Paid</div>
-<div class="payment-summary-value">₹${Math.round(totalPaid).toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">Rs. ${Math.round(totalPaid).toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Remaining</div>
-<div class="payment-summary-value">₹${Math.round(remaining).toLocaleString('en-IN')}</div>
+<div class="payment-summary-value">Rs. ${Math.round(remaining).toLocaleString('en-IN')}</div>
 </div>
 <div class="payment-summary-item">
 <div class="payment-summary-label">Progress</div>
@@ -3820,7 +4136,7 @@ html += `
 <span class="payment-badge paid" style="margin-left:8px">${methodLabels[p.method]||p.method}</span>
 </div>
 <div style="display:flex;align-items:center">
-<span class="payment-history-amount">₹${(parseFloat(p.amount)||0).toLocaleString('en-IN')}</span>
+<span class="payment-history-amount">Rs. ${(parseFloat(p.amount)||0).toLocaleString('en-IN')}</span>
 <button class="btn-delete-payment" onclick="deletePayment('${chequeId}','${p.id}')" title="Delete Payment">
 <i class="fas fa-trash"></i>
 </button>
@@ -3865,7 +4181,7 @@ updateData.paymentStatus = 'unpaid';
 }
 const historyEntry = {
 action:'Payment Deleted',
-details:`Deleted payment of ₹${(parseFloat(paymentToDelete.amount)||0).toLocaleString('en-IN')} dated ${formatDate(paymentToDelete.date)}`,
+details:`Deleted payment of Rs. ${(parseFloat(paymentToDelete.amount)||0).toLocaleString('en-IN')} dated ${formatDate(paymentToDelete.date)}`,
 timestamp:new Date().toISOString(),
 user:currentUser ? currentUser.email:'system'
 };
