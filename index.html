@@ -5092,6 +5092,148 @@ try {
 } catch (e) {}
 
 })();
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUTO-CLEAR FIX — Fully Paid Returned Cheques → Auto-Cleared
+   Paste at end of <script>. No replacements required.
+   Wraps loadAllChequesData() so every data-load triggers a scan.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+
+if (window.__autoClearFixInstalled) return;
+window.__autoClearFixInstalled = true;
+
+// Save reference to the original (must exist by now — script runs top-to-bottom)
+const _origLoadAllChequesData = window.loadAllChequesData;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCAN + CLEAR FUNCTION
+// ═══════════════════════════════════════════════════════════════════════════
+async function autoClearFullyPaidReturnedCheques() {
+    try {
+        // Only scan returned, non-deleted cheques
+        const candidates = allCheques.filter(c =>
+            c.status === 'returned' && !c.deletedAt
+        );
+
+        if (!candidates.length) return 0;
+
+        const toClear = [];
+
+        for (const cheque of candidates) {
+            const totalAmount = parseFloat(cheque.amount) || 0;
+            if (totalAmount <= 0) continue;
+
+            const payments = cheque.payments || [];
+            const totalPaid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+            const remaining = totalAmount - totalPaid;
+
+            // Fully paid: remaining is zero or negligible
+            if (remaining <= 0.01) {
+                toClear.push({ cheque, totalAmount, totalPaid });
+            }
+        }
+
+        if (!toClear.length) return 0;
+
+        console.log('[Auto-Clear] Found ' + toClear.length + ' fully paid returned cheque(s). Clearing...');
+
+        // Process each cheque sequentially
+        for (const item of toClear) {
+            const cheque = item.cheque;
+            const totalAmount = item.totalAmount;
+
+            const historyEntry = {
+                action: 'Auto-Cleared (Full Payment Detected)',
+                details: 'Cheque #' + cheque.number + ' fully paid (Rs. ' +
+                         totalAmount.toLocaleString('en-IN') +
+                         '). Auto-changed RETURNED → CLEARED.',
+                timestamp: new Date().toISOString(),
+                user: 'system',
+                previousStatus: 'returned',
+                newStatus: 'cleared',
+                autoAction: true
+            };
+
+            try {
+                await db.collection('cheques').doc(cheque.id).update({
+                    status: 'cleared',
+                    paymentStatus: 'fully-paid',
+                    clearedAmount: totalAmount,
+                    clearDate: cheque.clearDate || new Date().toISOString().split('T')[0],
+                    history: firebase.firestore.FieldValue.arrayUnion(historyEntry),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                // Update in-memory copy so UI reflects instantly
+                cheque.status = 'cleared';
+                cheque.paymentStatus = 'fully-paid';
+                cheque.clearedAmount = totalAmount;
+            } catch (firestoreErr) {
+                console.error('[Auto-Clear] Firestore update failed for cheque #' + cheque.number, firestoreErr);
+            }
+        }
+
+        // Show success toast
+        if (typeof showToast === 'function') {
+            showToast('✅ Auto-cleared ' + toClear.length + ' fully paid returned cheque(s)', 'success');
+        }
+
+        return toClear.length;
+    } catch (err) {
+        console.error('[Auto-Clear] Error:', err);
+        return 0;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WRAP loadAllChequesData()
+// Runs the original, then scans and clears, then re-renders affected views
+// ═══════════════════════════════════════════════════════════════════════════
+window.loadAllChequesData = async function() {
+    // 1. Run the original loader (populates allCheques from Firestore)
+    await _origLoadAllChequesData();
+
+    // 2. Scan for fully-paid returned cheques and clear them
+    const cleared = await autoClearFullyPaidReturnedCheques();
+
+    // 3. Re-render views only if something changed (avoids unnecessary re-render)
+    if (cleared > 0) {
+        try {
+            if (typeof updateDashboard === 'function') updateDashboard();
+            if (typeof renderAllCheques === 'function') renderAllCheques();
+            if (typeof renderReturned === 'function') renderReturned();
+            if (typeof renderInHand === 'function') renderInHand();
+            if (typeof renderRecycle === 'function') renderRecycle();
+            if (typeof renderPayees === 'function') renderPayees();
+            if (typeof renderIssuers === 'function') renderIssuers();
+            if (typeof renderAnalytics === 'function' &&
+                document.getElementById('analyticsView') &&
+                document.getElementById('analyticsView').classList.contains('active')) {
+                renderAnalytics();
+            }
+        } catch (renderErr) {
+            console.error('[Auto-Clear] Render refresh error:', renderErr);
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPOSE for manual trigger (call from DevTools or add your own button)
+// ═══════════════════════════════════════════════════════════════════════════
+window.autoClearFullyPaidReturnedCheques = async function() {
+    // Re-run the whole load cycle so scan uses fresh Firestore data
+    if (typeof loadAllChequesData === 'function') {
+        await loadAllChequesData();
+    } else {
+        await autoClearFullyPaidReturnedCheques();
+    }
+};
+
+console.log('[Auto-Clear Fix] ✅ Installed. Every data load will auto-clear fully paid returned cheques.');
+
+})();
+/* ═══ END OF AUTO-CLEAR FIX ═══ */
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
