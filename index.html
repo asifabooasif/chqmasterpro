@@ -5236,13 +5236,14 @@ console.log('[Auto-Clear Fix] ✅ Installed. Every data load will auto-clear ful
 /* ═══ END OF AUTO-CLEAR FIX ═══ */
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
-     NEONCHEQUE FINANCE MANAGER — v3.0 (Backdated + Timeline Edition)
+     NEONCHEQUE FINANCE MANAGER — v3.1
+     Cheque-Status Gated Commission Engine
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__financeManagerV3) return;
-window.__financeManagerV3 = true;
+if (window.__financeManagerV31) return;
+window.__financeManagerV31 = true;
 window.__financeManagerInstalled = true;
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -5259,7 +5260,7 @@ const FIN = {
    1 · STYLES
    ═══════════════════════════════════════════════════════════════════════ */
 (function injectStyles() {
-    if (document.getElementById('__fin_styles')) return;
+    document.querySelectorAll('#__fin_styles').forEach(e => e.remove());
     const s = document.createElement('style');
     s.id = '__fin_styles';
     s.textContent = `
@@ -5315,13 +5316,13 @@ const FIN = {
         .fin-info-banner { background:linear-gradient(135deg,#fef3c7,#fed7aa); border:1.5px solid #f59e0b; border-radius:10px; padding:12px 14px; font-size:12.5px; color:#92400e; margin-bottom:14px; display:flex; gap:10px; align-items:flex-start; }
         .fin-info-banner.danger { background:linear-gradient(135deg,#fee2e2,#fecaca); border-color:#ef4444; color:#991b1b; }
         .fin-info-banner.success { background:linear-gradient(135deg,#d1fae5,#a7f3d0); border-color:#10b981; color:#065f46; }
+        .fin-info-banner.info { background:linear-gradient(135deg,#dbeafe,#bfdbfe); border-color:#3b82f6; color:#1e40af; }
         .fin-info-banner i { font-size:16px; margin-top:1px; }
         .fin-tl { position:relative; padding-left:26px; border-left:2px solid var(--border); }
         .fin-tl-item { position:relative; margin-bottom:18px; padding:14px; background:var(--light); border-radius:10px; }
         .fin-tl-item::before { content:''; position:absolute; left:-34px; top:18px; width:12px; height:12px; border-radius:50%; background:var(--success); border:3px solid white; box-shadow:0 0 0 2px var(--success); }
         .fin-tl-item.cheque::before { background:var(--warning); box-shadow:0 0 0 2px var(--warning); }
-        .fin-tl-item.missed::before { background:var(--danger); box-shadow:0 0 0 2px var(--danger); }
-        .fin-tl-item.late::before { background:#f59e0b; box-shadow:0 0 0 2px #f59e0b; }
+        .fin-tl-item.pending-chq::before { background:#f59e0b; box-shadow:0 0 0 2px #f59e0b; }
         .fin-tl-date { font-weight:700; font-size:13px; margin-bottom:6px; color:var(--primary-dark); }
         .fin-tl-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; font-size:12px; }
         .fin-tl-cell { background:white; padding:8px 10px; border-radius:6px; }
@@ -5350,12 +5351,25 @@ const FIN = {
         .fin-schedule-tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
         .fin-schedule-tbl th { background:var(--light); padding:10px 8px; text-align:left; font-size:10px; text-transform:uppercase; color:var(--gray); font-weight:700; border-bottom:1px solid var(--border); }
         .fin-schedule-tbl td { padding:10px 8px; border-bottom:1px solid var(--border); }
-        .fin-schedule-tbl tr.missed-row { background:#fef2f2; }
-        .fin-schedule-tbl tr.late-row { background:#fffbeb; }
-        .fin-schedule-tbl tr.paid-row { background:#f0fdf4; }
-        .fin-schedule-tbl tr.missed-row td:first-child { border-left:4px solid #ef4444; }
-        .fin-schedule-tbl tr.late-row td:first-child { border-left:4px solid #f59e0b; }
         .fin-schedule-tbl tr.paid-row td:first-child { border-left:4px solid #10b981; }
+        .fin-schedule-tbl tr.late-row td:first-child { border-left:4px solid #f59e0b; }
+        .fin-schedule-tbl tr.pending-row { background:#fffbeb; opacity:.85; }
+        .fin-schedule-tbl tr.pending-row td:first-child { border-left:4px solid #f59e0b; }
+        .fin-schedule-tbl tr.bounced-row { background:#fef2f2; }
+        .fin-schedule-tbl tr.bounced-row td:first-child { border-left:4px solid #ef4444; }
+        /* Projected side-by-side panel */
+        .fin-proj-wrap { display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:20px; }
+        .fin-proj-col { padding:20px; }
+        .fin-proj-col.committed { background:white; }
+        .fin-proj-col.projected { background:linear-gradient(135deg,#fef3c7,#fef9e7); border-left:2px dashed #f59e0b; }
+        .fin-proj-header { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+        .fin-proj-header.committed { color:var(--primary-dark); }
+        .fin-proj-header.projected { color:#92400e; }
+        .fin-proj-row { display:flex; justify-content:space-between; padding:8px 0; font-size:13.5px; border-bottom:1px dashed rgba(0,0,0,.06); }
+        .fin-proj-row:last-child { border-bottom:none; font-weight:800; padding-top:12px; border-top:2px solid rgba(0,0,0,.1); }
+        .fin-proj-row .lbl { color:var(--gray); }
+        .fin-proj-row .val { font-weight:700; }
+        .fin-proj-delta { font-size:11px; color:#92400e; margin-top:-2px; margin-bottom:8px; padding-left:2px; }
         .nc-bell-wrap { position:relative; }
         .nc-bell-btn { width:42px; height:42px; border:none; background:var(--light); border-radius:12px; cursor:pointer; font-size:16px; transition:.2s; color:var(--dark); position:relative; }
         .nc-bell-btn:hover { background:var(--primary); color:white; transform:scale(1.05); }
@@ -5379,7 +5393,7 @@ const FIN = {
         .nc-bell-src.cheque { background:#cffafe; color:#0e7490; }
         .nc-bell-desc { font-size:12px; color:var(--gray); line-height:1.5; }
         @media (max-width:900px) {
-            .fin-two-col { grid-template-columns:1fr !important; }
+            .fin-two-col, .fin-proj-wrap { grid-template-columns:1fr !important; }
             .fin-tl-grid { grid-template-columns:1fr 1fr; }
             .fin-summary-grid { grid-template-columns:1fr; }
             .nc-bell-panel { right:12px; left:12px; width:auto; }
@@ -5413,11 +5427,10 @@ function finStatusKeyDed(d) { const r = finRemainingDed(d); if (r <= 0.001) retu
 
 /* ═══════════════════════════════════════════════════════════════════════
    4 · CALCULATION ENGINE
-   Always accrues from PLAN START (first payment) or LAST PAYMENT (subsequent).
-   Chronological order matters — backdated payments are sorted first.
    ═══════════════════════════════════════════════════════════════════════ */
+
+/** Live preview calc — used by payment modal. Uses committed payments only. */
 function finCalcPayment(plan, amount, effectiveDate) {
-    // Sort by effective date; the last one chronologically before this new date is the anchor
     const effDate = new Date(effectiveDate);
     const planPmts = FIN.payments
         .filter(p => p.planId === plan.id
@@ -5433,17 +5446,13 @@ function finCalcPayment(plan, amount, effectiveDate) {
     const grace = parseFloat(plan.gracePeriod || 0);
     let daysChargeable = days;
     if (!lastPmt) {
-        // First payment: chargeable days counted from plan start minus grace
         const sinceStart = Math.max(0, Math.round((effDate - new Date(plan.startDate)) / 86400000));
         daysChargeable = Math.max(0, sinceStart - grace);
     }
 
-    // IMPORTANT: Capital used for commission is what was outstanding DURING this period.
-    // If backdating, we use plan.capitalCurrent at this point in the replay
     const dailyCommission = ((parseFloat(plan.capitalCurrent) || 0) / 100000) * (parseFloat(plan.commissionRate) || 0);
     let accruedCommission = dailyCommission * daysChargeable;
 
-    // Late fee: if gap > expected interval (default 30 days)
     let penalty = 0;
     const penaltyPct = parseFloat(plan.penaltyRate || 0);
     const expectedInterval = parseFloat(plan.expectedInterval || 30);
@@ -5452,7 +5461,6 @@ function finCalcPayment(plan, amount, effectiveDate) {
         accruedCommission += penalty;
     }
 
-    // Due deductions whose dueDate <= effDate and still owed
     const dueDeds = FIN.deductions.filter(d =>
         d.planId === plan.id &&
         finRemainingDed(d) > 0.001 &&
@@ -5493,133 +5501,171 @@ function finCalcPayment(plan, amount, effectiveDate) {
         breakdown, totalCommissionOwed, totalCommissionPaid,
         newPendingCommission, newCapitalCurrent,
         capitalReduced: breakdown.capital,
-        effectiveDate: effDate.toISOString().split('T')[0],
-        isBackdated: lastPmt && effDate < new Date()
-    };
-}
-
-/** Compute full chronological replay for a plan (used for schedule + recalc) */
-function finReplayPlan(planId) {
-    const p = FIN.plans.find(x => x.id === planId);
-    if (!p) return null;
-
-    // Work on a copy so we don't mutate live state
-    const working = { ...p, capitalCurrent: p.capitalStart, pendingCommission: 0, status: 'active' };
-
-    // Timeline payments: sorted chronologically
-    const pmts = FIN.payments
-        .filter(x => x.planId === planId && x.status !== 'pending' && x.status !== 'bounced')
-        .sort((a,b) => new Date(a.effectiveDate || a.date) - new Date(b.effectiveDate || b.date));
-
-    const timeline = [];
-    let prevDate = new Date(p.startDate);
-
-    for (const pmt of pmts) {
-        const calc = finCalcPaymentOnWorking(working, pmt.amount, pmt.effectiveDate || pmt.date);
-        timeline.push({
-            payment: pmt,
-            calc,
-            startDate: prevDate.toISOString().split('T')[0],
-            endDate: pmt.effectiveDate || pmt.date,
-            days: calc.days,
-            daysChargeable: calc.daysChargeable,
-            penalty: calc.penalty,
-            commissionPaid: calc.totalCommissionPaid,
-            capitalPaid: calc.breakdown.capital,
-            deductions: calc.breakdown.deductions,
-            capitalBefore: working.capitalCurrent,
-            capitalAfter: calc.newCapitalCurrent,
-            pendingBefore: working.pendingCommission,
-            pendingAfter: calc.newPendingCommission,
-            wasLate: calc.days > (parseFloat(p.expectedInterval) || 30)
-        });
-        working.capitalCurrent = calc.newCapitalCurrent;
-        working.pendingCommission = calc.newPendingCommission;
-        prevDate = new Date(pmt.effectiveDate || pmt.date);
-    }
-
-    return {
-        plan: p,
-        timeline,
-        finalCapital: working.capitalCurrent,
-        finalPending: working.pendingCommission,
-        totalCommission: timeline.reduce((s,t) => s + t.commissionPaid, 0),
-        totalCapital: timeline.reduce((s,t) => s + t.capitalPaid, 0)
-    };
-}
-
-/** Same as finCalcPayment but takes explicit working plan instead of reading FIN */
-function finCalcPaymentOnWorking(workingPlan, amount, effectiveDate) {
-    // Build virtual plan payments list from timeline so far (chronologically before this date)
-    const effDate = new Date(effectiveDate);
-    // We rely on workingPlan.pendingCommission and workingPlan.capitalCurrent being pre-set
-    // so no need to filter plan payments — the caller manages them
-    const days = Math.max(0, Math.round((effDate - (workingPlan.__lastDate ? new Date(workingPlan.__lastDate) : new Date(workingPlan.startDate))) / 86400000));
-
-    const grace = parseFloat(workingPlan.gracePeriod || 0);
-    let daysChargeable = days;
-    if (!workingPlan.__lastDate) {
-        const sinceStart = Math.max(0, Math.round((effDate - new Date(workingPlan.startDate)) / 86400000));
-        daysChargeable = Math.max(0, sinceStart - grace);
-    }
-
-    const dailyCommission = ((parseFloat(workingPlan.capitalCurrent) || 0) / 100000) * (parseFloat(workingPlan.commissionRate) || 0);
-    let accruedCommission = dailyCommission * daysChargeable;
-
-    let penalty = 0;
-    const penaltyPct = parseFloat(workingPlan.penaltyRate || 0);
-    const expectedInterval = parseFloat(workingPlan.expectedInterval || 30);
-    if (penaltyPct > 0 && days > expectedInterval) {
-        penalty = accruedCommission * (penaltyPct / 100);
-        accruedCommission += penalty;
-    }
-
-    const dueDeds = FIN.deductions.filter(d =>
-        d.planId === workingPlan.id &&
-        finRemainingDed(d) > 0.001 &&
-        new Date(d.dueDate) <= effDate
-    ).map(d => ({
-        id: d.id, label: d.label,
-        originalAmount: parseFloat(d.amount || 0),
-        alreadyPaid: finPaidTotal(d),
-        remaining: finRemainingDed(d)
-    }));
-
-    const dedTotal = dueDeds.reduce((s,d) => s + d.remaining, 0);
-    const pendingBefore = parseFloat(workingPlan.pendingCommission || 0);
-
-    let rem = parseFloat(amount) || 0;
-    const breakdown = { deductions: [], commissionPending: 0, commissionCurrent: 0, penalty: 0, capital: 0 };
-
-    for (const d of dueDeds) {
-        if (rem <= 0) break;
-        const paid = Math.min(rem, d.remaining);
-        breakdown.deductions.push({ ...d, paid, fullyPaid: paid >= d.remaining - 0.001 });
-        rem -= paid;
-    }
-    if (rem > 0 && pendingBefore > 0) { const paid = Math.min(rem, pendingBefore); breakdown.commissionPending = paid; rem -= paid; }
-    if (rem > 0 && accruedCommission > 0) { const paid = Math.min(rem, accruedCommission); breakdown.commissionCurrent = paid; rem -= paid; }
-    if (rem > 0) breakdown.capital = rem;
-
-    const totalCommissionOwed = pendingBefore + accruedCommission;
-    const totalCommissionPaid = breakdown.commissionPending + breakdown.commissionCurrent;
-    const newPendingCommission = Math.max(0, totalCommissionOwed - totalCommissionPaid);
-    const newCapitalCurrent = Math.max(0, (parseFloat(workingPlan.capitalCurrent) || 0) - breakdown.capital);
-
-    return {
-        days, daysChargeable, grace,
-        dailyCommission, accruedCommission, penalty,
-        pendingBefore, dueDeductions: dueDeds, deductionsTotal: dedTotal,
-        totalDue: pendingBefore + accruedCommission + dedTotal,
-        breakdown, totalCommissionOwed, totalCommissionPaid,
-        newPendingCommission, newCapitalCurrent,
-        capitalReduced: breakdown.capital,
         effectiveDate: effDate.toISOString().split('T')[0]
     };
 }
 
+/** Replay a plan's cleared payments in chronological order. Returns timeline + final totals. */
+function finReplayCommitted(plan) {
+    const pmts = FIN.payments
+        .filter(x => x.planId === plan.id && x.status !== 'bounced' && x.status !== 'pending')
+        .sort((a,b) => new Date(a.effectiveDate || a.date) - new Date(b.effectiveDate || b.date));
+
+    let capital = parseFloat(plan.capitalStart) || 0;
+    let pending = 0;
+    const timeline = [];
+    let prevDate = new Date(plan.startDate);
+
+    for (const pmt of pmts) {
+        const effDate = new Date(pmt.effectiveDate || pmt.date);
+        const days = Math.max(0, Math.round((effDate - prevDate) / 86400000));
+        const grace = parseFloat(plan.gracePeriod || 0);
+        let daysChargeable = days;
+        if (timeline.length === 0) {
+            const sinceStart = Math.max(0, Math.round((effDate - new Date(plan.startDate)) / 86400000));
+            daysChargeable = Math.max(0, sinceStart - grace);
+        }
+        const daily = (capital / 100000) * (parseFloat(plan.commissionRate) || 0);
+        let accrued = daily * daysChargeable;
+        let penalty = 0;
+        const penaltyPct = parseFloat(plan.penaltyRate || 0);
+        const expectedInterval = parseFloat(plan.expectedInterval || 30);
+        if (penaltyPct > 0 && days > expectedInterval) {
+            penalty = accrued * (penaltyPct / 100);
+            accrued += penalty;
+        }
+
+        // Due deductions at that time (skip those already settled in real ledger — approximated by remaining)
+        const dueDeds = FIN.deductions.filter(d =>
+            d.planId === plan.id && finRemainingDed(d) > 0.001 && new Date(d.dueDate) <= effDate
+        ).map(d => ({ id: d.id, label: d.label, remaining: finRemainingDed(d) }));
+        const dedTotal = dueDeds.reduce((s,d) => s + d.remaining, 0);
+
+        let rem = parseFloat(pmt.amount) || 0;
+        const bd = { deductions: [], commissionPending: 0, commissionCurrent: 0, penalty, capital: 0 };
+        for (const d of dueDeds) {
+            if (rem <= 0) break;
+            const paid = Math.min(rem, d.remaining);
+            bd.deductions.push({ id: d.id, label: d.label, paid });
+            rem -= paid;
+        }
+        if (rem > 0 && pending > 0) { const paid = Math.min(rem, pending); bd.commissionPending = paid; rem -= paid; }
+        if (rem > 0 && accrued > 0) { const paid = Math.min(rem, accrued); bd.commissionCurrent = paid; rem -= paid; }
+        if (rem > 0) bd.capital = rem;
+
+        const totalOwed = pending + accrued;
+        const totalPaid = bd.commissionPending + bd.commissionCurrent;
+        const newPending = Math.max(0, totalOwed - totalPaid);
+        const newCapital = Math.max(0, capital - bd.capital);
+
+        timeline.push({
+            payment: pmt,
+            startDate: prevDate.toISOString().split('T')[0],
+            endDate: pmt.effectiveDate || pmt.date,
+            days, daysChargeable, penalty,
+            capitalBefore: capital, capitalAfter: newCapital,
+            commissionPaid: totalPaid,
+            capitalPaid: bd.capital,
+            deductions: bd.deductions,
+            pendingBefore: pending, pendingAfter: newPending,
+            wasLate: days > expectedInterval
+        });
+        capital = newCapital;
+        pending = newPending;
+        prevDate = effDate;
+    }
+
+    return { timeline, capital, pending };
+}
+
+/** Project what the plan looks like after all pending cheques clear (in order). */
+function finProjectPending(plan, committedState) {
+    const pendingCheques = FIN.payments
+        .filter(x => x.planId === plan.id && x.status === 'pending')
+        .sort((a,b) => new Date(a.effectiveDate || a.date) - new Date(b.effectiveDate || b.date));
+
+    if (!pendingCheques.length) return null;
+
+    // Merge committed + pending into a combined timeline
+    const combined = [
+        ...FIN.payments.filter(x => x.planId === plan.id && x.status !== 'bounced' && x.status !== 'pending')
+            .map(p => ({ ...p, __kind: 'committed' })),
+        ...pendingCheques.map(p => ({ ...p, __kind: 'pending' }))
+    ].sort((a,b) => new Date(a.effectiveDate || a.date) - new Date(b.effectiveDate || b.date));
+
+    let capital = parseFloat(plan.capitalStart) || 0;
+    let pending = 0;
+    let prevDate = new Date(plan.startDate);
+    const projTimeline = [];
+
+    for (const pmt of combined) {
+        const effDate = new Date(pmt.effectiveDate || pmt.date);
+        const days = Math.max(0, Math.round((effDate - prevDate) / 86400000));
+        const grace = parseFloat(plan.gracePeriod || 0);
+        let daysChargeable = days;
+        if (projTimeline.length === 0) {
+            const sinceStart = Math.max(0, Math.round((effDate - new Date(plan.startDate)) / 86400000));
+            daysChargeable = Math.max(0, sinceStart - grace);
+        }
+        const daily = (capital / 100000) * (parseFloat(plan.commissionRate) || 0);
+        let accrued = daily * daysChargeable;
+        let penalty = 0;
+        const penaltyPct = parseFloat(plan.penaltyRate || 0);
+        const expectedInterval = parseFloat(plan.expectedInterval || 30);
+        if (penaltyPct > 0 && days > expectedInterval) {
+            penalty = accrued * (penaltyPct / 100);
+            accrued += penalty;
+        }
+        const dueDeds = FIN.deductions.filter(d =>
+            d.planId === plan.id && finRemainingDed(d) > 0.001 && new Date(d.dueDate) <= effDate
+        ).map(d => ({ id: d.id, label: d.label, remaining: finRemainingDed(d) }));
+        const dedTotal = dueDeds.reduce((s,d) => s + d.remaining, 0);
+
+        let rem = parseFloat(pmt.amount) || 0;
+        const bd = { deductions: [], commissionPending: 0, commissionCurrent: 0, penalty, capital: 0 };
+        for (const d of dueDeds) {
+            if (rem <= 0) break;
+            const paid = Math.min(rem, d.remaining);
+            bd.deductions.push({ id: d.id, label: d.label, paid });
+            rem -= paid;
+        }
+        if (rem > 0 && pending > 0) { const paid = Math.min(rem, pending); bd.commissionPending = paid; rem -= paid; }
+        if (rem > 0 && accrued > 0) { const paid = Math.min(rem, accrued); bd.commissionCurrent = paid; rem -= paid; }
+        if (rem > 0) bd.capital = rem;
+
+        const totalOwed = pending + accrued;
+        const totalPaid = bd.commissionPending + bd.commissionCurrent;
+        const newPending = Math.max(0, totalOwed - totalPaid);
+        const newCapital = Math.max(0, capital - bd.capital);
+
+        projTimeline.push({
+            payment: pmt, kind: pmt.__kind,
+            startDate: prevDate.toISOString().split('T')[0],
+            endDate: pmt.effectiveDate || pmt.date,
+            days, daysChargeable, penalty,
+            capitalBefore: capital, capitalAfter: newCapital,
+            commissionPaid: totalPaid, capitalPaid: bd.capital,
+            deductions: bd.deductions,
+            pendingBefore: pending, pendingAfter: newPending,
+            wasLate: days > expectedInterval
+        });
+        capital = newCapital; pending = newPending;
+        prevDate = effDate;
+    }
+
+    const pendingOnly = projTimeline.filter(t => t.kind === 'pending');
+    return {
+        timeline: projTimeline,
+        pendingOnly,
+        capital: capital,
+        pending: pending,
+        deltaCapital: (committedState.capital || 0) - capital,
+        deltaCommission: pendingOnly.reduce((s,t) => s + t.commissionPaid, 0)
+    };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
-   5 · FIRESTORE (with resilient writes)
+   5 · FIRESTORE
    ═══════════════════════════════════════════════════════════════════════ */
 async function finLoadAll() {
     if (FIN.loading) return;
@@ -5637,12 +5683,9 @@ async function finLoadAll() {
     } catch (e) {
         console.error('Finance load error:', e);
         finToast('Error loading finance data: ' + e.message, 'error');
-    } finally {
-        FIN.loading = false;
-    }
+    } finally { FIN.loading = false; }
 }
 
-/** Resilient save: uses set+merge, returns id, never throws silently */
 async function finSaveDoc(collection, data) {
     const docRef = data.id ? db.collection(collection).doc(data.id) : db.collection(collection).doc();
     const { id, ...payload } = data;
@@ -5655,7 +5698,6 @@ async function finSaveDoc(collection, data) {
     return docRef.id;
 }
 
-/** Resilient partial update — creates if missing */
 async function finSafeMerge(collection, id, patch) {
     try {
         await db.collection(collection).doc(id).set({
@@ -5663,25 +5705,16 @@ async function finSafeMerge(collection, id, patch) {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         return true;
-    } catch (e) {
-        console.warn('Safe merge failed', collection, id, e);
-        return false;
-    }
+    } catch (e) { console.warn('Safe merge failed', collection, id, e); return false; }
 }
 
-/** Resilient delete — never throws */
 async function finSafeDelete(collection, id) {
-    try {
-        await db.collection(collection).doc(id).delete();
-        return true;
-    } catch (e) {
-        console.warn('Safe delete failed', collection, id, e);
-        return false;
-    }
+    try { await db.collection(collection).doc(id).delete(); return true; }
+    catch (e) { console.warn('Safe delete failed', collection, id, e); return false; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   6 · BUILD UI (nav / views / modals / bell)
+   6 · BUILD UI
    ═══════════════════════════════════════════════════════════════════════ */
 function finBuildNav() {
     const nav = document.querySelector('.sidebar nav');
@@ -5690,18 +5723,13 @@ function finBuildNav() {
     const section = document.createElement('div');
     section.className = 'nav-section';
     section.id = 'finNavSection';
-    section.innerHTML = `
-        <div class="nav-title">Finance Manager</div>
-        <div class="nav-item" id="finMainNavItem" onclick="showView('finance',this)">
-            <i class="fas fa-coins"></i><span>Finance</span>
-        </div>`;
+    section.innerHTML = `<div class="nav-title">Finance Manager</div>
+        <div class="nav-item" id="finMainNavItem" onclick="showView('finance',this)"><i class="fas fa-coins"></i><span>Finance</span></div>`;
     const sections = nav.querySelectorAll('.nav-section');
     let inserted = false;
     sections.forEach(s => {
         const t = s.querySelector('.nav-title');
-        if (t && t.textContent.trim() === 'Tools & Admin' && !inserted) {
-            nav.insertBefore(section, s); inserted = true;
-        }
+        if (t && t.textContent.trim() === 'Tools & Admin' && !inserted) { nav.insertBefore(section, s); inserted = true; }
     });
     if (!inserted) nav.appendChild(section);
 }
@@ -5746,8 +5774,8 @@ function finBuildModals() {
                 <div class="modal-body">
                     <input type="hidden" id="finPlanId">
                     <div class="form-row">
-                        <div class="form-group"><label>Finance Company *</label><input type="text" id="finPlanCompany" placeholder="e.g. LOLC Finance"></div>
-                        <div class="form-group"><label>Vehicle / Loan *</label><input type="text" id="finPlanVehicle" placeholder="e.g. Toyota Axio"></div>
+                        <div class="form-group"><label>Finance Company *</label><input type="text" id="finPlanCompany" placeholder="LOLC Finance"></div>
+                        <div class="form-group"><label>Vehicle / Loan *</label><input type="text" id="finPlanVehicle" placeholder="Toyota Axio"></div>
                     </div>
                     <div class="form-row">
                         <div class="form-group"><label>Starting Capital (Rs.) *</label><input type="number" id="finPlanCapital" step="0.01"></div>
@@ -5760,11 +5788,11 @@ function finBuildModals() {
                     <div style="background:var(--light);padding:14px;border-radius:10px;margin-bottom:16px">
                         <div style="font-weight:700;font-size:12px;color:var(--gray);text-transform:uppercase;margin-bottom:10px"><i class="fas fa-cog"></i> Advanced</div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-                            <div class="form-group" style="margin-bottom:0"><label>Expected Payment Interval (days)</label><input type="number" id="finPlanInterval" value="30" min="1"><div class="hint">Late fee applies if gap exceeds this</div></div>
-                            <div class="form-group" style="margin-bottom:0"><label>Late Fee (%)</label><input type="number" id="finPlanPenalty" value="0" min="0" step="0.1"><div class="hint">Extra % on commission for late periods</div></div>
+                            <div class="form-group" style="margin-bottom:0"><label>Expected Payment Interval (days)</label><input type="number" id="finPlanInterval" value="30" min="1"></div>
+                            <div class="form-group" style="margin-bottom:0"><label>Late Fee (%)</label><input type="number" id="finPlanPenalty" value="0" min="0" step="0.1"></div>
                         </div>
                         <div class="form-row" style="margin-top:14px;margin-bottom:0">
-                            <div class="form-group" style="margin-bottom:0"><label>Grace Period (days)</label><input type="number" id="finPlanGrace" value="0" min="0"><div class="hint">Commission-free days at start</div></div>
+                            <div class="form-group" style="margin-bottom:0"><label>Grace Period (days)</label><input type="number" id="finPlanGrace" value="0" min="0"></div>
                             <div class="form-group" style="margin-bottom:0"><label>Reminder (days before)</label><input type="number" id="finPlanReminder" value="3" min="0"></div>
                         </div>
                     </div>
@@ -5786,8 +5814,8 @@ function finBuildModals() {
                     <div class="form-row">
                         <div class="form-group"><label>Payment Method *</label>
                             <select id="finPayMethod" onchange="finOnPayMethodChange()">
-                                <option value="cheque">Cheque (calculate on cheque date)</option>
-                                <option value="cash">Cash (calculate on date)</option>
+                                <option value="cheque">Cheque</option>
+                                <option value="cash">Cash</option>
                                 <option value="bank-transfer">Bank Transfer</option>
                                 <option value="online">Online</option>
                             </select>
@@ -5797,15 +5825,15 @@ function finBuildModals() {
                     <div id="finChequeFieldsBlock" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px;border-radius:10px;margin-bottom:16px;border:1.5px solid #f59e0b">
                         <div style="font-weight:700;font-size:12px;color:#92400e;text-transform:uppercase;margin-bottom:10px"><i class="fas fa-money-check"></i> Cheque Details</div>
                         <div class="form-row">
-                            <div class="form-group" style="margin-bottom:0"><label>Cheque Date * <span style="color:#b45309;font-weight:500;font-size:11px">(calc runs on this)</span></label><input type="date" id="finPayChequeDate" onchange="finPreviewCalc()"></div>
+                            <div class="form-group" style="margin-bottom:0"><label>Cheque Date *</label><input type="date" id="finPayChequeDate" onchange="finPreviewCalc()"></div>
                             <div class="form-group" style="margin-bottom:0"><label>Cheque Number *</label><input type="text" id="finPayChequeNo" placeholder="004521"></div>
                         </div>
                         <div class="form-row" style="margin-top:12px">
                             <div class="form-group" style="margin-bottom:0"><label>Bank</label><input type="text" id="finPayChequeBank"></div>
                             <div class="form-group" style="margin-bottom:0"><label>Cheque Status</label>
-                                <select id="finPayChequeStatus">
-                                    <option value="cleared">Cleared / Deposited</option>
-                                    <option value="pending">Pending</option>
+                                <select id="finPayChequeStatus" onchange="finPreviewCalc()">
+                                    <option value="pending">⏳ Pending (not yet cleared)</option>
+                                    <option value="cleared">✅ Cleared / Deposited (apply immediately)</option>
                                 </select>
                             </div>
                         </div>
@@ -5832,12 +5860,17 @@ function finBuildModals() {
                     <button class="modal-close" onclick="closeModal('finBulkModal')"><i class="fas fa-times"></i></button></div>
                 <div class="modal-body">
                     <div class="form-group"><label>Finance Plan *</label><select id="finBulkPlan" onchange="finRenderBulkRows()"><option value="">-- Select --</option></select></div>
-                    <div class="form-group"><label>Add Cheques</label>
+                    <div class="form-group">
+                        <label>Add Cheques</label>
                         <div style="display:flex;gap:8px;flex-wrap:wrap">
                             <input type="date" id="finBulkDate" style="flex:1;min-width:150px;padding:9px 11px;border:2px solid var(--border);border-radius:8px">
                             <input type="number" id="finBulkAmount" placeholder="Amount" step="0.01" style="flex:1;min-width:130px;padding:9px 11px;border:2px solid var(--border);border-radius:8px">
                             <input type="text" id="finBulkChequeNo" placeholder="Cheque #" style="flex:1;min-width:120px;padding:9px 11px;border:2px solid var(--border);border-radius:8px">
                             <input type="text" id="finBulkBank" placeholder="Bank" style="flex:1;min-width:120px;padding:9px 11px;border:2px solid var(--border);border-radius:8px">
+                            <select id="finBulkStatus" style="padding:9px 11px;border:2px solid var(--border);border-radius:8px">
+                                <option value="pending">Pending</option>
+                                <option value="cleared">Cleared</option>
+                            </select>
                             <button class="btn btn-primary" onclick="finAddBulkRow()"><i class="fas fa-plus"></i> Add</button>
                         </div>
                     </div>
@@ -5850,16 +5883,18 @@ function finBuildModals() {
         </div>
 
         <div class="modal-overlay" id="finChequeModal">
-            <div class="modal" style="max-width:520px">
+            <div class="modal" style="max-width:560px">
                 <div class="modal-header"><h2 class="modal-title">Update Cheque Status</h2>
                     <button class="modal-close" onclick="closeModal('finChequeModal')"><i class="fas fa-times"></i></button></div>
                 <div class="modal-body">
                     <input type="hidden" id="finChequeClearId">
                     <div id="finChequeClearSummary" style="background:var(--light);padding:14px;border-radius:10px;margin-bottom:16px;font-size:13px"></div>
+                    <div class="fin-info-banner info" id="finChequeImpact" style="display:none"></div>
                     <div class="form-group"><label>New Status *</label>
-                        <select id="finChequeNewStatus" onchange="document.getElementById('finBounceGroup').classList.toggle('hidden', this.value!=='bounced')">
-                            <option value="cleared">✅ Cleared / Deposited</option>
-                            <option value="bounced">❌ Bounced</option>
+                        <select id="finChequeNewStatus" onchange="finChequeStatusPreview()">
+                            <option value="cleared">✅ Cleared (apply to plan)</option>
+                            <option value="pending">⏳ Pending (keep as reference only)</option>
+                            <option value="bounced">❌ Bounced (remove from plan)</option>
                         </select>
                     </div>
                     <div class="form-group hidden" id="finBounceGroup"><label>Bounce Reason</label><input type="text" id="finChequeBounceReason"></div>
@@ -5898,7 +5933,7 @@ function finBuildModals() {
                 <div class="modal-body">
                     <input type="hidden" id="finDedPayId">
                     <div class="fin-info-banner"><i class="fas fa-info-circle"></i>
-                        <div><strong>Direct payment</strong> — unpaid portion will still be auto-deducted from next main payment.</div></div>
+                        <div><strong>Direct payment</strong> — unpaid portion will still auto-deduct from next main payment.</div></div>
                     <div id="finDedPaySummary" style="background:var(--light);padding:14px;border-radius:10px;margin-bottom:16px;font-size:13px"></div>
                     <div class="form-row">
                         <div class="form-group"><label>Amount (Rs.) *</label><input type="number" id="finDedPayAmount" step="0.01"><div class="hint" id="finDedPayMaxHint"></div></div>
@@ -5950,7 +5985,7 @@ function finBuildModals() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   7 · BELL / NOTIFICATIONS
+   7 · BELL
    ═══════════════════════════════════════════════════════════════════════ */
 function finBuildBell() {
     const topbar = document.querySelector('.top-bar');
@@ -5965,10 +6000,8 @@ function finBuildBell() {
     const panel = document.createElement('div');
     panel.id = 'ncBellPanel';
     panel.className = 'nc-bell-panel';
-    panel.innerHTML = `
-        <div class="nc-bell-head">Notifications
-            <button class="btn btn-sm btn-secondary" onclick="ncToggleBell(event)"><i class="fas fa-times"></i></button>
-        </div>
+    panel.innerHTML = `<div class="nc-bell-head">Notifications
+        <button class="btn btn-sm btn-secondary" onclick="ncToggleBell(event)"><i class="fas fa-times"></i></button></div>
         <div id="ncBellList" style="padding:6px"></div>`;
     document.body.appendChild(panel);
 }
@@ -5977,24 +6010,15 @@ function finComputeNotifications() {
     const list = [];
     if (Array.isArray(window.allCheques)) {
         window.allCheques.filter(c => !c.deletedAt && c.status === 'returned').forEach(c => {
-            const payments = c.payments || [];
-            const paid = payments.reduce((s,p) => s + (parseFloat(p.amount)||0), 0);
+            const paid = (c.payments||[]).reduce((s,p) => s + (parseFloat(p.amount)||0), 0);
             const rem = (parseFloat(c.amount)||0) - paid;
-            if (rem > 0.01) list.push({
-                source:'cheque', id:'chq_ret_'+c.id, type:'danger', icon:'undo',
-                title:'Returned cheque unpaid',
-                desc:`Cheque #${c.number} (${c.payee}) — ${finFmt(rem)} outstanding`,
-                cheId:c.id
-            });
+            if (rem > 0.01) list.push({ source:'cheque', id:'chq_ret_'+c.id, type:'danger', icon:'undo',
+                title:'Returned cheque unpaid', desc:`Cheque #${c.number} (${c.payee}) — ${finFmt(rem)}`, cheId:c.id });
         });
         window.allCheques.filter(c => !c.deletedAt && c.status === 'in-hand').forEach(c => {
             const days = finDaysBetween(c.date, finToday());
-            if (days > 30) list.push({
-                source:'cheque', id:'chq_inh_'+c.id, type:'warning', icon:'clock',
-                title:`In-hand ${days} days`,
-                desc:`Cheque #${c.number} (${c.payee}) — ${finFmt(c.amount)}`,
-                cheId:c.id
-            });
+            if (days > 30) list.push({ source:'cheque', id:'chq_inh_'+c.id, type:'warning', icon:'clock',
+                title:`In-hand ${days} days`, desc:`Cheque #${c.number} (${c.payee}) — ${finFmt(c.amount)}`, cheId:c.id });
         });
     }
     FIN.plans.filter(p => p.status === 'active').forEach(p => {
@@ -6004,59 +6028,31 @@ function finComputeNotifications() {
         const lastDate = last ? new Date(last.effectiveDate || last.date) : new Date(p.startDate);
         const days = finDaysBetween(lastDate, new Date());
         const expected = parseFloat(p.expectedInterval) || 30;
-        if (days > expected) list.push({
-            source:'finance', id:'fin_over_'+p.id, type:'danger', icon:'exclamation-triangle',
-            title:'Finance payment overdue',
-            desc:`No payment on "${p.vehicle}" for ${days} days (expected interval ${expected}d). Commission + late fee accruing.`,
-            planId:p.id
-        });
-        if (parseFloat(p.pendingCommission) > 0.001) list.push({
-            source:'finance', id:'fin_pend_'+p.id, type:'warning', icon:'exclamation-circle',
-            title:'Pending commission',
-            desc:`${finFmt(p.pendingCommission)} pending on "${p.vehicle}"`,
-            planId:p.id
-        });
+        if (days > expected) list.push({ source:'finance', id:'fin_over_'+p.id, type:'danger', icon:'exclamation-triangle',
+            title:'Finance payment overdue', desc:`No cleared payment on "${p.vehicle}" for ${days}d (interval ${expected}d).`, planId:p.id });
+        if (parseFloat(p.pendingCommission) > 0.001) list.push({ source:'finance', id:'fin_pend_'+p.id, type:'warning', icon:'exclamation-circle',
+            title:'Pending commission', desc:`${finFmt(p.pendingCommission)} pending on "${p.vehicle}"`, planId:p.id });
         const pct = p.capitalStart > 0 ? ((p.capitalStart - p.capitalCurrent) / p.capitalStart * 100) : 0;
-        if (pct >= 90 && pct < 100) list.push({
-            source:'finance', id:'fin_near_'+p.id, type:'success', icon:'flag-checkered',
-            title:'Plan nearly complete',
-            desc:`"${p.vehicle}" ${pct.toFixed(1)}% paid. ${finFmt(p.capitalCurrent)} remaining.`,
-            planId:p.id
-        });
+        if (pct >= 90 && pct < 100) list.push({ source:'finance', id:'fin_near_'+p.id, type:'success', icon:'flag-checkered',
+            title:'Plan nearly complete', desc:`"${p.vehicle}" ${pct.toFixed(1)}% paid.`, planId:p.id });
     });
     FIN.payments.filter(c => c.method === 'cheque' && c.status === 'pending').forEach(c => {
         const days = finDaysBetween(finToday(), c.effectiveDate || c.date);
         const pl = FIN.plans.find(x => x.id === c.planId);
-        if (days <= 1 && days >= 0) list.push({
-            source:'finance', id:'fin_chq_'+c.id, type:'warning', icon:'money-check',
-            title:'Cheque date approaching',
-            desc:`#${c.chequeNo} on "${pl?.vehicle||'—'}" dated ${finDate(c.effectiveDate)}`,
-            planId:c.planId
-        });
-        else if (days < 0) list.push({
-            source:'finance', id:'fin_chqo_'+c.id, type:'danger', icon:'exclamation-triangle',
-            title:'Cheque date passed',
-            desc:`#${c.chequeNo} on "${pl?.vehicle||'—'}" was dated ${finDate(c.effectiveDate)}`,
-            planId:c.planId
-        });
+        if (days <= 1 && days >= 0) list.push({ source:'finance', id:'fin_chq_'+c.id, type:'warning', icon:'money-check',
+            title:'Cheque date approaching', desc:`#${c.chequeNo} on "${pl?.vehicle||'—'}" dated ${finDate(c.effectiveDate)}`, planId:c.planId });
+        else if (days < 0) list.push({ source:'finance', id:'fin_chqo_'+c.id, type:'danger', icon:'exclamation-triangle',
+            title:'Cheque date passed', desc:`#${c.chequeNo} on "${pl?.vehicle||'—'}" dated ${finDate(c.effectiveDate)} — mark cleared or bounced.`, planId:c.planId });
     });
     FIN.deductions.forEach(d => {
         const rem = finRemainingDed(d);
         if (rem <= 0.001) return;
         const pl = FIN.plans.find(x => x.id === d.planId);
         const days = finDaysBetween(new Date(), d.dueDate);
-        if (days < 0) list.push({
-            source:'finance', id:'fin_ded_'+d.id, type:'danger', icon:'exclamation-triangle',
-            title:`Deduction ${Math.abs(days)}d overdue`,
-            desc:`${d.label} (${finFmt(rem)}) on "${pl?.vehicle||'—'}" will auto-deduct.`,
-            planId:d.planId
-        });
-        else if (days <= 3) list.push({
-            source:'finance', id:'fin_dedsoon_'+d.id, type:'warning', icon:'clock',
-            title:days === 0 ? 'Deduction due TODAY' : `Deduction due in ${days}d`,
-            desc:`${d.label} (${finFmt(rem)}) on "${pl?.vehicle||'—'}"`,
-            planId:d.planId
-        });
+        if (days < 0) list.push({ source:'finance', id:'fin_ded_'+d.id, type:'danger', icon:'exclamation-triangle',
+            title:`Deduction ${Math.abs(days)}d overdue`, desc:`${d.label} (${finFmt(rem)}) on "${pl?.vehicle||'—'}"`, planId:d.planId });
+        else if (days <= 3) list.push({ source:'finance', id:'fin_dedsoon_'+d.id, type:'warning', icon:'clock',
+            title:days === 0 ? 'Deduction due TODAY' : `Deduction due in ${days}d`, desc:`${d.label} (${finFmt(rem)})`, planId:d.planId });
     });
     return list;
 }
@@ -6070,12 +6066,9 @@ function ncRefreshBell() {
     }
     const host = document.getElementById('ncBellList');
     if (!host) return;
-    if (!list.length) {
-        host.innerHTML = '<div class="fin-empty" style="padding:30px 10px"><i class="fas fa-bell-slash"></i><h3>All clear</h3></div>';
-        return;
-    }
+    if (!list.length) { host.innerHTML = '<div class="fin-empty" style="padding:30px 10px"><i class="fas fa-bell-slash"></i><h3>All clear</h3></div>'; return; }
     host.innerHTML = list.map(n => `
-        <div class="nc-bell-item ${n.source}" onclick="ncHandleNotifClick('${n.source}','${n.id}','${n.planId||''}','${n.cheId||''}')">
+        <div class="nc-bell-item ${n.source}" onclick="ncHandleNotifClick('${n.source}','${n.planId||''}','${n.cheId||''}')">
             <div class="nc-bell-icon ${n.type}"><i class="fas fa-${n.icon}"></i></div>
             <div class="nc-bell-body">
                 <div class="nc-bell-title">
@@ -6095,19 +6088,14 @@ window.ncToggleBell = function (e) {
     panel.classList.toggle('active');
     if (opening) ncRefreshBell();
 };
-
-window.ncHandleNotifClick = function (source, id, planId, cheId) {
+window.ncHandleNotifClick = function (source, planId, cheId) {
     const panel = document.getElementById('ncBellPanel');
     if (panel) panel.classList.remove('active');
     if (source === 'finance' && planId) finOpenPlanDetail(planId);
-    else if (source === 'cheque' && cheId) {
-        if (typeof showView === 'function') {
-            const navEl = document.querySelector('[onclick*="all-cheques"]');
-            showView('all-cheques', navEl);
-        }
+    else if (source === 'cheque' && cheId && typeof showView === 'function') {
+        showView('all-cheques', document.querySelector('[onclick*="all-cheques"]'));
     }
 };
-
 document.addEventListener('click', e => {
     const panel = document.getElementById('ncBellPanel');
     const wrap = document.getElementById('__ncBellWrap');
@@ -6148,9 +6136,6 @@ window.showView = function (viewName, navElement) {
     return _origShowView.apply(this, arguments);
 };
 
-/* ═══════════════════════════════════════════════════════════════════════
-   9 · TAB SWITCHER
-   ═══════════════════════════════════════════════════════════════════════ */
 window.finSwitchTab = function (tab, btn) {
     FIN.activeTab = tab;
     document.querySelectorAll('.fin-hub-tab').forEach(t => t.classList.remove('active'));
@@ -6176,28 +6161,31 @@ function finRenderActiveTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   10 · DASHBOARD TAB
+   9 · DASHBOARD TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function finRenderDashboard() {
     const root = document.getElementById('finTab-dashboard');
     const activePlans = FIN.plans.filter(p => p.status === 'active');
     const totalCurrent = FIN.plans.reduce((s,p) => s + (parseFloat(p.capitalCurrent) || 0), 0);
     const totalPendingComm = FIN.plans.reduce((s,p) => s + (parseFloat(p.pendingCommission) || 0), 0);
-    const validPmts = FIN.payments.filter(p => p.status !== 'bounced');
+    const validPmts = FIN.payments.filter(p => p.status !== 'bounced' && p.status !== 'pending');
+    const pendingPmts = FIN.payments.filter(p => p.status === 'pending');
     const totalPaidOut = validPmts.reduce((s,p) => s + (parseFloat(p.amount) || 0), 0);
     const totalCommissionPaid = validPmts.reduce((s,p) => s + (parseFloat(p.breakdown?.commissionPending||0)) + (parseFloat(p.breakdown?.commissionCurrent||0)), 0);
-    const totalCapitalReduced = validPmts.reduce((s,p) => s + (parseFloat(p.breakdown?.capital||0)), 0);
-    const pendingCheques = FIN.payments.filter(p => p.method === 'cheque' && p.status === 'pending');
-    const pendingChequeVal = pendingCheques.reduce((s,p) => s + (parseFloat(p.amount) || 0), 0);
+    const pendingChequeVal = pendingPmts.reduce((s,p) => s + (parseFloat(p.amount) || 0), 0);
     const overdueDeds = FIN.deductions.filter(finIsOverdueDed);
 
     root.innerHTML = `
+        <div class="fin-info-banner info">
+            <i class="fas fa-info-circle"></i>
+            <div><strong>Pending cheques do not affect your plan yet.</strong> Only <em>cleared</em> payments reduce capital and add commission. Pending cheques are shown as a <em>projection</em> so you can see the future state.</div>
+        </div>
         <div class="fin-widgets">
             <div class="fin-widget"><div class="fin-widget-title">Active Plans</div><div class="fin-widget-value" style="color:var(--primary)">${activePlans.length}</div><div class="fin-widget-sub">${FIN.plans.length} total</div></div>
-            <div class="fin-widget"><div class="fin-widget-title">Capital Outstanding</div><div class="fin-widget-value" style="color:var(--warning)">${finFmt(totalCurrent)}</div></div>
-            <div class="fin-widget"><div class="fin-widget-title">Commission Paid</div><div class="fin-widget-value" style="color:var(--success)">${finFmt(totalCommissionPaid)}</div><div class="fin-widget-sub">${finFmt(totalPaidOut)} total paid</div></div>
+            <div class="fin-widget"><div class="fin-widget-title">Capital Outstanding (Committed)</div><div class="fin-widget-value" style="color:var(--warning)">${finFmt(totalCurrent)}</div></div>
+            <div class="fin-widget"><div class="fin-widget-title">Commission Paid</div><div class="fin-widget-value" style="color:var(--success)">${finFmt(totalCommissionPaid)}</div><div class="fin-widget-sub">${finFmt(totalPaidOut)} total cleared</div></div>
             <div class="fin-widget"><div class="fin-widget-title">Pending Commission</div><div class="fin-widget-value" style="color:${totalPendingComm > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmt(totalPendingComm)}</div></div>
-            <div class="fin-widget"><div class="fin-widget-title">Pending Cheques</div><div class="fin-widget-value" style="color:var(--warning)">${pendingCheques.length}</div><div class="fin-widget-sub">${finFmt(pendingChequeVal)}</div></div>
+            <div class="fin-widget"><div class="fin-widget-title">⏳ Pending Cheques</div><div class="fin-widget-value" style="color:#f59e0b">${pendingPmts.length}</div><div class="fin-widget-sub">${finFmt(pendingChequeVal)} — awaiting clearance</div></div>
             <div class="fin-widget"><div class="fin-widget-title">Overdue Deductions</div><div class="fin-widget-value" style="color:${overdueDeds.length ? 'var(--danger)' : 'var(--success)'}">${overdueDeds.length}</div></div>
         </div>
         <div class="card">
@@ -6210,8 +6198,9 @@ function finRenderDashboard() {
             <div id="finDashRecent"></div>
         </div>`;
     const dashPlans = document.getElementById('finDashPlans');
-    if (!FIN.plans.length) dashPlans.innerHTML = '<div class="fin-empty" style="grid-column:1/-1"><i class="fas fa-file-invoice-dollar"></i><h3>No plans yet</h3><p>Click "New Plan" to get started.</p></div>';
+    if (!FIN.plans.length) dashPlans.innerHTML = '<div class="fin-empty" style="grid-column:1/-1"><i class="fas fa-file-invoice-dollar"></i><h3>No plans yet</h3></div>';
     else dashPlans.innerHTML = FIN.plans.slice(0, 6).map(p => finPlanCardHTML(p)).join('');
+
     const recent = [...FIN.payments].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
     const rc = document.getElementById('finDashRecent');
     if (!recent.length) rc.innerHTML = '<div class="fin-empty"><i class="fas fa-money-check-alt"></i><h3>No payments yet</h3></div>';
@@ -6225,22 +6214,24 @@ function finRenderDashboard() {
                 <td>${pl ? finEsc(pl.vehicle) : '—'}</td>
                 <td><strong>${finFmt(p.amount)}</strong></td>
                 <td><span class="fin-chip fin-chip-${p.method}">${p.method}</span></td>
-                <td><span class="fin-chip fin-chip-${p.status || 'cleared'}">${p.status || 'cleared'}</span></td>
-                <td style="color:var(--warning);font-weight:700">${finFmt(comm)}</td>
-                <td style="color:var(--success);font-weight:700">${finFmt(p.breakdown?.capital)}</td>
+                <td><span class="fin-chip fin-chip-${p.status || 'cleared'}">${p.status === 'pending' ? '⏳ pending' : (p.status || 'cleared')}</span></td>
+                <td style="color:var(--warning);font-weight:700">${p.status === 'pending' ? '<em style="color:#b45309">— not applied —</em>' : finFmt(comm)}</td>
+                <td style="color:var(--success);font-weight:700">${p.status === 'pending' ? '<em style="color:#b45309">— not applied —</em>' : finFmt(p.breakdown?.capital)}</td>
             </tr>`;
         }).join('')}</tbody></table></div>`;
 }
 
 function finPlanCardHTML(p) {
     const paidPct = p.capitalStart > 0 ? ((p.capitalStart - p.capitalCurrent) / p.capitalStart * 100) : 0;
-    const planPmts = FIN.payments.filter(x => x.planId === p.id && x.status !== 'bounced' && x.status !== 'pending');
-    const lastPmt = planPmts.length ? planPmts.sort((a,b) => new Date(b.effectiveDate || b.date) - new Date(a.effectiveDate || a.date))[0] : null;
+    const committedPmts = FIN.payments.filter(x => x.planId === p.id && (x.status === 'cleared' || (!x.status && x.method !== 'cheque')));
+    const pendingPmts = FIN.payments.filter(x => x.planId === p.id && x.status === 'pending');
+    const lastPmt = committedPmts.length ? committedPmts.sort((a,b) => new Date(b.effectiveDate || b.date) - new Date(a.effectiveDate || a.date))[0] : null;
     const daysSince = lastPmt ? finDaysBetween(lastPmt.effectiveDate || lastPmt.date, finToday()) : finDaysBetween(p.startDate, finToday());
     const expected = parseFloat(p.expectedInterval) || 30;
     const overdue = daysSince > expected && p.status === 'active';
-    const pendingChqs = FIN.payments.filter(x => x.planId === p.id && x.status === 'pending');
     const overdueDeds = FIN.deductions.filter(x => x.planId === p.id && finIsOverdueDed(x));
+    const pendingVal = pendingPmts.reduce((s,x) => s + (parseFloat(x.amount)||0), 0);
+
     return `
         <div class="fin-plan-card" onclick="finOpenPlanDetail('${p.id}')">
             <div class="fin-plan-head">
@@ -6252,9 +6243,10 @@ function finPlanCardHTML(p) {
                 <div class="fin-plan-stat"><div class="fin-plan-stat-label">Capital Now</div><div class="fin-plan-stat-value">${finFmt(p.capitalCurrent)}</div></div>
                 <div class="fin-plan-stat"><div class="fin-plan-stat-label">Rate / 100k / day</div><div class="fin-plan-stat-value">${finFmt(p.commissionRate)}</div></div>
                 <div class="fin-plan-stat"><div class="fin-plan-stat-label">Pending Comm.</div><div class="fin-plan-stat-value" style="color:${p.pendingCommission > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmt(p.pendingCommission)}</div></div>
-                <div class="fin-plan-stat"><div class="fin-plan-stat-label">Last Payment</div><div class="fin-plan-stat-value" style="font-size:13px">${lastPmt ? finDate(lastPmt.effectiveDate || lastPmt.date) : 'None'}</div></div>
+                <div class="fin-plan-stat"><div class="fin-plan-stat-label">Last Cleared</div><div class="fin-plan-stat-value" style="font-size:13px">${lastPmt ? finDate(lastPmt.effectiveDate || lastPmt.date) : 'None'}</div></div>
             </div>
-            ${pendingChqs.length ? `<div style="font-size:11px;color:#b45309;background:#fef3c7;padding:6px 10px;border-radius:6px;margin-bottom:8px"><i class="fas fa-clock"></i> ${pendingChqs.length} pending cheque(s)</div>` : ''}
+            ${pendingPmts.length ? `<div style="font-size:11px;color:#b45309;background:#fef3c7;padding:6px 10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #f59e0b">
+                <i class="fas fa-hourglass-half"></i> <strong>${pendingPmts.length} pending cheque(s)</strong> (${finFmt(pendingVal)}) — <em>not yet applied</em></div>` : ''}
             ${overdueDeds.length ? `<div style="font-size:11px;color:#991b1b;background:#fee2e2;padding:6px 10px;border-radius:6px;margin-bottom:8px"><i class="fas fa-exclamation-triangle"></i> ${overdueDeds.length} overdue deduction(s)</div>` : ''}
             <div style="font-size:11px;color:var(--gray);margin-bottom:4px">Capital Progress: ${paidPct.toFixed(1)}%</div>
             <div class="fin-progress-track"><div class="fin-progress-fill" style="width:${paidPct}%"></div></div>
@@ -6262,7 +6254,7 @@ function finPlanCardHTML(p) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   11 · PLANS TAB
+   10 · PLANS TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function finRenderPlansTab() {
     const root = document.getElementById('finTab-plans');
@@ -6276,7 +6268,7 @@ function finRenderPlansTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   12 · PLAN DETAIL
+   11 · PLAN DETAIL
    ═══════════════════════════════════════════════════════════════════════ */
 window.finOpenPlanDetail = function (planId) {
     const p = FIN.plans.find(x => x.id === planId);
@@ -6290,24 +6282,29 @@ function finRenderPlanDetail(planId) {
     const p = FIN.plans.find(x => x.id === planId);
     if (!p) return;
 
-    const planPmts = FIN.payments.filter(x => x.planId === planId).sort((a,b) => new Date(b.effectiveDate || b.date) - new Date(a.effectiveDate || a.date));
-    const validPmts = planPmts.filter(x => x.status !== 'bounced');
+    const allPmts = FIN.payments.filter(x => x.planId === planId).sort((a,b) => new Date(b.effectiveDate || b.date) - new Date(a.effectiveDate || a.date));
+    const committed = allPmts.filter(x => x.status !== 'pending' && x.status !== 'bounced');
+    const pendingChqs = allPmts.filter(x => x.status === 'pending');
+    const bouncedChqs = allPmts.filter(x => x.status === 'bounced');
+
     const planDeds = FIN.deductions.filter(x => x.planId === planId).sort((a,b) => {
         const oa = finIsOverdueDed(a) ? 0 : 1, ob = finIsOverdueDed(b) ? 0 : 1;
         if (oa !== ob) return oa - ob;
         return new Date(a.dueDate) - new Date(b.dueDate);
     });
 
-    const totalPaid = validPmts.filter(x => x.status !== 'pending').reduce((s,x) => s + (parseFloat(x.amount)||0), 0);
-    const totalCommission = validPmts.reduce((s,x) => s + (parseFloat(x.breakdown?.commissionPending)||0) + (parseFloat(x.breakdown?.commissionCurrent)||0), 0);
-    const totalCapitalReduced = validPmts.reduce((s,x) => s + (parseFloat(x.breakdown?.capital)||0), 0);
+    const totalPaid = committed.reduce((s,x) => s + (parseFloat(x.amount)||0), 0);
+    const totalCommission = committed.reduce((s,x) => s + (parseFloat(x.breakdown?.commissionPending)||0) + (parseFloat(x.breakdown?.commissionCurrent)||0), 0);
+    const totalCapitalReduced = committed.reduce((s,x) => s + (parseFloat(x.breakdown?.capital)||0), 0);
     const paidPct = p.capitalStart > 0 ? ((p.capitalStart - p.capitalCurrent) / p.capitalStart * 100) : 0;
-    const pendingChqs = planPmts.filter(x => x.status === 'pending');
-    const pendingChqVal = pendingChqs.reduce((s,x) => s + (parseFloat(x.amount)||0), 0);
     const overdueDeds = planDeds.filter(finIsOverdueDed);
 
-    // ── Replay timeline ──
-    const replay = finReplayPlan(planId);
+    // Projection
+    const committedState = finReplayCommitted(p);
+    const projection = pendingChqs.length ? finProjectPending(p, committedState) : null;
+
+    // Replay timeline (real)
+    const replay = finReplayCommitted(p);
 
     root.innerHTML = `
         <div class="card">
@@ -6316,59 +6313,122 @@ function finRenderPlanDetail(planId) {
                     <button class="btn btn-secondary btn-sm" onclick="showView('finance', document.getElementById('finMainNavItem'))"><i class="fas fa-arrow-left"></i> Back</button>
                     <h2 class="card-title" style="margin-top:12px">${finEsc(p.vehicle)}</h2>
                     <div style="font-size:13px;color:var(--gray);margin-top:4px"><i class="fas fa-building"></i> ${finEsc(p.company)}</div>
-                    <div style="font-size:12px;color:var(--gray);margin-top:6px"><i class="fas fa-calendar-alt"></i> Plan started <strong>${finDate(p.startDate)}</strong> · Expected interval: <strong>${p.expectedInterval||30} days</strong> · Late fee: <strong>${p.penaltyRate||0}%</strong></div>
+                    <div style="font-size:12px;color:var(--gray);margin-top:6px"><i class="fas fa-calendar-alt"></i> Started <strong>${finDate(p.startDate)}</strong> · Interval: <strong>${p.expectedInterval||30}d</strong> · Late fee: <strong>${p.penaltyRate||0}%</strong></div>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                     <button class="btn btn-primary btn-sm" onclick="finOpenPaymentModal('${p.id}')"><i class="fas fa-plus"></i> Record Payment</button>
                     <button class="btn btn-secondary btn-sm" onclick="finOpenBulkModal('${p.id}')"><i class="fas fa-layer-group"></i> Bulk</button>
-                    <button class="btn btn-warning btn-sm" onclick="finForceRecalc('${p.id}')" title="Replay all payments chronologically"><i class="fas fa-sync"></i> Recalculate</button>
+                    <button class="btn btn-warning btn-sm" onclick="finForceRecalc('${p.id}')" title="Replay all cleared payments"><i class="fas fa-sync"></i> Recalculate</button>
                     <button class="btn btn-secondary btn-sm" onclick="finOpenPlanModal('${p.id}')"><i class="fas fa-edit"></i> Edit</button>
                     <button class="btn btn-secondary btn-sm" onclick="finDeletePlan('${p.id}')" style="background:linear-gradient(135deg,var(--danger),#dc2626);color:white"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
 
-            <div class="fin-widgets">
+            <!-- ═══ SIDE-BY-SIDE: COMMITTED vs PROJECTED ═══ -->
+            <div class="fin-proj-wrap">
+                <div class="fin-proj-col committed">
+                    <div class="fin-proj-header committed"><i class="fas fa-check-circle"></i> Current Committed</div>
+                    <div class="fin-proj-row"><span class="lbl">Capital Outstanding</span><span class="val" style="color:var(--warning)">${finFmt(p.capitalCurrent)}</span></div>
+                    <div class="fin-proj-row"><span class="lbl">Pending Commission</span><span class="val" style="color:${p.pendingCommission > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmt(p.pendingCommission)}</span></div>
+                    <div class="fin-proj-row"><span class="lbl">Total Cleared</span><span class="val" style="color:var(--success)">${finFmt(totalPaid)}</span></div>
+                    <div class="fin-proj-row"><span class="lbl">Capital Reduced</span><span class="val">${finFmt(totalCapitalReduced)}</span></div>
+                    <div class="fin-proj-row"><span class="lbl">Progress</span><span class="val">${paidPct.toFixed(1)}%</span></div>
+                </div>
+                <div class="fin-proj-col projected">
+                    <div class="fin-proj-header projected">
+                        <i class="fas fa-hourglass-half"></i> After ${pendingChqs.length} Pending Cheque${pendingChqs.length !== 1 ? 's' : ''} Clear
+                        ${!pendingChqs.length ? '<span style="font-weight:400;font-size:10px;opacity:.6">(no pending cheques)</span>' : ''}
+                    </div>
+                    ${pendingChqs.length === 0 ? `
+                        <div style="text-align:center;padding:30px 10px;color:var(--gray);font-size:13px">
+                            <i class="fas fa-inbox" style="font-size:32px;opacity:.3;display:block;margin-bottom:8px"></i>
+                            No pending cheques
+                        </div>` : `
+                        <div class="fin-proj-row"><span class="lbl">Projected Capital</span><span class="val" style="color:#92400e">${finFmt(projection.capital)}</span></div>
+                        <div class="fin-proj-delta">↓ ${finFmt(projection.deltaCapital)} will be reduced</div>
+                        <div class="fin-proj-row"><span class="lbl">Projected Commission</span><span class="val" style="color:#92400e">${finFmt(projection.pending)}</span></div>
+                        <div class="fin-proj-row"><span class="lbl">Commission from Pending</span><span class="val" style="color:#b45309">${finFmt(projection.deltaCommission)}</span></div>
+                        <div class="fin-proj-row"><span class="lbl">New Progress</span><span class="val">${p.capitalStart > 0 ? (((p.capitalStart - projection.capital) / p.capitalStart) * 100).toFixed(1) : 0}%</span></div>
+                    `}
+                </div>
+            </div>
+
+            <div class="fin-widgets" style="margin-top:6px">
                 <div class="fin-widget"><div class="fin-widget-title">Starting Capital</div><div class="fin-widget-value">${finFmt(p.capitalStart)}</div><div class="fin-widget-sub">Started ${finDate(p.startDate)}</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Capital Outstanding</div><div class="fin-widget-value" style="color:var(--warning)">${finFmt(p.capitalCurrent)}</div><div class="fin-widget-sub">${paidPct.toFixed(1)}% paid</div></div>
                 <div class="fin-widget"><div class="fin-widget-title">Commission Rate</div><div class="fin-widget-value">${finFmt(p.commissionRate)}</div><div class="fin-widget-sub">per 100k/day${p.gracePeriod > 0 ? ` · ${p.gracePeriod}d grace` : ''}</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Pending Commission</div><div class="fin-widget-value" style="color:${p.pendingCommission > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmt(p.pendingCommission)}</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Total Paid</div><div class="fin-widget-value" style="color:var(--success)">${finFmt(totalPaid)}</div><div class="fin-widget-sub">${validPmts.length} payments</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Total Commission</div><div class="fin-widget-value" style="color:var(--info)">${finFmt(totalCommission)}</div><div class="fin-widget-sub">Capital: ${finFmt(totalCapitalReduced)}</div></div>
+                <div class="fin-widget"><div class="fin-widget-title">Total Commission Paid</div><div class="fin-widget-value" style="color:var(--info)">${finFmt(totalCommission)}</div></div>
+                <div class="fin-widget"><div class="fin-widget-title">Cleared Payments</div><div class="fin-widget-value" style="color:var(--success)">${committed.length}</div><div class="fin-widget-sub">${pendingChqs.length} pending · ${bouncedChqs.length} bounced</div></div>
             </div>
 
             ${overdueDeds.length ? `<div class="fin-info-banner danger"><i class="fas fa-exclamation-triangle"></i>
-                <div><strong>${overdueDeds.length} overdue deduction(s).</strong> Will be auto-deducted from next main payment.</div></div>` : ''}
-
-            ${pendingChqs.length ? `<div style="background:#fef3c7;padding:14px;border-radius:10px;margin-bottom:16px;border-left:4px solid #f59e0b">
-                <strong style="color:#92400e"><i class="fas fa-clock"></i> Pending Cheques</strong>
-                <div style="font-size:12px;color:#92400e;margin-top:4px">${pendingChqs.length} cheque(s) · ${finFmt(pendingChqVal)}</div></div>` : ''}
+                <div><strong>${overdueDeds.length} overdue deduction(s).</strong> Will auto-deduct from next cleared payment.</div></div>` : ''}
 
             <div class="fin-progress-track" style="height:10px"><div class="fin-progress-fill" style="width:${paidPct}%"></div></div>
         </div>
 
+        <!-- PENDING CHEQUES REFERENCE PANEL -->
+        ${pendingChqs.length ? `
+        <div class="card" style="border-left:5px solid #f59e0b">
+            <div class="card-header">
+                <h2 class="card-title" style="color:#92400e"><i class="fas fa-hourglass-half"></i> Pending Cheques — For Reference Only</h2>
+                <div style="font-size:12px;color:#b45309">Not applied to plan until cleared</div>
+            </div>
+            <div class="fin-info-banner" style="margin-bottom:16px">
+                <i class="fas fa-info-circle"></i>
+                <div>The cheques below are recorded but <strong>do not affect capital or commission yet</strong>. Mark each as <em>Cleared</em> to apply it, or <em>Bounced</em> to ignore.</div>
+            </div>
+            <div class="table-container"><table>
+                <thead><tr><th>Cheque #</th><th>Bank</th><th>Amount</th><th>Cheque Date</th><th>Recorded</th><th>Days Until</th><th>Projected Impact</th><th>Actions</th></tr></thead>
+                <tbody>${pendingChqs.map(c => {
+                    const days = finDaysBetween(finToday(), c.effectiveDate || c.date);
+                    const projRow = projection ? projection.timeline.find(t => t.payment.id === c.id) : null;
+                    return `<tr style="background:#fffbeb">
+                        <td><strong>#${finEsc(c.chequeNo) || '—'}</strong></td>
+                        <td>${finEsc(c.chequeBank) || '—'}</td>
+                        <td><strong>${finFmt(c.amount)}</strong></td>
+                        <td>${finDate(c.effectiveDate || c.date)}</td>
+                        <td>${finDate(c.date)}</td>
+                        <td>${days >= 0 ? `${days} days` : `<span style="color:#b45309">${Math.abs(days)} days ago</span>`}</td>
+                        <td>
+                            ${projRow ? `
+                                <div style="font-size:11px">Comm: <strong style="color:#f59e0b">${finFmt(projRow.commissionPaid)}</strong></div>
+                                <div style="font-size:11px">Capital: <strong style="color:var(--success)">${finFmt(projRow.capitalPaid)}</strong></div>
+                                <div style="font-size:10px;color:var(--gray)">Cap after: ${finFmt(projRow.capitalAfter)}</div>
+                            ` : '—'}
+                        </td>
+                        <td>
+                            <div style="display:flex;gap:4px;flex-wrap:wrap">
+                                <button class="btn btn-xs btn-success" onclick="finOpenChequeModal('${c.id}')"><i class="fas fa-check"></i> Update</button>
+                                <button class="btn btn-xs btn-secondary" onclick="finShowReceipt('${c.id}')"><i class="fas fa-receipt"></i></button>
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('')}</tbody></table></div>
+        </div>` : ''}
+
         <div class="card" style="background:linear-gradient(135deg,#1e1b4b,#312e81);color:white">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
                 <div>
-                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;opacity:.7">💡 Live Accrual</div>
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;opacity:.7">💡 Live Accrual (Committed)</div>
                     <div style="font-size:12px;opacity:.85;margin-top:2px">Daily: ${finFmtExact(((parseFloat(p.capitalCurrent)||0)/100000) * (parseFloat(p.commissionRate)||0))}</div>
                 </div>
                 <div id="finPlanLiveAccrual" style="font-family:'Courier New',monospace;font-size:26px;font-weight:800;color:#a5b4fc">—</div>
             </div>
         </div>
 
-        <!-- ═══ PAYMENT SCHEDULE / TIMELINE ═══ -->
+        <!-- PAYMENT SCHEDULE -->
         <div class="card">
             <div class="card-header">
                 <h2 class="card-title"><i class="fas fa-calendar-check"></i> Payment Schedule & Commission Timeline</h2>
-                <div style="font-size:12px;color:var(--gray)">Replayed chronologically from plan start</div>
+                <div style="font-size:12px;color:var(--gray)">Green = cleared · Amber = pending · Red = bounced</div>
             </div>
-            ${finScheduleHTML(replay)}
+            ${finScheduleHTML(replay, pendingChqs, bouncedChqs, projection)}
         </div>
 
         <div class="card">
             <div class="card-header"><h2 class="card-title"><i class="fas fa-flask"></i> What-If Simulator</h2></div>
             <div class="fin-what-if">
-                <h4><i class="fas fa-lightbulb"></i> Try a hypothetical payment — nothing is saved</h4>
+                <h4><i class="fas fa-lightbulb"></i> Try a hypothetical cleared payment — nothing is saved</h4>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
                     <div class="form-group" style="margin-bottom:0"><label>Amount (Rs.)</label><input type="number" id="finWiAmount" step="0.01" oninput="finRunWhatIf('${p.id}')"></div>
                     <div class="form-group" style="margin-bottom:0"><label>Method</label>
@@ -6393,31 +6453,31 @@ function finRenderPlanDetail(planId) {
 
         <div class="card">
             <div class="card-header"><h2 class="card-title"><i class="fas fa-shield-alt"></i> Planned Deductions</h2>
-                <button class="btn btn-primary btn-sm" onclick="finOpenDeductionModal('${p.id}')"><i class="fas fa-plus"></i> Add</button>
-            </div>
+                <button class="btn btn-primary btn-sm" onclick="finOpenDeductionModal('${p.id}')"><i class="fas fa-plus"></i> Add</button></div>
             ${finDeductionsTableHTML(planDeds)}
         </div>
 
         <div class="card">
-            <div class="card-header"><h2 class="card-title"><i class="fas fa-history"></i> All Payments</h2>
-                <div style="font-size:12px;color:var(--gray)">Sorted by effective date (newest first)</div>
-            </div>
-            ${planPmts.length === 0 ? '<div class="fin-empty"><i class="fas fa-money-check-alt"></i><h3>No payments</h3></div>' :
+            <div class="card-header"><h2 class="card-title"><i class="fas fa-history"></i> All Payments (Committed + Pending + Bounced)</h2></div>
+            ${allPmts.length === 0 ? '<div class="fin-empty"><i class="fas fa-money-check-alt"></i><h3>No payments</h3></div>' :
             `<div class="table-container"><table>
                 <thead><tr><th>Eff. Date</th><th>Given</th><th>Amount</th><th>Method</th><th>Status</th><th>Days</th><th>Commission</th><th>Capital</th><th>Pending After</th><th></th></tr></thead>
-                <tbody>${planPmts.map(pmt => {
+                <tbody>${allPmts.map(pmt => {
+                    const isPending = pmt.status === 'pending';
+                    const isBounced = pmt.status === 'bounced';
                     const comm = (parseFloat(pmt.breakdown?.commissionPending)||0) + (parseFloat(pmt.breakdown?.commissionCurrent)||0);
-                    return `<tr>
+                    return `<tr style="${isPending ? 'background:#fffbeb;' : (isBounced ? 'background:#fef2f2;opacity:.7;' : '')}">
                         <td><strong>${finDate(pmt.effectiveDate || pmt.date)}</strong></td>
                         <td>${finDate(pmt.date)}${pmt.effectiveDate && pmt.effectiveDate !== pmt.date ? '<div style="font-size:10px;color:#b45309">cheque</div>' : ''}</td>
                         <td><strong>${finFmt(pmt.amount)}</strong></td>
                         <td><span class="fin-chip fin-chip-${pmt.method}">${pmt.method}</span></td>
-                        <td><span class="fin-chip fin-chip-${pmt.status || 'cleared'}">${pmt.status || 'cleared'}</span></td>
+                        <td><span class="fin-chip fin-chip-${pmt.status || 'cleared'}">${isPending ? '⏳ pending' : (pmt.status || 'cleared')}</span></td>
                         <td>${pmt.breakdown?.days || 0}</td>
-                        <td style="color:var(--warning);font-weight:700">${finFmt(comm)}</td>
-                        <td style="color:var(--success);font-weight:700">${finFmt(pmt.breakdown?.capital)}</td>
-                        <td style="color:${pmt.newPendingCommission > 0 ? 'var(--danger)' : 'var(--success)'};font-weight:700">${finFmt(pmt.newPendingCommission)}</td>
+                        <td style="color:var(--warning);font-weight:700">${isPending || isBounced ? '<em style="color:#b45309;font-weight:400">— not applied —</em>' : finFmt(comm)}</td>
+                        <td style="color:var(--success);font-weight:700">${isPending || isBounced ? '<em style="color:#b45309;font-weight:400">— not applied —</em>' : finFmt(pmt.breakdown?.capital)}</td>
+                        <td style="color:${pmt.newPendingCommission > 0 ? 'var(--danger)' : 'var(--success)'};font-weight:700">${isPending || isBounced ? '—' : finFmt(pmt.newPendingCommission)}</td>
                         <td style="white-space:nowrap">
+                            ${isPending ? `<button class="btn btn-xs btn-success" onclick="finOpenChequeModal('${pmt.id}')"><i class="fas fa-check"></i></button>` : ''}
                             <button class="btn btn-xs btn-secondary" onclick="finShowReceipt('${pmt.id}')"><i class="fas fa-receipt"></i></button>
                             <button class="btn btn-xs btn-danger" onclick="finDeletePayment('${pmt.id}')"><i class="fas fa-trash"></i></button>
                         </td>
@@ -6426,54 +6486,65 @@ function finRenderPlanDetail(planId) {
         </div>
     `;
 
-    // Live ticker
-    const lastPay = validPmts.filter(x => x.status !== 'pending')[0];
-    const lastDate = lastPay ? new Date(lastPay.effectiveDate || lastPay.date) : new Date(p.startDate);
+    const lastCleared = committed.filter(x => x.status !== 'pending')[0];
+    const lastDate = lastCleared ? new Date(lastCleared.effectiveDate || lastCleared.date) : new Date(p.startDate);
     const daily = ((parseFloat(p.capitalCurrent)||0)/100000) * (parseFloat(p.commissionRate)||0);
     FIN._live = { lastDate, perSecond: daily / 86400 };
     finTickLive();
 }
 
-/** Build the payment schedule table */
-function finScheduleHTML(replay) {
-    if (!replay || replay.timeline.length === 0) {
-        return `<div class="fin-empty"><i class="fas fa-calendar-alt"></i><h3>No payments yet</h3>
-            <p>Record your first payment to see the schedule.</p>
-            <div style="font-size:12px;color:var(--gray);margin-top:12px">Commission begins accruing from <strong>${finDate(replay ? replay.plan.startDate : null)}</strong></div></div>`;
+function finScheduleHTML(replay, pendingChqs, bouncedChqs, projection) {
+    // Combined display: committed rows from replay + pending rows from projection
+    const committed = replay ? replay.timeline : [];
+    const pendingRows = projection ? projection.pendingOnly : [];
+    const bounced = (bouncedChqs || []).map(c => ({ payment: c, kind: 'bounced' }));
+
+    const allRows = [
+        ...committed.map(t => ({ ...t, kind: 'committed' })),
+        ...pendingRows,
+        ...bounced.map(b => ({ payment: b.payment, kind: 'bounced', days: 0, commissionPaid: 0, capitalPaid: 0, capitalAfter: null }))
+    ].sort((a,b) => new Date(a.payment.effectiveDate || a.payment.date) - new Date(b.payment.effectiveDate || b.payment.date));
+
+    if (allRows.length === 0) {
+        return `<div class="fin-empty"><i class="fas fa-calendar-alt"></i><h3>No payments yet</h3></div>`;
     }
 
     const p = replay.plan;
-    const rows = replay.timeline.map((t, i) => {
-        const status = t.wasLate ? 'late-row' : 'paid-row';
-        const statusLabel = t.wasLate ? `<span class="fin-chip fin-chip-bounced">LATE +${t.days - (parseFloat(p.expectedInterval)||30)}d</span>` : '<span class="fin-chip fin-chip-cleared">ON TIME</span>';
-        return `
-        <tr class="${status}">
-            <td>#${i+1}</td>
-            <td><strong>${finDate(t.payment.effectiveDate || t.payment.date)}</strong>
-                ${t.payment.effectiveDate && t.payment.effectiveDate !== t.payment.date ? '<div style="font-size:10px;color:#b45309">cheque</div>' : ''}</td>
-            <td>${finDate(t.startDate)} → ${finDate(t.endDate)}<div style="font-size:10px;color:var(--gray)">${t.days} days</div></td>
-            <td>${finFmt(t.capitalBefore)}</td>
-            <td style="color:var(--warning);font-weight:600">${finFmt(t.commissionPaid)}${t.penalty > 0 ? `<div style="font-size:10px;color:#b45309">incl. ${finFmt(t.penalty)} late fee</div>` : ''}</td>
-            <td style="color:var(--success);font-weight:600">${finFmt(t.capitalPaid)}</td>
-            <td><strong>${finFmt(t.capitalAfter)}</strong></td>
-            <td>${statusLabel}</td>
-        </tr>`;
-    }).join('');
-
     return `
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">
-            <div style="background:var(--light);padding:10px 14px;border-radius:8px;font-size:12px"><strong>Total periods:</strong> ${replay.timeline.length}</div>
-            <div style="background:var(--light);padding:10px 14px;border-radius:8px;font-size:12px"><strong>Total commission:</strong> ${finFmt(replay.totalCommission)}</div>
-            <div style="background:var(--light);padding:10px 14px;border-radius:8px;font-size:12px"><strong>Total capital reduced:</strong> ${finFmt(replay.totalCapital)}</div>
-            <div style="background:var(--light);padding:10px 14px;border-radius:8px;font-size:12px"><strong>Current capital:</strong> ${finFmt(replay.finalCapital)}</div>
+            <div style="background:var(--light);padding:10px 14px;border-radius:8px;font-size:12px"><strong>Cleared:</strong> ${committed.length}</div>
+            <div style="background:#fffbeb;padding:10px 14px;border-radius:8px;font-size:12px;color:#92400e"><strong>Pending:</strong> ${pendingRows.length} (not applied)</div>
+            <div style="background:#fef2f2;padding:10px 14px;border-radius:8px;font-size:12px;color:#991b1b"><strong>Bounced:</strong> ${bounced.length}</div>
         </div>
         <div style="overflow-x:auto">
             <table class="fin-schedule-tbl">
                 <thead><tr>
-                    <th>#</th><th>Payment Date</th><th>Period Covered</th><th>Capital Before</th>
-                    <th>Commission Paid</th><th>Capital Reduced</th><th>Capital After</th><th>Status</th>
+                    <th>#</th><th>Payment Date</th><th>Period</th><th>Capital Before</th>
+                    <th>Commission</th><th>Capital Reduced</th><th>Capital After</th><th>Status</th>
                 </tr></thead>
-                <tbody>${rows}</tbody>
+                <tbody>${allRows.map((t, i) => {
+                    const isPending = t.kind === 'pending';
+                    const isBounced = t.kind === 'bounced';
+                    const rowClass = isBounced ? 'bounced-row' : (isPending ? 'pending-row' : (t.wasLate ? 'late-row' : 'paid-row'));
+                    const statusLabel = isBounced ? '<span class="fin-chip fin-chip-bounced">BOUNCED</span>' :
+                        (isPending ? '<span class="fin-chip fin-chip-pending">⏳ PENDING</span>' :
+                        (t.wasLate ? `<span class="fin-chip fin-chip-bounced">LATE +${t.days - (parseFloat(p.expectedInterval)||30)}d</span>` : '<span class="fin-chip fin-chip-cleared">ON TIME</span>'));
+                    return `<tr class="${rowClass}">
+                        <td>#${i+1}</td>
+                        <td><strong>${finDate(t.payment.effectiveDate || t.payment.date)}</strong>
+                            ${t.payment.effectiveDate && t.payment.effectiveDate !== t.payment.date ? '<div style="font-size:10px;color:#b45309">cheque</div>' : ''}</td>
+                        <td>${t.startDate ? finDate(t.startDate) + ' → ' + finDate(t.endDate) : '—'}${t.days ? `<div style="font-size:10px;color:var(--gray)">${t.days} days</div>` : ''}</td>
+                        <td>${t.capitalBefore !== undefined ? finFmt(t.capitalBefore) : '—'}</td>
+                        <td style="color:${isPending || isBounced ? 'var(--gray)' : 'var(--warning)'};font-weight:600">
+                            ${isBounced ? '—' : finFmt(t.commissionPaid)}${t.penalty > 0 ? `<div style="font-size:10px;color:#b45309">incl. ${finFmt(t.penalty)} late fee</div>` : ''}
+                            ${isPending ? '<div style="font-size:10px;color:#b45309">projected</div>' : ''}</td>
+                        <td style="color:${isPending || isBounced ? 'var(--gray)' : 'var(--success)'};font-weight:600">
+                            ${isBounced ? '—' : finFmt(t.capitalPaid)}${isPending ? '<div style="font-size:10px;color:#b45309">projected</div>' : ''}</td>
+                        <td>${t.capitalAfter !== null && t.capitalAfter !== undefined ? `<strong>${finFmt(t.capitalAfter)}</strong>` : '—'}
+                            ${isPending ? '<div style="font-size:10px;color:#b45309">if cleared</div>' : ''}</td>
+                        <td>${statusLabel}</td>
+                    </tr>`;
+                }).join('')}</tbody>
             </table>
         </div>
     `;
@@ -6501,14 +6572,12 @@ function finDeductionsTableHTML(planDeds) {
                 <td><strong>${finFmt(d.amount)}</strong></td>
                 <td>
                     ${direct > 0 ? `<div style="color:var(--info);font-weight:600">${finFmt(direct)} <span style="font-size:10px;color:var(--gray)">direct</span></div>` : ''}
-                    ${fromMain > 0 ? `<div style="color:var(--warning);font-weight:600">${finFmt(fromMain)} <span style="font-size:10px;color:var(--gray)">from main</span></div>` : ''}
+                    ${fromMain > 0 ? `<div style="color:var(--warning);font-weight:600">${finFmt(fromMain)} <span style="font-size:10px;color:var(--gray)">from cleared</span></div>` : ''}
                     ${total === 0 ? '<span style="color:var(--gray)">—</span>' : ''}
                     <div class="fin-progress-track" style="width:100px;height:6px"><div class="fin-progress-fill" style="width:${pct}%"></div></div>
                 </td>
                 <td><strong style="color:${rem > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmt(rem)}</strong></td>
-                <td style="color:${overdue ? 'var(--danger)' : 'inherit'};font-weight:${overdue ? '700' : '400'}">
-                    ${finDate(d.dueDate)}${overdue ? `<div style="font-size:10px;color:var(--danger)">⚠ ${daysOver}d</div>` : ''}
-                </td>
+                <td style="color:${overdue ? 'var(--danger)' : 'inherit'};font-weight:${overdue ? '700' : '400'}">${finDate(d.dueDate)}${overdue ? `<div style="font-size:10px;color:var(--danger)">⚠ ${daysOver}d</div>` : ''}</td>
                 <td><span class="fin-ded-status ${statusClass}">${statusLabel}</span></td>
                 <td>
                     <div style="display:flex;gap:4px;flex-wrap:wrap">
@@ -6531,7 +6600,7 @@ function finTickLive() {
 setInterval(finTickLive, 1000);
 
 /* ═══════════════════════════════════════════════════════════════════════
-   13 · PLAN CRUD
+   12 · PLAN CRUD
    ═══════════════════════════════════════════════════════════════════════ */
 window.finOpenPlanModal = function (id) {
     if (id) {
@@ -6578,7 +6647,6 @@ window.finSavePlan = async function () {
     const notes = document.getElementById('finPlanNotes').value.trim();
     if (!company || !vehicle || !capital || !rate || !start) return finToast('Fill all required fields', 'error');
     if (capital <= 0 || rate <= 0) return finToast('Capital and rate must be positive', 'error');
-
     try {
         if (id) {
             const p = FIN.plans.find(x => x.id === id);
@@ -6588,8 +6656,7 @@ window.finSavePlan = async function () {
                 id, company, vehicle,
                 capitalStart: capital,
                 capitalCurrent: Math.max(0, (p.capitalCurrent || 0) + diff),
-                commissionRate: rate,
-                startDate: start, endDate: end,
+                commissionRate: rate, startDate: start, endDate: end,
                 expectedInterval: interval,
                 penaltyRate: penalty, gracePeriod: grace, reminderDays: reminder,
                 pendingCommission: p.pendingCommission || 0,
@@ -6600,27 +6667,20 @@ window.finSavePlan = async function () {
         } else {
             await finSaveDoc('finance_plans', {
                 company, vehicle,
-                capitalStart: capital,
-                capitalCurrent: capital,
-                commissionRate: rate,
-                startDate: start, endDate: end,
+                capitalStart: capital, capitalCurrent: capital,
+                commissionRate: rate, startDate: start, endDate: end,
                 expectedInterval: interval,
                 penaltyRate: penalty, gracePeriod: grace, reminderDays: reminder,
-                pendingCommission: 0,
-                notes, status: 'active'
+                pendingCommission: 0, notes, status: 'active'
             });
             finToast('Plan created', 'success');
         }
         closeModal('finPlanModal');
         await finLoadAll();
         ncRefreshBell();
-        if (FIN.activePlanId && document.getElementById('financePlanDetailView').classList.contains('active')) {
-            finRenderPlanDetail(FIN.activePlanId);
-        } else finRenderActiveTab();
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+        if (FIN.activePlanId && document.getElementById('financePlanDetailView').classList.contains('active')) finRenderPlanDetail(FIN.activePlanId);
+        else finRenderActiveTab();
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 window.finDeletePlan = async function (id) {
@@ -6635,30 +6695,23 @@ window.finDeletePlan = async function (id) {
         ncRefreshBell();
         showView('finance', document.getElementById('finMainNavItem'));
         finSwitchTab('plans');
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
-/** Force full recalculation of a plan (useful after backdating) */
 window.finForceRecalc = async function (planId) {
-    if (!confirm('Recalculate the entire plan from scratch? All payments will be replayed chronologically and totals updated.')) return;
+    if (!confirm('Recalculate the plan from scratch? Only CLEARED payments will be replayed.')) return;
     try {
-        await finLoadAll();           // ← refresh from Firestore first (fixes "No document" error)
+        await finLoadAll();
         await finRecalcPlan(planId);
         await finLoadAll();
         ncRefreshBell();
-        finToast('Plan recalculated', 'success');
+        finToast('Plan recalculated (cleared payments only)', 'success');
         finRenderPlanDetail(planId);
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   14 · PAYMENT
+   13 · PAYMENT
    ═══════════════════════════════════════════════════════════════════════ */
 window.finOpenPaymentModal = function (planId) {
     const p = FIN.plans.find(x => x.id === planId);
@@ -6669,7 +6722,7 @@ window.finOpenPaymentModal = function (planId) {
     document.getElementById('finPayChequeDate').value = finToday();
     document.getElementById('finPayChequeNo').value = '';
     document.getElementById('finPayChequeBank').value = '';
-    document.getElementById('finPayChequeStatus').value = 'cleared';
+    document.getElementById('finPayChequeStatus').value = 'pending';
     document.getElementById('finPayDate').value = finToday();
     document.getElementById('finPayRef').value = '';
     document.getElementById('finPayNotes').value = '';
@@ -6696,34 +6749,53 @@ window.finPreviewCalc = function () {
     const effDate = finGetEffectiveDate();
     const host = document.getElementById('finCalcPreview');
     const p = FIN.plans.find(x => x.id === planId);
+    const chequeStatus = document.getElementById('finPayChequeStatus').value;
+    const willApplyNow = method !== 'cheque' || chequeStatus === 'cleared';
+
     if (!p || !amount || !effDate || amount <= 0) {
         host.innerHTML = '<div style="text-align:center;color:var(--gray);font-size:13px"><i class="fas fa-calculator"></i> Enter amount and dates to see the breakdown</div>';
         return;
     }
     const calc = finCalcPayment(p, amount, effDate);
-    const isBackdated = FIN.payments.some(x => x.planId === planId && new Date(x.effectiveDate || x.date) > new Date(effDate));
+    const isBackdated = FIN.payments.some(x =>
+        x.planId === planId && x.status !== 'pending' && x.status !== 'bounced'
+        && new Date(x.effectiveDate || x.date) > new Date(effDate)
+    );
+
     host.innerHTML = `
+        ${!willApplyNow ? `
+        <div class="fin-info-banner" style="margin-bottom:12px;background:linear-gradient(135deg,#fef3c7,#fde68a);border-color:#f59e0b">
+            <i class="fas fa-hourglass-half"></i>
+            <div><strong>This cheque is PENDING.</strong> It will be recorded and visible but <strong>will NOT reduce capital or add commission</strong> until you mark it as Cleared.<br>
+            The numbers below show what <em>will</em> happen when it clears.</div>
+        </div>` : `
+        <div class="fin-info-banner success" style="margin-bottom:12px">
+            <i class="fas fa-check-circle"></i>
+            <div><strong>This payment will be applied immediately</strong> — capital and commission will update on save.</div>
+        </div>`}
+
         ${isBackdated ? `<div class="fin-info-banner" style="margin-bottom:12px"><i class="fas fa-history"></i>
-            <div><strong>Backdated entry detected.</strong> This payment is dated before existing payments. The plan will be recalculated chronologically after saving.</div></div>` : ''}
+            <div><strong>Backdated entry.</strong> Plan will be replayed chronologically after saving.</div></div>` : ''}
+
         <div style="font-weight:800;font-size:13px;margin-bottom:10px;color:var(--primary-dark)">
-            <i class="fas fa-calculator"></i> Live Breakdown — effective ${finDate(calc.effectiveDate)}
+            <i class="fas fa-calculator"></i> Breakdown — effective ${finDate(calc.effectiveDate)}
         </div>
-        <div class="fin-calc-row"><span>Days from ${calc.daysChargeable === calc.days ? 'last payment' : 'plan start'} to ${method === 'cheque' ? 'cheque date' : 'date'}</span><strong>${calc.days} days</strong></div>
+        <div class="fin-calc-row"><span>Days from ${calc.daysChargeable === calc.days ? 'last cleared payment' : 'plan start'}</span><strong>${calc.days} days</strong></div>
         <div class="fin-calc-row sub"><span>Chargeable days (grace: ${calc.grace}d)</span><strong>${calc.daysChargeable}</strong></div>
         <div class="fin-calc-row"><span>Capital at this point</span><strong>${finFmtExact(p.capitalCurrent)}</strong></div>
         <div class="fin-calc-row sub"><span>Daily commission</span><strong>${finFmtExact(calc.dailyCommission)}</strong></div>
         <div class="fin-calc-row sub"><span>Accrued commission</span><strong>${finFmtExact(calc.accruedCommission - calc.penalty)}</strong></div>
-        ${calc.penalty > 0 ? `<div class="fin-calc-row sub" style="color:#b45309"><span>⚠ Late fee (${p.penaltyRate}% — gap &gt; ${p.expectedInterval||30}d)</span><strong>${finFmtExact(calc.penalty)}</strong></div>` : ''}
-        <div class="fin-calc-row"><span>Pending commission</span><strong style="color:${calc.pendingBefore > 0 ? 'var(--danger)' : 'inherit'}">${finFmtExact(calc.pendingBefore)}</strong></div>
+        ${calc.penalty > 0 ? `<div class="fin-calc-row sub" style="color:#b45309"><span>⚠ Late fee (${p.penaltyRate}% — gap > ${p.expectedInterval||30}d)</span><strong>${finFmtExact(calc.penalty)}</strong></div>` : ''}
+        <div class="fin-calc-row"><span>Pending commission before</span><strong style="color:${calc.pendingBefore > 0 ? 'var(--danger)' : 'inherit'}">${finFmtExact(calc.pendingBefore)}</strong></div>
         <div class="fin-calc-row"><span>Due deductions</span><strong style="color:${calc.deductionsTotal > 0 ? 'var(--warning)' : 'inherit'}">${finFmtExact(calc.deductionsTotal)}</strong></div>
         <div class="fin-calc-row total"><span>Total Due</span><strong>${finFmtExact(calc.totalDue)}</strong></div>
         <div style="margin:14px 0 8px;font-weight:700;font-size:12px;color:var(--gray);text-transform:uppercase">Priority Order</div>
-        ${calc.breakdown.deductions.map(d => `<div class="fin-calc-row sub"><span>${d.fullyPaid ? '✓' : '◐'} ${finEsc(d.label)}${d.alreadyPaid > 0 ? ` <em style="color:var(--gray)">(already paid ${finFmt(d.alreadyPaid)})</em>` : ''}</span><strong>${finFmtExact(d.paid)}</strong></div>`).join('')}
+        ${calc.breakdown.deductions.map(d => `<div class="fin-calc-row sub"><span>${d.fullyPaid ? '✓' : '◐'} ${finEsc(d.label)}</span><strong>${finFmtExact(d.paid)}</strong></div>`).join('')}
         <div class="fin-calc-row sub"><span>→ Pending commission</span><strong>${finFmtExact(calc.breakdown.commissionPending)}</strong></div>
         <div class="fin-calc-row sub"><span>→ Current commission</span><strong>${finFmtExact(calc.breakdown.commissionCurrent)}</strong></div>
         <div class="fin-calc-row sub"><span>→ Capital reduction</span><strong style="color:var(--success)">${finFmtExact(calc.breakdown.capital)}</strong></div>
-        <div class="fin-calc-row total" style="margin-top:14px"><span>New Pending Commission</span><strong style="color:${calc.newPendingCommission > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmtExact(calc.newPendingCommission)}</strong></div>
-        <div class="fin-calc-row total"><span>New Capital</span><strong>${finFmtExact(calc.newCapitalCurrent)}</strong></div>
+        <div class="fin-calc-row total" style="margin-top:14px"><span>${willApplyNow ? '' : 'PROJECTED '}New Pending Commission</span><strong style="color:${calc.newPendingCommission > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmtExact(calc.newPendingCommission)}</strong></div>
+        <div class="fin-calc-row total"><span>${willApplyNow ? '' : 'PROJECTED '}New Capital</span><strong>${finFmtExact(calc.newCapitalCurrent)}</strong></div>
         ${calc.newPendingCommission > 0 ? `<div style="margin-top:10px;padding:10px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:12px"><i class="fas fa-exclamation-triangle"></i> Shortfall of ${finFmtExact(calc.newPendingCommission)} carries to next payment.</div>` : ''}
     `;
 };
@@ -6747,11 +6819,11 @@ window.finSavePayment = async function () {
         reference = `Cheque #${chequeNo}${chequeBank ? ' · ' + chequeBank : ''}`;
     } else {
         reference = document.getElementById('finPayRef').value.trim();
+        chequeStatus = 'cleared';
     }
 
-    // Detect backdating
     const isBackdated = FIN.payments.some(x =>
-        x.planId === planId && x.status !== 'bounced' && x.status !== 'pending'
+        x.planId === planId && x.status !== 'pending' && x.status !== 'bounced'
         && new Date(x.effectiveDate || x.date) > new Date(effDate)
     );
 
@@ -6777,11 +6849,10 @@ window.finSavePayment = async function () {
     };
 
     try {
-        // 1. Save the payment
         const paymentId = await finSaveDoc('finance_payments', payment);
 
-        // 2. Settle deductions (only if not pending cheque)
-        if (chequeStatus !== 'pending') {
+        // ═══ KEY FIX: ONLY apply to plan if cheque is CLEARED ═══
+        if (chequeStatus === 'cleared') {
             for (const dd of calc.breakdown.deductions) {
                 if (!dd.paid || dd.paid <= 0) continue;
                 const ded = FIN.deductions.find(x => x.id === dd.id);
@@ -6792,39 +6863,37 @@ window.finSavePayment = async function () {
                     })
                 }).catch(e => console.warn('Deduction update failed', e));
             }
-        }
 
-        // 3. If backdated → trigger full recalc. Otherwise → direct plan update.
-        if (isBackdated) {
-            finToast(`Backdated payment recorded. Recalculating plan…`, 'info');
-            await finLoadAll();            // ← fresh state
-            await finRecalcPlan(planId);
+            if (isBackdated) {
+                finToast('Backdated payment recorded. Recalculating…', 'info');
+                await finLoadAll();
+                await finRecalcPlan(planId);
+            } else {
+                const planUpdate = {
+                    capitalCurrent: calc.newCapitalCurrent,
+                    pendingCommission: calc.newPendingCommission
+                };
+                if (calc.newCapitalCurrent <= 0.01 && calc.newPendingCommission <= 0.01) planUpdate.status = 'completed';
+                await finSafeMerge('finance_plans', planId, planUpdate);
+            }
+            finToast(`✅ Payment ${finFmt(amount)} CLEARED — applied to plan`, 'success');
         } else {
-            const planUpdate = {
-                capitalCurrent: calc.newCapitalCurrent,
-                pendingCommission: calc.newPendingCommission
-            };
-            if (calc.newCapitalCurrent <= 0.01 && calc.newPendingCommission <= 0.01) planUpdate.status = 'completed';
-            await finSafeMerge('finance_plans', planId, planUpdate);
+            // PENDING: record only, don't touch plan
+            finToast(`⏳ Cheque ${finFmt(amount)} recorded as PENDING — mark cleared to apply`, 'info');
         }
 
-        finToast(`Payment ${finFmt(amount)} recorded${chequeStatus === 'pending' ? ' (pending)' : ''}`, 'success');
         closeModal('finPaymentModal');
         await finLoadAll();
         ncRefreshBell();
         finRenderPlanDetail(planId);
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 window.finDeletePayment = async function (paymentId) {
-    if (!confirm('Delete this payment? Plan will be recalculated.')) return;
+    if (!confirm('Delete this payment?')) return;
     const pmt = FIN.payments.find(p => p.id === paymentId);
     if (!pmt) return;
     try {
-        // Revert deduction main-settlements
         for (const d of FIN.deductions.filter(x => x.planId === pmt.planId)) {
             const md = (d.mainDeductions || []).filter(m => m.paymentId !== paymentId);
             if (md.length !== (d.mainDeductions || []).length) {
@@ -6832,38 +6901,29 @@ window.finDeletePayment = async function (paymentId) {
             }
         }
         await finSafeDelete('finance_payments', paymentId);
-        await finLoadAll();            // ← fresh state before recalc
+        await finLoadAll();
         await finRecalcPlan(pmt.planId);
         await finLoadAll();
         ncRefreshBell();
         finToast('Payment deleted & plan recalculated', 'success');
         if (FIN.activePlanId) finRenderPlanDetail(FIN.activePlanId);
         else finRenderActiveTab();
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
-/**
- * Full recalculation:
- * 1. Reset all deduction main-settlements for this plan
- * 2. Replay payments in chronological order
- * 3. Use SAFE merge (set+merge) so missing docs never crash
- */
 async function finRecalcPlan(planId) {
     const p = FIN.plans.find(x => x.id === planId);
     if (!p) return;
 
-    // 1. Reset deduction main-settlements
     for (const d of FIN.deductions.filter(x => x.planId === planId)) {
         if ((d.mainDeductions || []).length > 0) {
             await finSafeMerge('finance_deductions', d.id, { mainDeductions: [] });
         }
     }
 
-    // 2. Replay chronologically
     const workingPlan = { ...p, capitalCurrent: parseFloat(p.capitalStart) || 0, pendingCommission: 0, status: 'active' };
+
+    // ═══ ONLY CLEARED payments replay into the plan ═══
     const planPmts = FIN.payments
         .filter(x => x.planId === planId && x.status !== 'pending' && x.status !== 'bounced')
         .sort((a,b) => new Date(a.effectiveDate || a.date) - new Date(b.effectiveDate || b.date));
@@ -6871,7 +6931,6 @@ async function finRecalcPlan(planId) {
     for (const pmt of planPmts) {
         const calc = finCalcPayment(workingPlan, pmt.amount, pmt.effectiveDate || pmt.date);
 
-        // Safe merge — creates doc if it somehow went missing (fixes "No document to update")
         await finSafeMerge('finance_payments', pmt.id, {
             breakdown: {
                 days: calc.days, daysChargeable: calc.daysChargeable, grace: calc.grace,
@@ -6885,7 +6944,6 @@ async function finRecalcPlan(planId) {
             newCapital: calc.newCapitalCurrent
         });
 
-        // Re-apply deduction settlements
         for (const dd of calc.breakdown.deductions) {
             if (!dd.paid || dd.paid <= 0) continue;
             const ded = FIN.deductions.find(x => x.id === dd.id);
@@ -6910,12 +6968,13 @@ async function finRecalcPlan(planId) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   15 · BULK
+   14 · BULK
    ═══════════════════════════════════════════════════════════════════════ */
 window.finOpenBulkModal = function (planId) {
     const sel = document.getElementById('finBulkPlan');
     sel.innerHTML = '<option value="">-- Select --</option>' + FIN.plans.map(p => `<option value="${p.id}" ${p.id === planId ? 'selected' : ''}>${finEsc(p.vehicle)} — ${finEsc(p.company)}</option>`).join('');
     document.getElementById('finBulkDate').value = finToday();
+    document.getElementById('finBulkStatus').value = 'pending';
     ['finBulkAmount','finBulkChequeNo','finBulkBank'].forEach(k => document.getElementById(k).value = '');
     FIN.bulkRows = [];
     finRenderBulkRows();
@@ -6929,8 +6988,9 @@ window.finAddBulkRow = function () {
     const amount = parseFloat(document.getElementById('finBulkAmount').value);
     const chequeNo = document.getElementById('finBulkChequeNo').value.trim();
     const bank = document.getElementById('finBulkBank').value.trim();
+    const status = document.getElementById('finBulkStatus').value;
     if (!date || !amount || amount <= 0 || !chequeNo) return finToast('Fill date, amount, cheque number', 'error');
-    FIN.bulkRows.push({ id: finUid('bulk'), date, amount, chequeNo, bank });
+    FIN.bulkRows.push({ id: finUid('bulk'), date, amount, chequeNo, bank, status });
     FIN.bulkRows.sort((a,b) => new Date(a.date) - new Date(b.date));
     ['finBulkAmount','finBulkChequeNo','finBulkBank'].forEach(k => document.getElementById(k).value = '');
     finRenderBulkRows();
@@ -6947,16 +7007,17 @@ window.finRenderBulkRows = function () {
     let sim = orig ? { capital: parseFloat(orig.capitalCurrent) || 0, pending: parseFloat(orig.pendingCommission) || 0 } : null;
     host.innerHTML = FIN.bulkRows.map(r => {
         let preview = '';
-        if (orig && sim) {
+        if (orig && sim && r.status === 'cleared') {
             const calc = finCalcPayment({ ...orig, capitalCurrent: sim.capital, pendingCommission: sim.pending }, r.amount, r.date);
             preview = `<div style="font-size:11px;color:var(--gray);margin-top:4px">→ Comm ${finFmt(calc.totalCommissionPaid)} · Cap ${finFmt(calc.breakdown.capital)} · Pending ${finFmt(calc.newPendingCommission)}</div>`;
             sim.capital = calc.newCapitalCurrent;
             sim.pending = calc.newPendingCommission;
         }
-        return `<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--light);margin-bottom:8px;font-size:12.5px">
+        return `<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--light);margin-bottom:8px;font-size:12.5px">
             <div style="font-weight:700;color:var(--primary)">#${finEsc(r.chequeNo)}</div>
             <div><div style="font-weight:600">${finDate(r.date)} ${r.bank ? '· ' + finEsc(r.bank) : ''}</div>
                 <div style="font-size:11px;color:var(--gray)">${finFmt(r.amount)}</div>${preview}</div>
+            <div><span class="fin-chip fin-chip-${r.status}">${r.status === 'pending' ? '⏳ pending' : r.status}</span></div>
             <div></div>
             <button class="btn btn-xs btn-danger" onclick="finRemoveBulkRow('${r.id}')"><i class="fas fa-times"></i></button>
         </div>`;
@@ -6976,57 +7037,29 @@ window.finCommitBulkPayments = async function () {
     if (!p) return;
     try {
         FIN.bulkRows.sort((a,b) => new Date(a.date) - new Date(b.date));
-        const existingMax = FIN.payments
-            .filter(x => x.planId === planId && x.status !== 'bounced' && x.status !== 'pending')
-            .reduce((m,x) => Math.max(m, new Date(x.effectiveDate || x.date).getTime()), 0);
-        const hasBackdated = FIN.bulkRows.some(r => new Date(r.date).getTime() < existingMax);
-
-        if (hasBackdated) {
-            // Simple approach: save all rows as documents, then recalc whole plan
-            for (const r of FIN.bulkRows) {
-                const calc = finCalcPayment(p, r.amount, r.date);
-                await finSaveDoc('finance_payments', {
-                    planId, date: finToday(), effectiveDate: calc.effectiveDate,
-                    amount: r.amount, method: 'cheque',
-                    reference: `Cheque #${r.chequeNo}${r.bank ? ' · ' + r.bank : ''}`,
-                    chequeNo: r.chequeNo, chequeBank: r.bank,
-                    status: 'cleared', notes: 'Bulk entry',
-                    breakdown: {
-                        days: calc.days, daysChargeable: calc.daysChargeable, grace: calc.grace,
-                        dailyCommission: calc.dailyCommission, accruedCommission: calc.accruedCommission, penalty: calc.penalty,
-                        pendingBefore: calc.pendingBefore, deductionsTotal: calc.deductionsTotal,
-                        deductions: calc.breakdown.deductions,
-                        commissionPending: calc.breakdown.commissionPending,
-                        commissionCurrent: calc.breakdown.commissionCurrent,
-                        capital: calc.breakdown.capital
-                    },
-                    newPendingCommission: calc.newPendingCommission, newCapital: calc.newCapitalCurrent
-                });
-            }
-            await finLoadAll();
-            await finRecalcPlan(planId);
-        } else {
-            // Fast path: sequential plan update
-            let workingPlan = { ...p };
-            for (const r of FIN.bulkRows) {
-                const calc = finCalcPayment(workingPlan, r.amount, r.date);
-                const paymentId = await finSaveDoc('finance_payments', {
-                    planId, date: finToday(), effectiveDate: calc.effectiveDate,
-                    amount: r.amount, method: 'cheque',
-                    reference: `Cheque #${r.chequeNo}${r.bank ? ' · ' + r.bank : ''}`,
-                    chequeNo: r.chequeNo, chequeBank: r.bank,
-                    status: 'cleared', notes: 'Bulk entry',
-                    breakdown: {
-                        days: calc.days, daysChargeable: calc.daysChargeable, grace: calc.grace,
-                        dailyCommission: calc.dailyCommission, accruedCommission: calc.accruedCommission, penalty: calc.penalty,
-                        pendingBefore: calc.pendingBefore, deductionsTotal: calc.deductionsTotal,
-                        deductions: calc.breakdown.deductions,
-                        commissionPending: calc.breakdown.commissionPending,
-                        commissionCurrent: calc.breakdown.commissionCurrent,
-                        capital: calc.breakdown.capital
-                    },
-                    newPendingCommission: calc.newPendingCommission, newCapital: calc.newCapitalCurrent
-                });
+        let clearedCount = 0, pendingCount = 0;
+        let workingPlan = { ...p };
+        // Preserve chronological order — pending entries are saved but skipped in replay
+        for (const r of FIN.bulkRows) {
+            const calc = finCalcPayment(workingPlan, r.amount, r.date);
+            const paymentId = await finSaveDoc('finance_payments', {
+                planId, date: finToday(), effectiveDate: calc.effectiveDate,
+                amount: r.amount, method: 'cheque',
+                reference: `Cheque #${r.chequeNo}${r.bank ? ' · ' + r.bank : ''}`,
+                chequeNo: r.chequeNo, chequeBank: r.bank,
+                status: r.status, notes: 'Bulk entry',
+                breakdown: {
+                    days: calc.days, daysChargeable: calc.daysChargeable, grace: calc.grace,
+                    dailyCommission: calc.dailyCommission, accruedCommission: calc.accruedCommission, penalty: calc.penalty,
+                    pendingBefore: calc.pendingBefore, deductionsTotal: calc.deductionsTotal,
+                    deductions: calc.breakdown.deductions,
+                    commissionPending: calc.breakdown.commissionPending,
+                    commissionCurrent: calc.breakdown.commissionCurrent,
+                    capital: calc.breakdown.capital
+                },
+                newPendingCommission: calc.newPendingCommission, newCapital: calc.newCapitalCurrent
+            });
+            if (r.status === 'cleared') {
                 for (const dd of calc.breakdown.deductions) {
                     if (!dd.paid || dd.paid <= 0) continue;
                     const ded = FIN.deductions.find(x => x.id === dd.id);
@@ -7037,29 +7070,32 @@ window.finCommitBulkPayments = async function () {
                 }
                 workingPlan.capitalCurrent = calc.newCapitalCurrent;
                 workingPlan.pendingCommission = calc.newPendingCommission;
+                clearedCount++;
+            } else {
+                pendingCount++;
             }
-            const planUpdate = {
-                capitalCurrent: workingPlan.capitalCurrent,
-                pendingCommission: workingPlan.pendingCommission
-            };
-            if (workingPlan.capitalCurrent <= 0.01 && workingPlan.pendingCommission <= 0.01) planUpdate.status = 'completed';
+        }
+        const planUpdate = {
+            capitalCurrent: workingPlan.capitalCurrent,
+            pendingCommission: workingPlan.pendingCommission
+        };
+        if (workingPlan.capitalCurrent <= 0.01 && workingPlan.pendingCommission <= 0.01) planUpdate.status = 'completed';
+        // Only update plan totals if any cleared cheques were included
+        if (clearedCount > 0) {
             await finSafeMerge('finance_plans', planId, planUpdate);
         }
 
-        finToast(`Committed ${FIN.bulkRows.length} cheques`, 'success');
+        finToast(`Committed ${FIN.bulkRows.length} cheques (${clearedCount} cleared, ${pendingCount} pending)`, 'success');
         closeModal('finBulkModal');
         FIN.bulkRows = [];
         await finLoadAll();
         ncRefreshBell();
         finRenderPlanDetail(planId);
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   16 · CHEQUE STATUS UPDATE
+   15 · CHEQUE STATUS UPDATE (the crucial one)
    ═══════════════════════════════════════════════════════════════════════ */
 window.finOpenChequeModal = function (paymentId) {
     const c = FIN.payments.find(p => p.id === paymentId);
@@ -7070,10 +7106,44 @@ window.finOpenChequeModal = function (paymentId) {
         <div><strong>Cheque:</strong> #${finEsc(c.chequeNo)} ${c.chequeBank ? '· ' + finEsc(c.chequeBank) : ''}</div>
         <div><strong>Plan:</strong> ${pl ? finEsc(pl.vehicle) : '—'}</div>
         <div><strong>Amount:</strong> ${finFmt(c.amount)}</div>
-        <div><strong>Cheque date:</strong> ${finDate(c.effectiveDate || c.date)}</div>`;
-    document.getElementById('finChequeNewStatus').value = 'cleared';
-    document.getElementById('finBounceGroup').classList.add('hidden');
+        <div><strong>Cheque date:</strong> ${finDate(c.effectiveDate || c.date)}</div>
+        <div><strong>Current status:</strong> <span class="fin-chip fin-chip-${c.status}">${c.status === 'pending' ? '⏳ pending' : c.status}</span></div>`;
+    document.getElementById('finChequeNewStatus').value = c.status === 'pending' ? 'cleared' : c.status;
+    document.getElementById('finBounceGroup').classList.toggle('hidden', document.getElementById('finChequeNewStatus').value !== 'bounced');
+    finChequeStatusPreview();
     openModal('finChequeModal');
+};
+
+window.finChequeStatusPreview = function () {
+    const id = document.getElementById('finChequeClearId').value;
+    const newStatus = document.getElementById('finChequeNewStatus').value;
+    const c = FIN.payments.find(p => p.id === id);
+    if (!c) return;
+    const banner = document.getElementById('finChequeImpact');
+    const p = FIN.plans.find(x => x.id === c.planId);
+    if (!p) { banner.style.display = 'none'; return; }
+    banner.style.display = 'flex';
+
+    if (newStatus === 'cleared' && c.status !== 'cleared') {
+        const calc = finCalcPayment(p, c.amount, c.effectiveDate || c.date);
+        banner.className = 'fin-info-banner success';
+        banner.innerHTML = `<i class="fas fa-check-circle"></i>
+            <div><strong>Clearing this cheque will apply:</strong><br>
+                Capital reduced by <strong>${finFmt(calc.breakdown.capital)}</strong> (${finFmt(p.capitalCurrent)} → <strong>${finFmt(calc.newCapitalCurrent)}</strong>)<br>
+                Commission paid <strong>${finFmt(calc.totalCommissionPaid)}</strong>${calc.penalty > 0 ? ` (includes ${finFmt(calc.penalty)} late fee)` : ''}<br>
+                New pending commission: <strong>${finFmt(calc.newPendingCommission)}</strong></div>`;
+    } else if (newStatus === 'bounced' && c.status !== 'bounced') {
+        banner.className = 'fin-info-banner danger';
+        banner.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
+            <div><strong>Marking as BOUNCED</strong> removes it from the plan entirely. Any deduction settlements from it will be reversed.</div>`;
+    } else if (newStatus === 'pending') {
+        banner.className = 'fin-info-banner';
+        banner.innerHTML = `<i class="fas fa-hourglass-half"></i>
+            <div><strong>Pending:</strong> recorded but will NOT affect capital or commission. Plan will be recalculated without this payment.</div>`;
+    } else {
+        banner.className = 'fin-info-banner info';
+        banner.innerHTML = `<i class="fas fa-info-circle"></i><div>No change in status.</div>`;
+    }
 };
 
 window.finCommitChequeStatus = async function () {
@@ -7083,25 +7153,30 @@ window.finCommitChequeStatus = async function () {
     const c = FIN.payments.find(p => p.id === id);
     if (!c) return;
     try {
+        const prevStatus = c.status;
         const update = { status: newStatus };
         if (newStatus === 'bounced') update.bounceReason = reason;
         await finSafeMerge('finance_payments', id, update);
-        await finLoadAll();
-        await finRecalcPlan(c.planId);
-        await finLoadAll();
+
+        // If status changed TO cleared → deduction settlements must be applied
+        // If status changed FROM cleared → old settlements must be reversed
+        // Easiest approach: reload + full recalc (handles all cases)
+        if (prevStatus !== newStatus) {
+            await finLoadAll();
+            await finRecalcPlan(c.planId);
+            await finLoadAll();
+        }
+
         ncRefreshBell();
-        finToast(`Cheque marked as ${newStatus}`, newStatus === 'bounced' ? 'error' : 'success');
+        finToast(`Cheque marked as ${newStatus}${newStatus === 'cleared' ? ' — plan updated' : ''}`, newStatus === 'bounced' ? 'error' : 'success');
         closeModal('finChequeModal');
         if (FIN.activePlanId) finRenderPlanDetail(FIN.activePlanId);
         else finRenderActiveTab();
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   17 · PAYMENTS TAB
+   16 · PAYMENTS TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function finRenderPaymentsTab() {
     const root = document.getElementById('finTab-payments');
@@ -7113,9 +7188,9 @@ function finRenderPaymentsTab() {
         <div class="card" style="margin-bottom:20px">
             <div class="card-header"><h2 class="card-title"><i class="fas fa-money-check"></i> Cheque Registry</h2></div>
             <div class="fin-widgets">
-                <div class="fin-widget"><div class="fin-widget-title">Pending</div><div class="fin-widget-value" style="color:var(--warning)">${pending.length}</div><div class="fin-widget-sub">${finFmt(pending.reduce((s,c) => s + (parseFloat(c.amount)||0), 0))}</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Cleared</div><div class="fin-widget-value" style="color:var(--success)">${cleared.length}</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Bounced</div><div class="fin-widget-value" style="color:var(--danger)">${bounced.length}</div></div>
+                <div class="fin-widget"><div class="fin-widget-title">⏳ Pending (Not Applied)</div><div class="fin-widget-value" style="color:#f59e0b">${pending.length}</div><div class="fin-widget-sub">${finFmt(pending.reduce((s,c) => s + (parseFloat(c.amount)||0), 0))}</div></div>
+                <div class="fin-widget"><div class="fin-widget-title">✅ Cleared (Applied)</div><div class="fin-widget-value" style="color:var(--success)">${cleared.length}</div></div>
+                <div class="fin-widget"><div class="fin-widget-title">❌ Bounced</div><div class="fin-widget-value" style="color:var(--danger)">${bounced.length}</div></div>
                 <div class="fin-widget"><div class="fin-widget-title">Total Cheques</div><div class="fin-widget-value">${cheques.length}</div></div>
             </div>
             <div id="finChequeRegistryTable"></div>
@@ -7138,16 +7213,16 @@ function finRenderPaymentsTab() {
             <tbody>${sorted.map(c => {
                 const pl = FIN.plans.find(x => x.id === c.planId);
                 const daysToClear = c.status === 'pending' ? finDaysBetween(finToday(), c.effectiveDate || c.date) : null;
-                return `<tr>
+                return `<tr style="${c.status === 'pending' ? 'background:#fffbeb;' : (c.status === 'bounced' ? 'background:#fef2f2;opacity:.7;' : '')}">
                     <td><strong>${finEsc(c.chequeNo) || '—'}</strong></td>
                     <td>${finEsc(c.chequeBank) || '—'}</td>
                     <td>${pl ? finEsc(pl.vehicle) : '—'}</td>
                     <td><strong>${finFmt(c.amount)}</strong></td>
                     <td>${finDate(c.effectiveDate || c.date)}${daysToClear !== null && daysToClear > 0 ? `<div style="font-size:10px;color:var(--warning)">in ${daysToClear} days</div>` : ''}</td>
                     <td>${finDate(c.date)}</td>
-                    <td><span class="fin-chip fin-chip-${c.status}">${c.status}</span></td>
+                    <td><span class="fin-chip fin-chip-${c.status}">${c.status === 'pending' ? '⏳ pending' : c.status}</span></td>
                     <td>
-                        ${c.status === 'pending' ? `<button class="btn btn-xs btn-success" onclick="finOpenChequeModal('${c.id}')"><i class="fas fa-check"></i> Update</button>` : ''}
+                        <button class="btn btn-xs ${c.status === 'pending' ? 'btn-success' : 'btn-secondary'}" onclick="finOpenChequeModal('${c.id}')"><i class="fas fa-${c.status === 'pending' ? 'check' : 'edit'}"></i> ${c.status === 'pending' ? 'Update' : 'Change'}</button>
                         <button class="btn btn-xs btn-secondary" onclick="finShowReceipt('${c.id}')"><i class="fas fa-receipt"></i></button>
                     </td>
                 </tr>`;
@@ -7169,22 +7244,23 @@ window.finRenderAllPaymentsTable = function () {
         <tbody>${payments.map(p => {
             const pl = FIN.plans.find(x => x.id === p.planId);
             const comm = (parseFloat(p.breakdown?.commissionPending)||0) + (parseFloat(p.breakdown?.commissionCurrent)||0);
-            return `<tr>
+            const notApplied = p.status === 'pending' || p.status === 'bounced';
+            return `<tr style="${p.status === 'pending' ? 'background:#fffbeb;' : (p.status === 'bounced' ? 'background:#fef2f2;opacity:.7;' : '')}">
                 <td><strong>${finDate(p.effectiveDate || p.date)}</strong></td>
                 <td>${finDate(p.date)}</td>
                 <td>${pl ? finEsc(pl.vehicle) : '—'}</td>
                 <td><strong>${finFmt(p.amount)}</strong></td>
                 <td><span class="fin-chip fin-chip-${p.method}">${p.method}</span></td>
-                <td><span class="fin-chip fin-chip-${p.status || 'cleared'}">${p.status || 'cleared'}</span></td>
-                <td style="color:var(--warning);font-weight:700">${finFmt(comm)}</td>
-                <td style="color:var(--success);font-weight:700">${finFmt(p.breakdown?.capital)}</td>
-                <td style="color:${p.newPendingCommission > 0 ? 'var(--danger)' : 'var(--success)'};font-weight:700">${finFmt(p.newPendingCommission)}</td>
+                <td><span class="fin-chip fin-chip-${p.status || 'cleared'}">${p.status === 'pending' ? '⏳ pending' : (p.status || 'cleared')}</span></td>
+                <td style="color:var(--warning);font-weight:700">${notApplied ? '<em style="color:#b45309;font-weight:400">— not applied —</em>' : finFmt(comm)}</td>
+                <td style="color:var(--success);font-weight:700">${notApplied ? '<em style="color:#b45309;font-weight:400">— not applied —</em>' : finFmt(p.breakdown?.capital)}</td>
+                <td style="color:${p.newPendingCommission > 0 ? 'var(--danger)' : 'var(--success)'};font-weight:700">${notApplied ? '—' : finFmt(p.newPendingCommission)}</td>
             </tr>`;
         }).join('')}</tbody></table></div>`;
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   18 · DEDUCTIONS TAB
+   17 · DEDUCTIONS TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function finRenderDeductionsTab() {
     const root = document.getElementById('finTab-deductions');
@@ -7219,7 +7295,7 @@ function finRenderDeductionsTab() {
                 <td>${pl ? finEsc(pl.vehicle) : '—'}</td>
                 <td><strong>${finEsc(d.label)}</strong></td>
                 <td><strong>${finFmt(d.amount)}</strong></td>
-                <td>${direct > 0 ? `<div style="color:var(--info)">${finFmt(direct)} direct</div>` : ''}${fromMain > 0 ? `<div style="color:var(--warning)">${finFmt(fromMain)} from main</div>` : ''}${total === 0 ? '—' : ''}
+                <td>${direct > 0 ? `<div style="color:var(--info)">${finFmt(direct)} direct</div>` : ''}${fromMain > 0 ? `<div style="color:var(--warning)">${finFmt(fromMain)} from cleared</div>` : ''}${total === 0 ? '—' : ''}
                     <div class="fin-progress-track" style="width:100px;height:6px"><div class="fin-progress-fill" style="width:${pct}%"></div></div></td>
                 <td><strong style="color:${rem > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmt(rem)}</strong></td>
                 <td style="color:${overdue ? 'var(--danger)' : 'inherit'}">${finDate(d.dueDate)}${overdue ? `<div style="font-size:10px;color:var(--danger)">⚠ ${daysOver}d</div>` : ''}</td>
@@ -7264,10 +7340,7 @@ window.finSaveDeduction = async function () {
         ncRefreshBell();
         if (FIN.activePlanId && document.getElementById('financePlanDetailView').classList.contains('active')) finRenderPlanDetail(FIN.activePlanId);
         else finRenderActiveTab();
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 window.finDeleteDeduction = async function (id) {
@@ -7279,14 +7352,11 @@ window.finDeleteDeduction = async function (id) {
         ncRefreshBell();
         if (FIN.activePlanId && document.getElementById('financePlanDetailView').classList.contains('active')) finRenderPlanDetail(FIN.activePlanId);
         else finRenderActiveTab();
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   19 · DIRECT DEDUCTION PAYMENT
+   18 · DIRECT DEDUCTION PAYMENT
    ═══════════════════════════════════════════════════════════════════════ */
 window.finOpenDedPayModal = function (dedId) {
     const d = FIN.deductions.find(x => x.id === dedId);
@@ -7299,7 +7369,7 @@ window.finOpenDedPayModal = function (dedId) {
         <div style="font-weight:800;font-size:14px;margin-bottom:8px">${finEsc(d.label)}</div>
         <div class="fin-summary-grid">
             <div><strong>Plan</strong>${pl ? finEsc(pl.vehicle) : '—'}</div>
-            <div><strong>Total Amount</strong>${finFmt(d.amount)}</div>
+            <div><strong>Total</strong>${finFmt(d.amount)}</div>
             <div><strong>Already Paid</strong>${finFmt(finPaidTotal(d))}</div>
             <div><strong>Due Date</strong>${finDate(d.dueDate)}</div>
         </div>
@@ -7344,10 +7414,7 @@ window.finSaveDeductionPayment = async function () {
         ncRefreshBell();
         if (FIN.activePlanId && document.getElementById('financePlanDetailView').classList.contains('active')) finRenderPlanDetail(FIN.activePlanId);
         else finRenderActiveTab();
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 window.finDeleteDeductionPayment = async function (dedId, payId) {
@@ -7362,14 +7429,11 @@ window.finDeleteDeductionPayment = async function (dedId, payId) {
         ncRefreshBell();
         if (FIN.activePlanId) finRenderPlanDetail(FIN.activePlanId);
         else finRenderActiveTab();
-    } catch (e) {
-        console.error(e);
-        finToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { console.error(e); finToast('Error: ' + e.message, 'error'); }
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   20 · DEDUCTION AUDIT
+   19 · DEDUCTION AUDIT
    ═══════════════════════════════════════════════════════════════════════ */
 window.finShowDedDetail = function (dedId) {
     const d = FIN.deductions.find(x => x.id === dedId);
@@ -7391,9 +7455,9 @@ window.finShowDedDetail = function (dedId) {
             <div style="font-size:12px;color:var(--gray);margin-bottom:14px">${pl ? finEsc(pl.vehicle) + ' · ' + finEsc(pl.company) : '—'}</div>
             <div class="fin-summary-grid">
                 <div><strong>Total Amount</strong>${finFmt(d.amount)}</div>
-                <div><strong>Due Date</strong>${finDate(d.dueDate)}${overdue ? ` <span style="color:var(--danger)">(${daysOver}d overdue)</span>` : ''}</div>
+                <div><strong>Due Date</strong>${finDate(d.dueDate)}${overdue ? ` <span style="color:var(--danger)">(${daysOver}d)</span>` : ''}</div>
                 <div><strong>Paid Directly</strong><span style="color:var(--info)">${finFmt(direct)}</span></div>
-                <div><strong>From Main Payments</strong><span style="color:var(--warning)">${finFmt(fromMain)}</span></div>
+                <div><strong>From Cleared Payments</strong><span style="color:var(--warning)">${finFmt(fromMain)}</span></div>
                 <div><strong>Remaining</strong><span style="color:${rem > 0 ? 'var(--danger)' : 'var(--success)'};font-weight:800">${finFmt(rem)}</span></div>
                 <div><strong>Status</strong><span class="fin-ded-status ${statusK === 'settled' ? 'fin-ded-settled' : statusK === 'partial' ? 'fin-ded-partial' : overdue ? 'fin-ded-overdue' : 'fin-ded-pending'}">${statusK === 'settled' ? 'Settled ✓' : statusK === 'partial' ? 'Partial' : overdue ? 'Overdue' : 'Pending'}</span></div>
             </div>
@@ -7401,7 +7465,7 @@ window.finShowDedDetail = function (dedId) {
             <div style="font-size:11px;color:var(--gray);text-align:right;margin-top:4px">${pct.toFixed(1)}% settled</div>
         </div>
         ${overdue ? `<div class="fin-info-banner danger"><i class="fas fa-exclamation-triangle"></i>
-            <div><strong>Overdue by ${daysOver} days.</strong> Remaining ${finFmt(rem)} will auto-deduct from next main payment.</div></div>` : ''}
+            <div><strong>Overdue by ${daysOver} days.</strong> Remaining ${finFmt(rem)} will auto-deduct from next cleared payment.</div></div>` : ''}
         <h4 style="font-size:12px;color:var(--gray);text-transform:uppercase;margin-bottom:10px">Direct Payments (${directRows.length})</h4>
         ${directRows.length === 0 ? '<div style="text-align:center;padding:18px;color:var(--gray);font-size:12px;background:var(--light);border-radius:8px">No direct payments yet</div>' :
         directRows.map(p => `
@@ -7410,16 +7474,15 @@ window.finShowDedDetail = function (dedId) {
                 <div style="flex:1">
                     <div style="font-weight:800;color:var(--info)">${finFmt(p.amount)} · ${finEsc(p.method)}</div>
                     <div style="font-size:12px;color:var(--gray);margin-top:2px">${finDate(p.date)}${p.reference ? ' · ' + finEsc(p.reference) : ''}</div>
-                    ${p.notes ? `<div style="font-size:11px;color:var(--gray);font-style:italic;margin-top:4px">"${finEsc(p.notes)}"</div>` : ''}
                 </div>
                 <button class="btn btn-xs btn-danger" onclick="finDeleteDeductionPayment('${d.id}','${p.id}')"><i class="fas fa-trash"></i></button>
             </div>`).join('')}
-        <h4 style="font-size:12px;color:var(--gray);text-transform:uppercase;margin:20px 0 10px">Deducted From Main Payments (${mainRows.length})</h4>
-        ${mainRows.length === 0 ? '<div style="text-align:center;padding:18px;color:var(--gray);font-size:12px;background:var(--light);border-radius:8px">Not deducted from any main payment yet</div>' :
+        <h4 style="font-size:12px;color:var(--gray);text-transform:uppercase;margin:20px 0 10px">Deducted From Cleared Payments (${mainRows.length})</h4>
+        ${mainRows.length === 0 ? '<div style="text-align:center;padding:18px;color:var(--gray);font-size:12px;background:var(--light);border-radius:8px">Not deducted from any cleared payment yet</div>' :
         mainRows.map(m => {
             const pmt = FIN.payments.find(x => x.id === m.paymentId);
             return `<div class="fin-audit-row">
-                <span class="badge-src main">FROM MAIN</span>
+                <span class="badge-src main">FROM CLEARED</span>
                 <div style="flex:1">
                     <div style="font-weight:800;color:var(--warning)">${finFmt(m.amount)} deducted</div>
                     <div style="font-size:12px;color:var(--gray);margin-top:2px">Payment dated ${finDate(m.date)}${pmt ? ' · Ref ' + finEsc(pmt.reference) : ''}</div>
@@ -7430,16 +7493,20 @@ window.finShowDedDetail = function (dedId) {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   21 · RECEIPT
+   20 · RECEIPT
    ═══════════════════════════════════════════════════════════════════════ */
 window.finShowReceipt = function (paymentId) {
     const c = FIN.payments.find(p => p.id === paymentId);
     if (!c) return;
     const pl = FIN.plans.find(x => x.id === c.planId);
     const b = c.breakdown || {};
+    const isPending = c.status === 'pending';
+    const isBounced = c.status === 'bounced';
     document.getElementById('finReceiptBody').innerHTML = `
         <div class="fin-receipt">
-            <h2>PAYMENT RECEIPT</h2>
+            <h2>${isPending ? 'PAYMENT (PENDING)' : isBounced ? 'PAYMENT (BOUNCED)' : 'PAYMENT RECEIPT'}</h2>
+            ${isPending ? '<div style="background:#fef3c7;color:#92400e;padding:8px;border-radius:6px;text-align:center;font-size:12px;margin-bottom:14px">⏳ This cheque is pending — plan not yet affected</div>' : ''}
+            ${isBounced ? '<div style="background:#fee2e2;color:#991b1b;padding:8px;border-radius:6px;text-align:center;font-size:12px;margin-bottom:14px">❌ Bounced — removed from plan</div>' : ''}
             <div class="fin-receipt-row"><span>Receipt #</span><strong>${c.id.slice(-8).toUpperCase()}</strong></div>
             <div class="fin-receipt-row"><span>Date</span><strong>${finDate(c.date)}</strong></div>
             <div class="fin-receipt-row"><span>Plan</span><strong>${pl ? finEsc(pl.vehicle) : '—'}</strong></div>
@@ -7453,10 +7520,10 @@ window.finShowReceipt = function (paymentId) {
             <div class="fin-receipt-row"><span>Accrued commission</span><strong>${finFmtExact(b.accruedCommission)}</strong></div>
             ${b.penalty > 0 ? `<div class="fin-receipt-row"><span>Late fee</span><strong>${finFmtExact(b.penalty)}</strong></div>` : ''}
             ${(b.deductions||[]).map(d => `<div class="fin-receipt-row"><span>Deduction: ${finEsc(d.label)}</span><strong>${finFmtExact(d.paid)}</strong></div>`).join('')}
-            <div class="fin-receipt-row"><span>Commission paid</span><strong>${finFmtExact((parseFloat(b.commissionPending)||0) + (parseFloat(b.commissionCurrent)||0))}</strong></div>
-            <div class="fin-receipt-row"><span>Capital reduced</span><strong>${finFmtExact(b.capital)}</strong></div>
-            <div class="fin-receipt-row total"><span>TOTAL PAID</span><strong>${finFmtExact(c.amount)}</strong></div>
-            <div class="fin-receipt-row" style="margin-top:12px"><span>New capital</span><strong>${finFmtExact(c.newCapital)}</strong></div>
+            <div class="fin-receipt-row"><span>Commission ${isPending || isBounced ? '(projected)' : 'paid'}</span><strong>${finFmtExact((parseFloat(b.commissionPending)||0) + (parseFloat(b.commissionCurrent)||0))}</strong></div>
+            <div class="fin-receipt-row"><span>Capital ${isPending || isBounced ? '(projected)' : 'reduced'}</span><strong>${finFmtExact(b.capital)}</strong></div>
+            <div class="fin-receipt-row total"><span>TOTAL</span><strong>${finFmtExact(c.amount)}</strong></div>
+            <div class="fin-receipt-row" style="margin-top:12px"><span>New capital ${isPending || isBounced ? '(projected)' : ''}</span><strong>${finFmtExact(c.newCapital)}</strong></div>
             <div class="fin-receipt-row"><span>Pending commission</span><strong>${finFmtExact(c.newPendingCommission)}</strong></div>
             <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--gray);border-top:1px dashed #ddd;padding-top:12px">
                 Generated by NeonCheque Finance · ${new Date().toLocaleString()}</div>
@@ -7465,7 +7532,7 @@ window.finShowReceipt = function (paymentId) {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   22 · WHAT-IF + AMORTIZATION
+   21 · WHAT-IF + AMORTIZATION
    ═══════════════════════════════════════════════════════════════════════ */
 window.finRunWhatIf = function (planId) {
     const p = FIN.plans.find(x => x.id === planId);
@@ -7477,8 +7544,8 @@ window.finRunWhatIf = function (planId) {
     if (!amount || amount <= 0 || !date) { host.innerHTML = ''; return; }
     const calc = finCalcPayment(p, amount, date);
     host.innerHTML = `<div class="fin-calc-preview" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#16a34a">
-        <div style="font-weight:800;font-size:13px;margin-bottom:10px;color:#14532d"><i class="fas fa-flask"></i> Simulation (${method}, effective ${finDate(calc.effectiveDate)})</div>
-        <div class="fin-calc-row"><span>Days since last payment</span><strong>${calc.days}</strong></div>
+        <div style="font-weight:800;font-size:13px;margin-bottom:10px;color:#14532d"><i class="fas fa-flask"></i> Simulation (assumes CLEARED, effective ${finDate(calc.effectiveDate)})</div>
+        <div class="fin-calc-row"><span>Days since last cleared payment</span><strong>${calc.days}</strong></div>
         <div class="fin-calc-row sub"><span>Chargeable days</span><strong>${calc.daysChargeable}</strong></div>
         <div class="fin-calc-row sub"><span>Daily commission</span><strong>${finFmtExact(calc.dailyCommission)}</strong></div>
         <div class="fin-calc-row sub"><span>Accrued commission</span><strong>${finFmtExact(calc.accruedCommission - calc.penalty)}</strong></div>
@@ -7540,11 +7607,12 @@ window.finRunAmortization = function (planId) {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   23 · REPORTS TAB
+   22 · REPORTS TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function finRenderReportsTab() {
     const root = document.getElementById('finTab-reports');
-    const validPmts = FIN.payments.filter(p => p.status !== 'bounced');
+    const validPmts = FIN.payments.filter(p => p.status !== 'bounced' && p.status !== 'pending');
+    const pendingPmts = FIN.payments.filter(p => p.status === 'pending');
     const totalStart = FIN.plans.reduce((s,p) => s + (parseFloat(p.capitalStart)||0), 0);
     const totalCurrent = FIN.plans.reduce((s,p) => s + (parseFloat(p.capitalCurrent)||0), 0);
     const totalPendingComm = FIN.plans.reduce((s,p) => s + (parseFloat(p.pendingCommission)||0), 0);
@@ -7552,11 +7620,10 @@ function finRenderReportsTab() {
     const totalComm = validPmts.reduce((s,p) => s + (parseFloat(p.breakdown?.commissionPending)||0) + (parseFloat(p.breakdown?.commissionCurrent)||0), 0);
     const totalCap = validPmts.reduce((s,p) => s + (parseFloat(p.breakdown?.capital)||0), 0);
     const totalLateFee = validPmts.reduce((s,p) => s + (parseFloat(p.breakdown?.penalty)||0), 0);
-    const pendingCheques = FIN.payments.filter(p => p.method === 'cheque' && p.status === 'pending');
-    const pendingChequeVal = pendingCheques.reduce((s,p) => s + (parseFloat(p.amount)||0), 0);
+    const pendingChequeVal = pendingPmts.reduce((s,p) => s + (parseFloat(p.amount)||0), 0);
     const ratio = totalPaid > 0 ? (totalComm / totalPaid * 100) : 0;
     const buckets = { '0-7': 0, '8-30': 0, '31-60': 0, '60+': 0 };
-    pendingCheques.forEach(c => {
+    pendingPmts.forEach(c => {
         const days = finDaysBetween(finToday(), c.effectiveDate || c.date);
         const amt = parseFloat(c.amount) || 0;
         if (days <= 7) buckets['0-7'] += amt;
@@ -7571,10 +7638,10 @@ function finRenderReportsTab() {
             <div class="fin-widgets">
                 <div class="fin-widget"><div class="fin-widget-title">Total Starting Capital</div><div class="fin-widget-value">${finFmt(totalStart)}</div></div>
                 <div class="fin-widget"><div class="fin-widget-title">Current Outstanding</div><div class="fin-widget-value" style="color:var(--warning)">${finFmt(totalCurrent)}</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Total Paid</div><div class="fin-widget-value" style="color:var(--success)">${finFmt(totalPaid)}</div></div>
+                <div class="fin-widget"><div class="fin-widget-title">Total Paid (Cleared)</div><div class="fin-widget-value" style="color:var(--success)">${finFmt(totalPaid)}</div></div>
+                <div class="fin-widget"><div class="fin-widget-title">⏳ Pending Cheques</div><div class="fin-widget-value" style="color:#f59e0b">${finFmt(pendingChequeVal)}</div><div class="fin-widget-sub">${pendingPmts.length} awaiting clearance</div></div>
                 <div class="fin-widget"><div class="fin-widget-title">Commission Paid</div><div class="fin-widget-value" style="color:var(--info)">${finFmt(totalComm)}</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Late Fees Collected</div><div class="fin-widget-value" style="color:#f59e0b">${finFmt(totalLateFee)}</div></div>
-                <div class="fin-widget"><div class="fin-widget-title">Pending Commission</div><div class="fin-widget-value" style="color:${totalPendingComm > 0 ? 'var(--danger)' : 'var(--success)'}">${finFmt(totalPendingComm)}</div></div>
+                <div class="fin-widget"><div class="fin-widget-title">Late Fees</div><div class="fin-widget-value" style="color:#f59e0b">${finFmt(totalLateFee)}</div></div>
             </div>
         </div>
         <div class="card" style="margin-bottom:20px">
@@ -7587,8 +7654,8 @@ function finRenderReportsTab() {
             </div>
         </div>
         <div class="card" style="margin-bottom:20px">
-            <div class="card-header"><h2 class="card-title">Cheque Float Aging</h2></div>
-            <div style="font-size:12px;color:var(--gray);margin-bottom:14px">Total pending cheque value: <strong>${finFmt(pendingChequeVal)}</strong> across ${pendingCheques.length} cheque(s)</div>
+            <div class="card-header"><h2 class="card-title">Pending Cheque Aging</h2></div>
+            <div style="font-size:12px;color:var(--gray);margin-bottom:14px">Total pending: <strong>${finFmt(pendingChequeVal)}</strong> across ${pendingPmts.length} cheque(s)</div>
             ${Object.entries(buckets).map(([label, val]) => `
                 <div style="margin-bottom:10px">
                     <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
@@ -7600,18 +7667,19 @@ function finRenderReportsTab() {
             <div class="card-header"><h2 class="card-title">Plan-wise Breakdown</h2></div>
             ${FIN.plans.length === 0 ? '<div class="fin-empty"><i class="fas fa-chart-line"></i><h3>No data</h3></div>' :
             `<div class="table-container"><table>
-                <thead><tr><th>Plan</th><th>Company</th><th>Start Cap</th><th>Current Cap</th><th>Paid</th><th>Commission</th><th>Pending</th><th>Progress</th></tr></thead>
+                <thead><tr><th>Plan</th><th>Company</th><th>Start Cap</th><th>Current Cap</th><th>Cleared Paid</th><th>Pending</th><th>Commission</th><th>Progress</th></tr></thead>
                 <tbody>${FIN.plans.map(p => {
                     const planPmts = validPmts.filter(x => x.planId === p.id);
                     const paid = planPmts.reduce((s,x) => s + (parseFloat(x.amount)||0), 0);
                     const comm = planPmts.reduce((s,x) => s + (parseFloat(x.breakdown?.commissionPending)||0) + (parseFloat(x.breakdown?.commissionCurrent)||0), 0);
+                    const pendVal = FIN.payments.filter(x => x.planId === p.id && x.status === 'pending').reduce((s,x) => s + (parseFloat(x.amount)||0), 0);
                     const pct = p.capitalStart > 0 ? ((p.capitalStart - p.capitalCurrent) / p.capitalStart * 100) : 0;
                     return `<tr>
                         <td><strong>${finEsc(p.vehicle)}</strong></td><td>${finEsc(p.company)}</td>
                         <td>${finFmt(p.capitalStart)}</td><td>${finFmt(p.capitalCurrent)}</td>
                         <td style="color:var(--success);font-weight:700">${finFmt(paid)}</td>
+                        <td style="color:#f59e0b;font-weight:700">${pendVal > 0 ? finFmt(pendVal) : '—'}</td>
                         <td style="color:var(--info);font-weight:700">${finFmt(comm)}</td>
-                        <td style="color:${p.pendingCommission > 0 ? 'var(--danger)' : 'var(--success)'};font-weight:700">${finFmt(p.pendingCommission)}</td>
                         <td style="min-width:120px"><div style="font-size:11px;color:var(--gray);margin-bottom:4px">${pct.toFixed(1)}%</div><div class="fin-progress-track" style="height:6px"><div class="fin-progress-fill" style="width:${pct}%"></div></div></td>
                     </tr>`;
                 }).join('')}</tbody></table></div>`}
@@ -7619,7 +7687,7 @@ function finRenderReportsTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   24 · BOOTSTRAP
+   23 · BOOTSTRAP
    ═══════════════════════════════════════════════════════════════════════ */
 function finBoot() {
     finBuildNav();
@@ -7628,7 +7696,6 @@ function finBoot() {
     finBuildBell();
     ncRefreshBell();
     setInterval(() => { if (typeof currentUser !== 'undefined' && currentUser) ncRefreshBell(); }, 60000);
-
     let loaded = false;
     const check = setInterval(async () => {
         if (typeof currentUser !== 'undefined' && currentUser && !loaded) {
@@ -7639,12 +7706,11 @@ function finBoot() {
         }
     }, 800);
     setTimeout(() => clearInterval(check), 30000);
-
     try {
         const m = document.createElement('div');
         m.id = '__fin_ready';
         m.style.cssText = 'position:fixed;bottom:1px;left:60px;font-size:1px;color:transparent;pointer-events:none';
-        m.textContent = 'finance-manager-v3-ready';
+        m.textContent = 'finance-manager-v31-ready';
         document.body.appendChild(m);
     } catch (e) {}
 }
