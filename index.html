@@ -8049,6 +8049,984 @@ else finBoot();
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     NEONCHEQUE ADD-ON MODULE — Capital Flow + Banking
+     ADDS: Categories • Banks • Transactions • Projects • Loans
+           Out Payments • In Payments • Parties
+     Does NOT touch: Finance Manager • Cheque features • Existing bell
+     Hooks: cheque Add/Edit modals (to inject Category dropdown)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncAddOn) return;
+window.__ncAddOn = true;
+
+/* ══════════ UTILS ══════════ */
+const $  = id => document.getElementById(id);
+const N  = n  => parseFloat(n) || 0;
+const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
+const T  = () => new Date().toISOString().slice(0,10);
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const TS = () => { try { return firebase.firestore.FieldValue.serverTimestamp(); } catch(e){ return new Date(); } };
+const INC= n => { try { return firebase.firestore.FieldValue.increment(n); } catch(e){ return n; } };
+const AU = v => { try { return firebase.firestore.FieldValue.arrayUnion(v); } catch(e){ return [v]; } };
+const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+
+function toast(m, t) {
+  try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
+  console.log('['+(t||'info')+']', m);
+}
+
+/* ══════════ STATE ══════════ */
+const S = { cats:[], banks:[], txns:[], projects:[], loans:[], out:[], inp:[], parties:[] };
+
+/* ══════════ MODAL FACTORY ══════════ */
+function ensureModal() {
+  let h = $('ncAddOnModalHost');
+  if (h) return h;
+  h = document.createElement('div');
+  h.id = 'ncAddOnModalHost';
+  h.className = 'modal-overlay';
+  h.innerHTML =
+    '<div class="modal" style="max-width:680px">' +
+      '<div class="modal-header">' +
+        '<h2 class="modal-title" id="ncAddOnTitle">Modal</h2>' +
+        '<button class="modal-close" onclick="ncAddOnClose()"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div class="modal-body" id="ncAddOnBody"></div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="ncAddOnClose()">Cancel</button>' +
+        '<button class="btn btn-primary" id="ncAddOnSave"><i class="fas fa-save"></i> Save</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(h);
+  h.addEventListener('click', e => { if (e.target === h) ncAddOnClose(); });
+  return h;
+}
+window.ncAddOnClose = function () { const h = $('ncAddOnModalHost'); if (h) h.classList.remove('active'); };
+
+function ncModal(title, fields, onSubmit) {
+  const host = ensureModal();
+  $('ncAddOnTitle').textContent = title;
+  const body = $('ncAddOnBody');
+
+  body.innerHTML = fields.map(f => {
+    const req = f.required ? ' *' : '';
+    const val = f.value == null ? '' : String(f.value);
+    let input;
+    if (f.type === 'select') {
+      input = '<select id="ncAO_'+f.id+'">' +
+        (f.placeholder ? '<option value="">'+E(f.placeholder)+'</option>' : '') +
+        (f.options||[]).map(o => {
+          const v = typeof o === 'string' ? o : o.value;
+          const l = typeof o === 'string' ? o : o.label;
+          return '<option value="'+E(v)+'"'+(String(f.value)===String(v)?' selected':'')+'>'+E(l)+'</option>';
+        }).join('') +
+      '</select>';
+    } else if (f.type === 'textarea') {
+      input = '<textarea id="ncAO_'+f.id+'" rows="'+(f.rows||3)+'" placeholder="'+E(f.placeholder||'')+'">'+E(val)+'</textarea>';
+    } else {
+      input = '<input type="'+(f.type||'text')+'" id="ncAO_'+f.id+'" value="'+E(val)+'"' +
+        (f.placeholder ? ' placeholder="'+E(f.placeholder)+'"' : '') +
+        (f.min!=null ? ' min="'+f.min+'"' : '') +
+        (f.step ? ' step="'+f.step+'"' : '') + '>';
+    }
+    return '<div class="form-group"><label>'+E(f.label)+req+'</label>'+input+'</div>';
+  }).join('');
+
+  const saveBtn = $('ncAddOnSave');
+  const fresh = saveBtn.cloneNode(true);
+  saveBtn.parentNode.replaceChild(fresh, saveBtn);
+  fresh.addEventListener('click', async () => {
+    const data = {};
+    for (const f of fields) {
+      const el = $('ncAO_'+f.id); if (!el) continue;
+      let v = el.value;
+      if (f.type === 'number') v = N(v);
+      if (f.required && (v === '' || v == null || (f.type==='number' && v===0))) {
+        toast('Required: '+f.label, 'error'); return;
+      }
+      data[f.id] = v;
+    }
+    try { fresh.disabled = true; await onSubmit(data); ncAddOnClose(); }
+    catch (e) { console.error(e); toast('Error: '+(e.message||e), 'error'); }
+    finally { fresh.disabled = false; }
+  });
+
+  host.classList.add('active');
+  setTimeout(() => { const x = body.querySelector('input,select,textarea'); if (x) x.focus(); }, 100);
+}
+
+/* ══════════ DATA LOAD ══════════ */
+function toList(snap) { return snap && snap.docs ? snap.docs.map(d => Object.assign({id:d.id}, d.data())) : []; }
+const empty = () => ({docs:[]});
+
+async function loadAll() {
+  const db = DB(); if (!db) return;
+  try {
+    const r = await Promise.all([
+      db.collection('chequeCategories').get().catch(empty),
+      db.collection('bankAccounts').get().catch(empty),
+      db.collection('bankTransactions').orderBy('date','desc').limit(1000).get().catch(empty),
+      db.collection('projects').get().catch(empty),
+      db.collection('loans').get().catch(empty),
+      db.collection('outPayments').orderBy('date','desc').limit(1000).get().catch(empty),
+      db.collection('inPayments').orderBy('date','desc').limit(1000).get().catch(empty),
+      db.collection('parties').get().catch(empty)
+    ]);
+    S.cats     = toList(r[0]);
+    S.banks    = toList(r[1]);
+    S.txns     = toList(r[2]);
+    S.projects = toList(r[3]);
+    S.loans    = toList(r[4]);
+    S.out      = toList(r[5]);
+    S.inp      = toList(r[6]);
+    S.parties  = toList(r[7]);
+
+    if (S.cats.length === 0) await seedCategories();
+
+    renderAll();
+    injectChequeDropdowns();
+    pushAlertsToExistingBell();
+    console.log('[Add-On] Loaded', {cats:S.cats.length, banks:S.banks.length, projects:S.projects.length, loans:S.loans.length});
+  } catch (e) { console.error('[Add-On] load fail', e); }
+}
+
+async function seedCategories() {
+  const defaults = [
+    {name:'BTC',              color:'#f59e0b', description:'BTC related cheques'},
+    {name:'SHOE',             color:'#6366f1', description:'Shoe business cheques'},
+    {name:'Imported Received',color:'#10b981', description:'Received from imports'},
+    {name:'Local Received',   color:'#06b6d4', description:'Local received cheques'},
+    {name:'Local Issued',     color:'#8b5cf6', description:'Locally issued cheques'}
+  ];
+  const db = DB(); if (!db) return;
+  for (const c of defaults) {
+    try { await db.collection('chequeCategories').add(Object.assign({}, c, {createdAt:TS(), createdBy:'system-seed'})); } catch (e) {}
+  }
+  S.cats = toList(await db.collection('chequeCategories').get());
+}
+
+async function refreshCol(col, key) {
+  const db = DB(); if (!db) return;
+  try {
+    const snap = await db.collection(col).get();
+    S[key] = toList(snap);
+    renderAll();
+    pushAlertsToExistingBell();
+  } catch (e) {}
+}
+window.ncAddOnRefresh = function (key) {
+  const map = {cats:'chequeCategories', banks:'bankAccounts', txns:'bankTransactions',
+    projects:'projects', loans:'loans', out:'outPayments', inp:'inPayments', parties:'parties'};
+  if (map[key]) return refreshCol(map[key], key);
+  return loadAll();
+};
+
+/* ══════════ RENDER ══════════ */
+function renderAll() {
+  renderCats(); renderBanks(); renderTxns(); renderProjects();
+  renderLoans(); renderOut(); renderInp(); renderParties(); renderNewWidgets();
+  injectChequeDropdowns();
+}
+
+function tbl(headers, rows, emptyMsg) {
+  if (!rows.length) return '<div class="empty-state"><i class="fas fa-inbox"></i><h3>'+E(emptyMsg)+'</h3></div>';
+  return '<div class="table-container"><table><thead><tr>' +
+    headers.map(h => '<th>'+E(h)+'</th>').join('') +
+    '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td>'+c+'</td>').join('') + '</tr>').join('') +
+    '</tbody></table></div>';
+}
+const btns = (e, d) =>
+  '<button class="btn btn-sm btn-secondary" onclick="'+e+'"><i class="fas fa-edit"></i></button> ' +
+  '<button class="btn btn-sm btn-secondary" onclick="'+d+'"><i class="fas fa-trash"></i></button>';
+
+/* --- CATEGORIES --- */
+function renderCats() {
+  const el = $('ncAOCatsBody'); if (!el) return;
+  const rows = S.cats.map(c => {
+    const count = (function(){ try { return (Array.isArray(allCheques)?allCheques:[]).filter(x=>!x.deletedAt && x.category===c.name).length; } catch(e){ return 0; } })();
+    return [
+      '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'+E(c.color||'#6366f1')+';margin-right:8px"></span><strong>'+E(c.name)+'</strong>',
+      E(c.description||'-'),
+      count + ' cheques',
+      btns("ncAddOnEditCat('"+c.id+"')", "ncAddOnDelCat('"+c.id+"')")
+    ];
+  });
+  el.innerHTML = tbl(['Category','Description','Usage','Actions'], rows, 'No categories');
+}
+window.ncAddOnAddCat = function () {
+  ncModal('Add Cheque Category', [
+    {id:'name', label:'Name', type:'text', required:true},
+    {id:'color', label:'Color', type:'color', value:'#6366f1'},
+    {id:'description', label:'Description', type:'text'}
+  ], async d => {
+    await DB().collection('chequeCategories').add(Object.assign(d, {createdAt:TS(), createdBy:who()}));
+    toast('Category added','success'); await refreshCol('chequeCategories','cats');
+  });
+};
+window.ncAddOnEditCat = function (id) {
+  const c = S.cats.find(x=>x.id===id); if (!c) return;
+  ncModal('Edit Category', [
+    {id:'name', label:'Name', type:'text', required:true, value:c.name},
+    {id:'color', label:'Color', type:'color', value:c.color||'#6366f1'},
+    {id:'description', label:'Description', type:'text', value:c.description||''}
+  ], async d => {
+    await DB().collection('chequeCategories').doc(id).update(d);
+    toast('Updated','success'); await refreshCol('chequeCategories','cats');
+  });
+};
+window.ncAddOnDelCat = function (id) {
+  if (!confirm('Delete category?')) return;
+  DB().collection('chequeCategories').doc(id).delete()
+    .then(() => refreshCol('chequeCategories','cats')).catch(e => toast('Error: '+e.message,'error'));
+};
+
+/* --- BANKS --- */
+function renderBanks() {
+  const el = $('ncAOBanksBody'); if (!el) return;
+  const rows = S.banks.map(b => {
+    const bal = N(b.currentBalance);
+    return [
+      '<strong>'+E(b.bankName)+'</strong>',
+      E(b.accountName||'-'),
+      E(b.accountNumber||'-'),
+      E(b.ifsc||'-'),
+      '<span class="status-badge">'+E(b.type||'Current')+'</span>',
+      '<strong style="color:'+(bal>=0?'var(--success)':'var(--danger)')+'">'+F(bal)+'</strong>',
+      btns("ncAddOnEditBank('"+b.id+"')", "ncAddOnDelBank('"+b.id+"')")
+    ];
+  });
+  el.innerHTML = tbl(['Bank','Holder','A/c #','IFSC','Type','Balance','Actions'], rows, 'No bank accounts');
+}
+window.ncAddOnAddBank = function () {
+  ncModal('Add Bank Account', [
+    {id:'bankName', label:'Bank Name', type:'text', required:true},
+    {id:'accountName', label:'Account Holder', type:'text'},
+    {id:'accountNumber', label:'Account Number', type:'text'},
+    {id:'ifsc', label:'IFSC', type:'text'},
+    {id:'branch', label:'Branch', type:'text'},
+    {id:'type', label:'Type', type:'select', options:['Current','Savings','Other'], value:'Current'},
+    {id:'openingBalance', label:'Opening Balance', type:'number', value:0, step:'0.01'}
+  ], async d => {
+    await DB().collection('bankAccounts').add(Object.assign(d, {currentBalance:d.openingBalance, active:true, createdAt:TS(), createdBy:who()}));
+    toast('Bank added','success'); await refreshCol('bankAccounts','banks');
+  });
+};
+window.ncAddOnEditBank = function (id) {
+  const b = S.banks.find(x=>x.id===id); if (!b) return;
+  ncModal('Edit Bank', [
+    {id:'bankName', label:'Bank Name', type:'text', required:true, value:b.bankName},
+    {id:'accountName', label:'Holder', type:'text', value:b.accountName||''},
+    {id:'accountNumber', label:'A/c #', type:'text', value:b.accountNumber||''},
+    {id:'ifsc', label:'IFSC', type:'text', value:b.ifsc||''},
+    {id:'branch', label:'Branch', type:'text', value:b.branch||''},
+    {id:'type', label:'Type', type:'select', options:['Current','Savings','Other'], value:b.type||'Current'},
+    {id:'currentBalance', label:'Current Balance', type:'number', value:N(b.currentBalance), step:'0.01'}
+  ], async d => {
+    await DB().collection('bankAccounts').doc(id).update(d);
+    toast('Updated','success'); await refreshCol('bankAccounts','banks');
+  });
+};
+window.ncAddOnDelBank = function (id) {
+  if (!confirm('Delete bank account?')) return;
+  DB().collection('bankAccounts').doc(id).delete()
+    .then(() => refreshCol('bankAccounts','banks')).catch(e => toast('Error: '+e.message,'error'));
+};
+
+/* --- TRANSACTIONS --- */
+function renderTxns() {
+  const el = $('ncAOTxnsBody'); if (!el) return;
+  const rows = S.txns.map(t => {
+    const bank = S.banks.find(b=>b.id===t.bankAccountId);
+    const isC = t.type === 'credit';
+    return [
+      E(t.date||'-'),
+      E(bank ? bank.bankName : '(deleted)'),
+      '<span class="status-badge '+(isC?'status-cleared':'status-returned')+'">'+E(t.type)+'</span>',
+      '<strong style="color:'+(isC?'var(--success)':'var(--danger)')+'">'+F(t.amount)+'</strong>',
+      E(t.description||'-'),
+      E(t.reference||'-'),
+      '<button class="btn btn-sm btn-secondary" onclick="ncAddOnDelTxn(\''+t.id+'\')"><i class="fas fa-trash"></i></button>'
+    ];
+  });
+  el.innerHTML = tbl(['Date','Bank','Type','Amount','Description','Reference','Actions'], rows, 'No transactions');
+}
+window.ncAddOnAddTxn = function () {
+  if (!S.banks.length) return toast('Add a bank first','error');
+  ncModal('Add Bank Transaction', [
+    {id:'bankAccountId', label:'Bank', type:'select', required:true,
+     options:S.banks.map(b=>({value:b.id,label:b.bankName})), placeholder:'-- Select --'},
+    {id:'date', label:'Date', type:'date', required:true, value:T()},
+    {id:'type', label:'Type', type:'select', required:true, options:['debit','credit'], value:'debit'},
+    {id:'amount', label:'Amount', type:'number', required:true, step:'0.01', min:0.01},
+    {id:'description', label:'Description', type:'text'},
+    {id:'reference', label:'Reference', type:'text'}
+  ], async d => {
+    await DB().collection('bankTransactions').add(Object.assign(d, {createdAt:TS(), createdBy:who()}));
+    const delta = d.type === 'credit' ? d.amount : -d.amount;
+    await DB().collection('bankAccounts').doc(d.bankAccountId).update({currentBalance: INC(delta)});
+    toast('Recorded','success');
+    await refreshCol('bankTransactions','txns');
+    await refreshCol('bankAccounts','banks');
+  });
+};
+window.ncAddOnDelTxn = function (id) {
+  if (!confirm('Delete transaction? (balance NOT reversed)')) return;
+  DB().collection('bankTransactions').doc(id).delete()
+    .then(() => refreshCol('bankTransactions','txns')).catch(e => toast('Error: '+e.message,'error'));
+};
+
+/* --- PROJECTS --- */
+function renderProjects() {
+  const el = $('ncAOProjectsBody'); if (!el) return;
+  const rows = S.projects.map(p => {
+    const spend = S.out.filter(o => o.projectId === p.id).reduce((s,o) => s + N(o.amount), 0);
+    const budget = N(p.budget);
+    const pct = budget>0 ? Math.min(100, (spend/budget)*100) : 0;
+    return [
+      '<strong>'+E(p.name)+'</strong>',
+      E(p.client||'-'),
+      '<div style="min-width:140px"><div style="font-size:11px;display:flex;justify-content:space-between"><span>'+F(spend)+'</span><span>'+F(budget)+'</span></div><div class="payment-progress-bar"><div class="payment-progress-fill" style="width:'+pct+'%;background:'+(pct>90?'var(--danger)':'var(--success)')+'"></div></div></div>',
+      E(p.startDate||'-'),
+      E(p.endDate||'-'),
+      '<span class="status-badge">'+E(p.status||'active')+'</span>',
+      btns("ncAddOnEditProject('"+p.id+"')", "ncAddOnDelProject('"+p.id+"')")
+    ];
+  });
+  el.innerHTML = tbl(['Name','Client','Budget vs Spend','Start','End','Status','Actions'], rows, 'No projects');
+}
+window.ncAddOnAddProject = function () {
+  ncModal('Add Project', [
+    {id:'name', label:'Name', type:'text', required:true},
+    {id:'code', label:'Code', type:'text'},
+    {id:'client', label:'Client', type:'text'},
+    {id:'budget', label:'Budget', type:'number', step:'0.01', value:0},
+    {id:'startDate', label:'Start Date', type:'date', value:T()},
+    {id:'endDate', label:'End Date', type:'date'},
+    {id:'status', label:'Status', type:'select', options:['active','on-hold','completed','cancelled'], value:'active'},
+    {id:'description', label:'Description', type:'textarea'}
+  ], async d => {
+    await DB().collection('projects').add(Object.assign(d, {createdAt:TS(), createdBy:who()}));
+    toast('Added','success'); await refreshCol('projects','projects');
+  });
+};
+window.ncAddOnEditProject = function (id) {
+  const p = S.projects.find(x=>x.id===id); if (!p) return;
+  ncModal('Edit Project', [
+    {id:'name', label:'Name', type:'text', required:true, value:p.name},
+    {id:'code', label:'Code', type:'text', value:p.code||''},
+    {id:'client', label:'Client', type:'text', value:p.client||''},
+    {id:'budget', label:'Budget', type:'number', step:'0.01', value:N(p.budget)},
+    {id:'startDate', label:'Start Date', type:'date', value:p.startDate||T()},
+    {id:'endDate', label:'End Date', type:'date', value:p.endDate||''},
+    {id:'status', label:'Status', type:'select', options:['active','on-hold','completed','cancelled'], value:p.status||'active'},
+    {id:'description', label:'Description', type:'textarea', value:p.description||''}
+  ], async d => {
+    await DB().collection('projects').doc(id).update(d);
+    toast('Updated','success'); await refreshCol('projects','projects');
+  });
+};
+window.ncAddOnDelProject = function (id) {
+  if (!confirm('Delete project?')) return;
+  DB().collection('projects').doc(id).delete().then(() => refreshCol('projects','projects')).catch(e => toast('Error: '+e.message,'error'));
+};
+
+/* --- LOANS --- */
+function loanPaid(l) { return (l.payments||[]).reduce((s,p) => s + N(p.amount), 0); }
+function loanBal(l) { return Math.max(0, N(l.principal) - loanPaid(l)); }
+function renderLoans() {
+  const el = $('ncAOLoansBody'); if (!el) return;
+  const rows = S.loans.map(l => {
+    const bal = loanBal(l);
+    return [
+      E(l.lender||'-'),
+      E(l.borrower||'-'),
+      F(l.principal),
+      N(l.interestRate)+'%',
+      E(l.startDate||'-'),
+      E(l.endDate||'-'),
+      '<strong style="color:'+(bal<=0?'var(--success)':'var(--danger)')+'">'+F(bal)+'</strong>',
+      '<span class="status-badge">'+E(l.status||'active')+'</span>',
+      '<button class="btn btn-sm btn-secondary" onclick="ncAddOnLoanPay(\''+l.id+'\')" title="Pay"><i class="fas fa-money-bill"></i></button> ' +
+      btns("ncAddOnEditLoan('"+l.id+"')", "ncAddOnDelLoan('"+l.id+"')")
+    ];
+  });
+  el.innerHTML = tbl(['Lender','Borrower','Principal','Rate','Start','Due','Balance','Status','Actions'], rows, 'No loans');
+}
+window.ncAddOnAddLoan = function () {
+  ncModal('Add Loan', [
+    {id:'lender', label:'Lender', type:'text'},
+    {id:'borrower', label:'Borrower', type:'text'},
+    {id:'principal', label:'Principal', type:'number', required:true, step:'0.01', min:0.01},
+    {id:'interestRate', label:'Interest %', type:'number', step:'0.01', value:0},
+    {id:'startDate', label:'Start Date', type:'date', value:T()},
+    {id:'endDate', label:'Due Date', type:'date'},
+    {id:'status', label:'Status', type:'select', options:['active','closed'], value:'active'},
+    {id:'notes', label:'Notes', type:'textarea'}
+  ], async d => {
+    await DB().collection('loans').add(Object.assign(d, {payments:[], createdAt:TS(), createdBy:who()}));
+    toast('Added','success'); await refreshCol('loans','loans');
+  });
+};
+window.ncAddOnEditLoan = function (id) {
+  const l = S.loans.find(x=>x.id===id); if (!l) return;
+  ncModal('Edit Loan', [
+    {id:'lender', label:'Lender', type:'text', value:l.lender||''},
+    {id:'borrower', label:'Borrower', type:'text', value:l.borrower||''},
+    {id:'principal', label:'Principal', type:'number', required:true, step:'0.01', value:N(l.principal)},
+    {id:'interestRate', label:'Interest %', type:'number', step:'0.01', value:N(l.interestRate)},
+    {id:'startDate', label:'Start Date', type:'date', value:l.startDate||T()},
+    {id:'endDate', label:'Due Date', type:'date', value:l.endDate||''},
+    {id:'status', label:'Status', type:'select', options:['active','closed'], value:l.status||'active'},
+    {id:'notes', label:'Notes', type:'textarea', value:l.notes||''}
+  ], async d => {
+    await DB().collection('loans').doc(id).update(d);
+    toast('Updated','success'); await refreshCol('loans','loans');
+  });
+};
+window.ncAddOnLoanPay = function (id) {
+  const l = S.loans.find(x=>x.id===id); if (!l) return;
+  const bankOpts = [{value:'', label:'-- None --'}].concat(S.banks.map(b => ({value:b.id, label:b.bankName})));
+  ncModal('Loan Payment — '+(l.lender||l.borrower||''), [
+    {id:'amount', label:'Amount', type:'number', required:true, step:'0.01', min:0.01, value:loanBal(l)},
+    {id:'date', label:'Date', type:'date', required:true, value:T()},
+    {id:'method', label:'Method', type:'select', options:['cash','bank','cheque','online'], value:'bank'},
+    {id:'bankAccountId', label:'From Bank (optional)', type:'select', options:bankOpts, value:''},
+    {id:'note', label:'Note', type:'text'}
+  ], async d => {
+    const entry = {amount:d.amount, date:d.date, method:d.method, note:d.note||'', at:new Date().toISOString()};
+    await DB().collection('loans').doc(id).update({payments: AU(entry)});
+    if (d.bankAccountId) {
+      await DB().collection('bankTransactions').add({
+        bankAccountId:d.bankAccountId, date:d.date, type:'debit', amount:d.amount,
+        description:'Loan payment: '+(l.lender||l.borrower||''),
+        reference:'loan:'+id, createdAt:TS()
+      });
+      await DB().collection('bankAccounts').doc(d.bankAccountId).update({currentBalance: INC(-d.amount)});
+    }
+    toast('Payment recorded','success');
+    await refreshCol('loans','loans');
+    if (d.bankAccountId) { await refreshCol('bankAccounts','banks'); await refreshCol('bankTransactions','txns'); }
+  });
+};
+window.ncAddOnDelLoan = function (id) {
+  if (!confirm('Delete loan?')) return;
+  DB().collection('loans').doc(id).delete().then(() => refreshCol('loans','loans')).catch(e => toast('Error: '+e.message,'error'));
+};
+
+/* --- OUT PAYMENTS --- */
+function renderOut() {
+  const el = $('ncAOOutBody'); if (!el) return;
+  const rows = S.out.map(p => {
+    const bank = S.banks.find(b=>b.id===p.bankAccountId);
+    const proj = S.projects.find(x=>x.id===p.projectId);
+    return [
+      E(p.date||'-'),
+      '<strong>'+E(p.payee||'-')+'</strong>',
+      '<span style="color:var(--danger);font-weight:700">'+F(p.amount)+'</span>',
+      E(p.category||'-'),
+      E(bank ? bank.bankName : '-'),
+      E(proj ? proj.name : '-'),
+      btns("ncAddOnEditOut('"+p.id+"')", "ncAddOnDelOut('"+p.id+"')")
+    ];
+  });
+  el.innerHTML = tbl(['Date','Payee','Amount','Category','Bank','Project','Actions'], rows, 'No out payments');
+}
+
+function paymentModal(title, kind, initial) {
+  const bankOpts = [{value:'', label:'-- None --'}].concat(S.banks.map(b => ({value:b.id, label:b.bankName})));
+  const projOpts = [{value:'', label:'-- None --'}].concat(S.projects.map(p => ({value:p.id, label:p.name})));
+  const catOpts  = [{value:'', label:'-- None --'}].concat(S.cats.map(c => ({value:c.name, label:c.name})));
+  const partyKey = kind === 'out' ? 'payee' : 'payer';
+  const fields = [
+    {id:partyKey, label:kind==='out'?'Payee':'Payer', type:'text', required:true, value:(initial&&initial[partyKey])||''},
+    {id:'amount', label:'Amount', type:'number', required:true, step:'0.01', min:0.01, value:(initial&&N(initial.amount))||''},
+    {id:'date', label:'Date', type:'date', required:true, value:(initial&&initial.date)||T()},
+    {id:'category', label:'Category', type:'select', options:catOpts, value:(initial&&initial.category)||''},
+    {id:'method', label:'Method', type:'select', options:['cash','bank','cheque','online','other'], value:(initial&&initial.method)||'bank'},
+    {id:'bankAccountId', label:'Bank Account', type:'select', options:bankOpts, value:(initial&&initial.bankAccountId)||''},
+    {id:'reference', label:'Reference', type:'text', value:(initial&&initial.reference)||''},
+    {id:'notes', label:'Notes', type:'textarea', value:(initial&&initial.notes)||''},
+    {id:'projectId', label:'Project', type:'select', options:projOpts, value:(initial&&initial.projectId)||''}
+  ];
+
+  ncModal(title, fields, async d => {
+    const col = kind === 'out' ? 'outPayments' : 'inPayments';
+    const payload = Object.assign({}, d, {createdAt:TS(), createdBy:who()});
+
+    const name = d[partyKey];
+    if (name && !S.parties.some(p => (p.name||'').toLowerCase() === name.toLowerCase())) {
+      await DB().collection('parties').add({name, type: kind==='out'?'payee':'payer', createdAt:TS(), createdBy:who()});
+    }
+
+    if (initial && initial.bankAccountId && initial.method === 'bank') {
+      const rev = kind === 'out' ? N(initial.amount) : -N(initial.amount);
+      await DB().collection('bankAccounts').doc(initial.bankAccountId).update({currentBalance: INC(rev)});
+    }
+
+    if (initial && initial.id) {
+      await DB().collection(col).doc(initial.id).update(payload);
+    } else {
+      await DB().collection(col).add(payload);
+    }
+
+    if (d.bankAccountId && d.method === 'bank') {
+      const delta = kind === 'out' ? -d.amount : d.amount;
+      await DB().collection('bankAccounts').doc(d.bankAccountId).update({currentBalance: INC(delta)});
+      await DB().collection('bankTransactions').add({
+        bankAccountId:d.bankAccountId, date:d.date,
+        type: kind==='out' ? 'debit' : 'credit', amount:d.amount,
+        description: (kind==='out'?'To ':'From ') + name,
+        reference: d.reference || '', createdAt:TS()
+      });
+    }
+
+    toast('Saved','success');
+    await refreshCol(col, kind==='out'?'out':'inp');
+    await refreshCol('parties','parties');
+    await refreshCol('bankAccounts','banks');
+    await refreshCol('bankTransactions','txns');
+    await refreshCol('projects','projects');
+  });
+}
+
+window.ncAddOnAddOut = function () { paymentModal('Add Out Payment','out'); };
+window.ncAddOnEditOut = function (id) { const p = S.out.find(x=>x.id===id); if (p) paymentModal('Edit Out Payment','out',p); };
+window.ncAddOnDelOut = function (id) {
+  const p = S.out.find(x=>x.id===id); if (!p) return;
+  if (!confirm('Delete? Bank balance will be restored.')) return;
+  DB().collection('outPayments').doc(id).delete().then(async () => {
+    if (p.bankAccountId && p.method === 'bank') {
+      await DB().collection('bankAccounts').doc(p.bankAccountId).update({currentBalance: INC(N(p.amount))});
+    }
+    await refreshCol('outPayments','out');
+    await refreshCol('bankAccounts','banks');
+    await refreshCol('projects','projects');
+  }).catch(e => toast('Error: '+e.message,'error'));
+};
+
+/* --- IN PAYMENTS --- */
+function renderInp() {
+  const el = $('ncAOInpBody'); if (!el) return;
+  const rows = S.inp.map(p => {
+    const bank = S.banks.find(b=>b.id===p.bankAccountId);
+    const proj = S.projects.find(x=>x.id===p.projectId);
+    return [
+      E(p.date||'-'),
+      '<strong>'+E(p.payer||'-')+'</strong>',
+      '<span style="color:var(--success);font-weight:700">'+F(p.amount)+'</span>',
+      E(p.category||'-'),
+      E(bank ? bank.bankName : '-'),
+      E(proj ? proj.name : '-'),
+      btns("ncAddOnEditIn('"+p.id+"')", "ncAddOnDelIn('"+p.id+"')")
+    ];
+  });
+  el.innerHTML = tbl(['Date','Payer','Amount','Category','Bank','Project','Actions'], rows, 'No in payments');
+}
+window.ncAddOnAddIn = function () { paymentModal('Add In Payment','in'); };
+window.ncAddOnEditIn = function (id) { const p = S.inp.find(x=>x.id===id); if (p) paymentModal('Edit In Payment','in',p); };
+window.ncAddOnDelIn = function (id) {
+  const p = S.inp.find(x=>x.id===id); if (!p) return;
+  if (!confirm('Delete? Bank balance will be restored.')) return;
+  DB().collection('inPayments').doc(id).delete().then(async () => {
+    if (p.bankAccountId && p.method === 'bank') {
+      await DB().collection('bankAccounts').doc(p.bankAccountId).update({currentBalance: INC(-N(p.amount))});
+    }
+    await refreshCol('inPayments','inp');
+    await refreshCol('bankAccounts','banks');
+  }).catch(e => toast('Error: '+e.message,'error'));
+};
+
+/* --- PARTIES --- */
+function renderParties() {
+  const el = $('ncAOPartiesBody'); if (!el) return;
+  const rows = S.parties.map(p => [
+    '<strong>'+E(p.name)+'</strong>',
+    '<span class="status-badge">'+E(p.type||'-')+'</span>',
+    E(p.email||'-'),
+    E(p.phone||'-'),
+    btns("ncAddOnEditParty('"+p.id+"')", "ncAddOnDelParty('"+p.id+"')")
+  ]);
+  el.innerHTML = tbl(['Name','Type','Email','Phone','Actions'], rows, 'No parties');
+}
+window.ncAddOnAddParty = function () {
+  ncModal('Add Party', [
+    {id:'name', label:'Name', type:'text', required:true},
+    {id:'type', label:'Type', type:'select', required:true,
+     options:['payee','payer','issuer','lender','borrower','client','supplier','other'], value:'payee'},
+    {id:'email', label:'Email', type:'email'},
+    {id:'phone', label:'Phone', type:'text'},
+    {id:'address', label:'Address', type:'textarea'},
+    {id:'notes', label:'Notes', type:'textarea'}
+  ], async d => {
+    await DB().collection('parties').add(Object.assign(d, {createdAt:TS(), createdBy:who()}));
+    toast('Added','success'); await refreshCol('parties','parties');
+  });
+};
+window.ncAddOnEditParty = function (id) {
+  const p = S.parties.find(x=>x.id===id); if (!p) return;
+  ncModal('Edit Party', [
+    {id:'name', label:'Name', type:'text', required:true, value:p.name},
+    {id:'type', label:'Type', type:'select', required:true,
+     options:['payee','payer','issuer','lender','borrower','client','supplier','other'], value:p.type||'payee'},
+    {id:'email', label:'Email', type:'email', value:p.email||''},
+    {id:'phone', label:'Phone', type:'text', value:p.phone||''},
+    {id:'address', label:'Address', type:'textarea', value:p.address||''},
+    {id:'notes', label:'Notes', type:'textarea', value:p.notes||''}
+  ], async d => {
+    await DB().collection('parties').doc(id).update(d);
+    toast('Updated','success'); await refreshCol('parties','parties');
+  });
+};
+window.ncAddOnDelParty = function (id) {
+  if (!confirm('Delete party?')) return;
+  DB().collection('parties').doc(id).delete().then(() => refreshCol('parties','parties')).catch(e => toast('Error: '+e.message,'error'));
+};
+
+/* ══════════ NEW DASHBOARD WIDGET ROW (below existing) ══════════ */
+function renderNewWidgets() {
+  const dash = $('dashboardView'); if (!dash) return;
+  let row = $('ncAODashWidgets');
+  if (!row) {
+    row = document.createElement('div');
+    row.id = 'ncAODashWidgets';
+    row.className = 'widgets-grid';
+    row.style.marginTop = '20px';
+    // Insert AFTER any existing widget rows (Finance Manager's or base)
+    const anchor = dash.querySelector('.widgets-grid:last-of-type') || dash.querySelector('.widgets-grid');
+    if (anchor) anchor.parentNode.insertBefore(row, anchor.nextSibling);
+    else dash.appendChild(row);
+  }
+  const totalBank = S.banks.reduce((s,b) => s + N(b.currentBalance), 0);
+  const loanOut = S.loans.filter(l => l.status === 'active').reduce((s,l) => s + loanBal(l), 0);
+  const cashIn = S.inp.reduce((s,p) => s + N(p.amount), 0);
+  const cashOut = S.out.reduce((s,p) => s + N(p.amount), 0);
+  const net = cashIn - cashOut;
+
+  row.innerHTML =
+    '<div class="widget"><div class="widget-header"><div><div class="widget-title">Bank Balance</div><div class="widget-value" style="color:'+(totalBank>=0?'var(--success)':'var(--danger)')+'">'+F(totalBank)+'</div></div><div class="widget-icon primary"><i class="fas fa-university"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div><div class="widget-title">Loan Outstanding</div><div class="widget-value" style="color:var(--warning)">'+F(loanOut)+'</div></div><div class="widget-icon warning"><i class="fas fa-hand-holding-usd"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div><div class="widget-title">Cash In</div><div class="widget-value" style="color:var(--success)">'+F(cashIn)+'</div></div><div class="widget-icon success"><i class="fas fa-arrow-circle-down"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div><div class="widget-title">Cash Out</div><div class="widget-value" style="color:var(--danger)">'+F(cashOut)+'</div></div><div class="widget-icon danger"><i class="fas fa-arrow-circle-up"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div><div class="widget-title">Net Flow</div><div class="widget-value" style="color:'+(net>=0?'var(--success)':'var(--danger)')+'">'+F(net)+'</div></div><div class="widget-icon primary"><i class="fas fa-balance-scale"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div><div class="widget-title">Active Projects</div><div class="widget-value">'+S.projects.filter(p=>p.status==='active').length+'</div></div><div class="widget-icon primary"><i class="fas fa-project-diagram"></i></div></div></div>';
+}
+
+/* ══════════ CHEQUE MODAL INJECTION ══════════ */
+function injectChequeDropdowns() {
+  const targets = [
+    {statusId:'chequeStatus',     catId:'chequeCategory',     projId:'chequeProject'},
+    {statusId:'editChequeStatus', catId:'editChequeCategory', projId:'editChequeProject'}
+  ];
+  const catOpts = '<option value="">-- None --</option>' +
+    S.cats.map(c => '<option value="'+E(c.name)+'">'+E(c.name)+'</option>').join('');
+  const projOpts = '<option value="">-- None --</option>' +
+    S.projects.map(p => '<option value="'+E(p.id)+'">'+E(p.name)+'</option>').join('');
+
+  targets.forEach(t => {
+    const statusEl = $(t.statusId);
+    if (!statusEl) return;
+    const grp = statusEl.closest('.form-group');
+    if (!grp || !grp.parentElement) return;
+
+    let catSel = $(t.catId);
+    if (!catSel) {
+      const d = document.createElement('div');
+      d.className = 'form-group';
+      d.innerHTML = '<label>Category</label><select id="'+t.catId+'">'+catOpts+'</select>';
+      grp.parentElement.insertBefore(d, grp.nextSibling);
+      catSel = $(t.catId);
+    } else {
+      const v = catSel.value;
+      catSel.innerHTML = catOpts;
+      catSel.value = v;
+    }
+
+    let projSel = $(t.projId);
+    if (!projSel) {
+      const d = document.createElement('div');
+      d.className = 'form-group';
+      d.innerHTML = '<label>Link to Project</label><select id="'+t.projId+'">'+projOpts+'</select>';
+      const catGrp = catSel.closest('.form-group');
+      catGrp.parentElement.insertBefore(d, catGrp.nextSibling);
+      projSel = $(t.projId);
+    } else {
+      const v = projSel.value;
+      projSel.innerHTML = projOpts;
+      projSel.value = v;
+    }
+  });
+}
+
+/* ══════════ HOOKS (non-destructive) ══════════ */
+function hookFn(name, wrapper) {
+  if (typeof window[name] !== 'function') return false;
+  if (window[name].__ncAOHooked) return true;
+  const orig = window[name];
+  const hooked = wrapper(orig);
+  hooked.__ncAOHooked = true;
+  window[name] = hooked;
+  return true;
+}
+
+function installHooks() {
+  hookFn('openModal', orig => function (id) {
+    const r = orig.apply(this, arguments);
+    setTimeout(() => {
+      if (id === 'addChequeModal') injectChequeDropdowns();
+      if (id === 'editChequeModal') {
+        injectChequeDropdowns();
+        const idEl = $('editChequeId');
+        if (idEl && idEl.value) {
+          const c = (Array.isArray(allCheques)?allCheques:[]).find(x => x.id === idEl.value);
+          if (c) {
+            if ($('editChequeCategory') && c.category) $('editChequeCategory').value = c.category;
+            if ($('editChequeProject') && c.projectId) $('editChequeProject').value = c.projectId;
+          }
+        }
+      }
+    }, 80);
+    return r;
+  });
+
+  hookFn('saveCheque', orig => function () {
+    try {
+      const cat = $('chequeCategory');
+      const proj = $('chequeProject');
+      window.__ncAOPendingCat  = cat ? cat.value : null;
+      window.__ncAOPendingProj = proj ? proj.value : null;
+    } catch (e) {}
+    return orig.apply(this, arguments);
+  });
+
+  hookFn('saveEditCheque', orig => function () {
+    try {
+      const idEl = $('editChequeId');
+      const cat = $('editChequeCategory');
+      const proj = $('editChequeProject');
+      if (idEl && idEl.value && DB()) {
+        const update = {};
+        if (cat) update.category = cat.value || null;
+        if (proj) update.projectId = proj.value || null;
+        if (Object.keys(update).length) {
+          DB().collection('cheques').doc(idEl.value).update(update)
+            .catch(e => console.warn('[Add-On] cheque update', e.message));
+        }
+      }
+    } catch (e) {}
+    return orig.apply(this, arguments);
+  });
+}
+
+async function attachPendingToNewest() {
+  if (!window.__ncAOPendingCat && !window.__ncAOPendingProj) return;
+  const db = DB(); if (!db) return;
+  try {
+    const snap = await db.collection('cheques').orderBy('createdAt','desc').limit(1).get();
+    if (!snap.empty) {
+      const upd = {};
+      if (window.__ncAOPendingCat)  upd.category  = window.__ncAOPendingCat;
+      if (window.__ncAOPendingProj) upd.projectId = window.__ncAOPendingProj;
+      await db.collection('cheques').doc(snap.docs[0].id).update(upd);
+    }
+  } catch (e) {}
+  window.__ncAOPendingCat = null;
+  window.__ncAOPendingProj = null;
+}
+
+function installChequeWatcher() {
+  if (typeof window.loadAllChequesData !== 'function') return setTimeout(installChequeWatcher, 300);
+  if (window.loadAllChequesData.__ncAOWatched) return;
+  const orig = window.loadAllChequesData;
+  const wrapped = function () {
+    const r = orig.apply(this, arguments);
+    const after = () => { try { attachPendingToNewest(); renderCats(); renderNewWidgets(); } catch(e){} };
+    if (r && r.then) r.then(after); else setTimeout(after, 400);
+    return r;
+  };
+  wrapped.__ncAOWatched = true;
+  window.loadAllChequesData = wrapped;
+}
+
+/* ══════════ PUSH NEW ALERTS INTO EXISTING BELL (optional) ══════════ */
+function computeExtraAlerts() {
+  const alerts = []; const now = Date.now(); const in7 = now + 7*86400000;
+
+  S.loans.forEach(l => {
+    if (l.status !== 'active' || !l.endDate) return;
+    const bal = loanBal(l);
+    if (bal <= 0) return;
+    const due = new Date(l.endDate).getTime();
+    if (due < now) alerts.push({sev:'danger', title:'[Loan] Overdue — '+(l.lender||l.borrower||''), msg:'Balance '+F(bal)+' due '+l.endDate});
+    else if (due < in7) alerts.push({sev:'warning', title:'[Loan] Due in '+Math.floor((due-now)/86400000)+'d — '+(l.lender||l.borrower||''), msg:'Outstanding '+F(bal)});
+  });
+
+  S.banks.forEach(b => {
+    if (N(b.currentBalance) < 0) alerts.push({sev:'warning', title:'[Bank] Negative — '+b.bankName, msg:F(b.currentBalance)});
+  });
+
+  S.projects.forEach(p => {
+    if (p.status !== 'active' || !p.endDate) return;
+    const due = new Date(p.endDate).getTime();
+    const spend = S.out.filter(o => o.projectId === p.id).reduce((s,o) => s + N(o.amount), 0);
+    if (due < now) alerts.push({sev:'warning', title:'[Project] Overdue — '+p.name, msg:'Spent '+F(spend)});
+    if (N(p.budget) > 0 && spend > N(p.budget)) alerts.push({sev:'danger', title:'[Project] Over budget — '+p.name, msg:F(spend)+' vs '+F(p.budget)});
+  });
+
+  return alerts;
+}
+
+function pushAlertsToExistingBell() {
+  // Try to find the existing bell and add a badge / list. If not possible, log only.
+  // Strategy: look for existing element with id containing 'bell' or 'Bell'
+  try {
+    const extras = computeExtraAlerts();
+    if (extras.length === 0) return;
+    // Attach as a small floating indicator if no integration point exists
+    let indicator = $('ncAOAlertIndicator');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'ncAOAlertIndicator';
+      indicator.style.cssText = 'position:fixed;bottom:20px;right:20px;background:white;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);padding:12px 16px;font-size:12px;z-index:2400;max-width:320px;cursor:pointer;border-left:4px solid var(--primary)';
+      indicator.onclick = () => {
+        const panel = $('ncAOAlertPanel');
+        if (panel) panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+      };
+      document.body.appendChild(indicator);
+
+      const panel = document.createElement('div');
+      panel.id = 'ncAOAlertPanel';
+      panel.style.cssText = 'display:none;position:fixed;bottom:80px;right:20px;width:360px;max-height:400px;overflow-y:auto;background:white;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.25);z-index:2501;padding:16px';
+      document.body.appendChild(panel);
+    }
+    indicator.innerHTML = '<i class="fas fa-bell" style="color:var(--primary);margin-right:6px"></i><strong>'+extras.length+' capital alerts</strong><br><span style="color:var(--gray);font-size:11px">Click to view</span>';
+
+    const panel = $('ncAOAlertPanel');
+    panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+      '<h3 style="font-size:14px;font-weight:700">Capital Flow Alerts</h3>' +
+      '<button class="modal-close" onclick="document.getElementById(\'ncAOAlertPanel\').style.display=\'none\'"><i class="fas fa-times"></i></button></div>' +
+      extras.map(a => {
+        const col = a.sev === 'danger' ? 'var(--danger)' : a.sev === 'warning' ? 'var(--warning)' : 'var(--info)';
+        return '<div style="padding:10px;border-left:3px solid '+col+';background:var(--light);border-radius:8px;margin-bottom:8px">' +
+          '<div style="font-weight:700;font-size:12px">'+E(a.title)+'</div>' +
+          '<div style="font-size:11px;color:var(--gray);margin-top:4px">'+E(a.msg)+'</div></div>';
+      }).join('');
+  } catch (e) {}
+}
+
+/* ══════════ SIDEBAR + VIEWS ══════════ */
+const VIEWS = [
+  {key:'ncAO-projects', id:'ncAOProjectsView', title:'Projects',          icon:'project-diagram',  body:'ncAOProjectsBody', add:'ncAddOnAddProject()'},
+  {key:'ncAO-loans',    id:'ncAOLoansView',    title:'Loans',             icon:'hand-holding-usd', body:'ncAOLoansBody',    add:'ncAddOnAddLoan()'},
+  {key:'ncAO-out',      id:'ncAOOutView',      title:'Out Payments',      icon:'arrow-circle-up',  body:'ncAOOutBody',      add:'ncAddOnAddOut()'},
+  {key:'ncAO-inp',      id:'ncAOInpView',      title:'In Payments',       icon:'arrow-circle-down',body:'ncAOInpBody',      add:'ncAddOnAddIn()'},
+  {key:'ncAO-parties',  id:'ncAOPartiesView',  title:'Parties',           icon:'address-book',     body:'ncAOPartiesBody',  add:'ncAddOnAddParty()'},
+  {key:'ncAO-banks',    id:'ncAOBanksView',    title:'Bank Accounts',     icon:'university',       body:'ncAOBanksBody',    add:'ncAddOnAddBank()'},
+  {key:'ncAO-txns',     id:'ncAOTxnsView',     title:'Bank Transactions', icon:'exchange-alt',     body:'ncAOTxnsBody',     add:'ncAddOnAddTxn()'},
+  {key:'ncAO-cats',     id:'ncAOCatsView',     title:'Cheque Categories', icon:'tags',             body:'ncAOCatsBody',     add:'ncAddOnAddCat()'}
+];
+const viewMap = {};
+VIEWS.forEach(v => viewMap[v.key] = v.id);
+
+function injectSidebar() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('ncAOCapSection')) return;
+
+  const cap = document.createElement('div');
+  cap.className = 'nav-section'; cap.id = 'ncAOCapSection';
+  cap.innerHTML =
+    '<div class="nav-title">Capital Flow</div>' +
+    '<div class="nav-item" onclick="ncAORoute(\'ncAO-projects\',this)"><i class="fas fa-project-diagram"></i><span>Projects</span></div>' +
+    '<div class="nav-item" onclick="ncAORoute(\'ncAO-loans\',this)"><i class="fas fa-hand-holding-usd"></i><span>Loans</span></div>' +
+    '<div class="nav-item" onclick="ncAORoute(\'ncAO-out\',this)"><i class="fas fa-arrow-circle-up"></i><span>Out Payments</span></div>' +
+    '<div class="nav-item" onclick="ncAORoute(\'ncAO-inp\',this)"><i class="fas fa-arrow-circle-down"></i><span>In Payments</span></div>' +
+    '<div class="nav-item" onclick="ncAORoute(\'ncAO-parties\',this)"><i class="fas fa-address-book"></i><span>Parties</span></div>';
+
+  const bank = document.createElement('div');
+  bank.className = 'nav-section'; bank.id = 'ncAOBankSection';
+  bank.innerHTML =
+    '<div class="nav-title">Banking</div>' +
+    '<div class="nav-item" onclick="ncAORoute(\'ncAO-banks\',this)"><i class="fas fa-university"></i><span>Bank Accounts</span></div>' +
+    '<div class="nav-item" onclick="ncAORoute(\'ncAO-txns\',this)"><i class="fas fa-exchange-alt"></i><span>Bank Transactions</span></div>' +
+    '<div class="nav-item" onclick="ncAORoute(\'ncAO-cats\',this)"><i class="fas fa-tags"></i><span>Cheque Categories</span></div>';
+
+  nav.appendChild(cap);
+  nav.appendChild(bank);
+}
+
+function injectViews() {
+  const main = document.querySelector('.main-content');
+  if (!main) return;
+  VIEWS.forEach(v => {
+    if ($(v.id)) return;
+    const div = document.createElement('div');
+    div.id = v.id;
+    div.className = 'view-content';
+    div.innerHTML =
+      '<div class="card">' +
+        '<div class="card-header">' +
+          '<h2 class="card-title"><i class="fas fa-'+v.icon+'" style="color:var(--primary);margin-right:8px"></i>'+v.title+'</h2>' +
+          '<div>' +
+            '<button class="btn btn-secondary btn-sm" onclick="ncAddOnRefresh(\''+v.key.replace('ncAO-','')+'\')" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
+            '<button class="btn btn-primary btn-sm" onclick="'+v.add+'"><i class="fas fa-plus"></i> Add</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="'+v.body+'"></div>' +
+      '</div>';
+    main.appendChild(div);
+  });
+}
+
+window.ncAORoute = function (viewName, navEl) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  if (navEl) navEl.classList.add('active');
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const id = viewMap[viewName]; if (!id) return;
+  const el = $(id); if (el) el.classList.add('active');
+  const titleEl = $('pageTitle');
+  if (titleEl) {
+    const v = VIEWS.find(x => x.key === viewName);
+    if (v) titleEl.textContent = v.title;
+  }
+  if (window.innerWidth <= 768) {
+    const sb = $('sidebar'), ov = $('sidebarOverlay');
+    if (sb) sb.classList.remove('active');
+    if (ov) ov.classList.remove('active');
+  }
+  renderAll();
+};
+
+/* ══════════ BOOT ══════════ */
+function boot() {
+  injectSidebar();
+  injectViews();
+  installHooks();
+  installChequeWatcher();
+  loadAll();
+
+  try {
+    if (typeof auth !== 'undefined' && auth && auth.onAuthStateChanged) {
+      auth.onAuthStateChanged(u => {
+        if (u) setTimeout(() => {
+          injectSidebar(); injectViews(); installHooks(); installChequeWatcher(); loadAll();
+        }, 700);
+      });
+    }
+  } catch (e) {}
+
+  setInterval(() => { try { pushAlertsToExistingBell(); } catch (e) {} }, 60000);
+
+  console.log('[Add-On] ✅ Ready — Capital Flow + Banking added without touching Finance/Cheques');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 500));
+else setTimeout(boot, 500);
+
+})();
+</script>
 <!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
      Appended at end of file. Runs alongside the existing console blocker.
