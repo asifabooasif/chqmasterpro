@@ -8050,17 +8050,28 @@ else finBoot();
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
-     NEONCHEQUE ADD-ON MODULE — Capital Flow + Banking
-     ADDS: Categories • Banks • Transactions • Projects • Loans
-           Out Payments • In Payments • Parties
+     NEONCHEQUE ADD-ON MODULE — v10 COMPLETE
+     Contains EVERYTHING from previous Add-On PLUS Change #1:
+       • Categories (BTC / SHOE / Imported / Local — seeded)
+       • Cheque category chips in All Cheques view (toggle filter)
+       • Bulk categorize existing 153 cheques
+       • Auto-tag by project default category
+       • Banks • Bank Transactions • Projects • Loans
+       • Out Payments • In Payments • Parties
+       • Dashboard widgets + Capital Flow alerts
      Does NOT touch: Finance Manager • Cheque features • Existing bell
-     Hooks: cheque Add/Edit modals (to inject Category dropdown)
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__ncAddOn) return;
-window.__ncAddOn = true;
+if (window.__ncV10) return;
+window.__ncV10 = true;
+
+/* ─────────── CLEANUP any leftover elements from old Add-On ─────────── */
+['ncAOAlertIndicator','ncAOAlertPanel','ncAODashWidgets','ncAOCapSection','ncAOBankSection'].forEach(id => {
+  const el = document.getElementById(id); if (el) el.remove();
+});
+document.querySelectorAll('.view-content[id^="ncAO"]').forEach(el => el.remove());
 
 /* ══════════ UTILS ══════════ */
 const $  = id => document.getElementById(id);
@@ -8073,6 +8084,7 @@ const INC= n => { try { return firebase.firestore.FieldValue.increment(n); } cat
 const AU = v => { try { return firebase.firestore.FieldValue.arrayUnion(v); } catch(e){ return [v]; } };
 const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
 const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+const getCheques = () => { try { return (Array.isArray(allCheques) ? allCheques : []).filter(c => !c.deletedAt); } catch(e){ return []; } };
 
 function toast(m, t) {
   try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
@@ -8081,43 +8093,44 @@ function toast(m, t) {
 
 /* ══════════ STATE ══════════ */
 const S = { cats:[], banks:[], txns:[], projects:[], loans:[], out:[], inp:[], parties:[] };
+let activeCatFilter = 'ALL';
 
 /* ══════════ MODAL FACTORY ══════════ */
 function ensureModal() {
-  let h = $('ncAddOnModalHost');
+  let h = $('ncV10ModalHost');
   if (h) return h;
   h = document.createElement('div');
-  h.id = 'ncAddOnModalHost';
+  h.id = 'ncV10ModalHost';
   h.className = 'modal-overlay';
   h.innerHTML =
     '<div class="modal" style="max-width:680px">' +
       '<div class="modal-header">' +
-        '<h2 class="modal-title" id="ncAddOnTitle">Modal</h2>' +
-        '<button class="modal-close" onclick="ncAddOnClose()"><i class="fas fa-times"></i></button>' +
+        '<h2 class="modal-title" id="ncV10Title">Modal</h2>' +
+        '<button class="modal-close" onclick="ncV10Close()"><i class="fas fa-times"></i></button>' +
       '</div>' +
-      '<div class="modal-body" id="ncAddOnBody"></div>' +
+      '<div class="modal-body" id="ncV10Body"></div>' +
       '<div class="modal-footer">' +
-        '<button class="btn btn-secondary" onclick="ncAddOnClose()">Cancel</button>' +
-        '<button class="btn btn-primary" id="ncAddOnSave"><i class="fas fa-save"></i> Save</button>' +
+        '<button class="btn btn-secondary" onclick="ncV10Close()">Cancel</button>' +
+        '<button class="btn btn-primary" id="ncV10Save"><i class="fas fa-save"></i> Save</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(h);
-  h.addEventListener('click', e => { if (e.target === h) ncAddOnClose(); });
+  h.addEventListener('click', e => { if (e.target === h) ncV10Close(); });
   return h;
 }
-window.ncAddOnClose = function () { const h = $('ncAddOnModalHost'); if (h) h.classList.remove('active'); };
+window.ncV10Close = function () { const h = $('ncV10ModalHost'); if (h) h.classList.remove('active'); };
 
 function ncModal(title, fields, onSubmit) {
   const host = ensureModal();
-  $('ncAddOnTitle').textContent = title;
-  const body = $('ncAddOnBody');
+  $('ncV10Title').textContent = title;
+  const body = $('ncV10Body');
 
   body.innerHTML = fields.map(f => {
     const req = f.required ? ' *' : '';
     const val = f.value == null ? '' : String(f.value);
     let input;
     if (f.type === 'select') {
-      input = '<select id="ncAO_'+f.id+'">' +
+      input = '<select id="ncV10F_'+f.id+'">' +
         (f.placeholder ? '<option value="">'+E(f.placeholder)+'</option>' : '') +
         (f.options||[]).map(o => {
           const v = typeof o === 'string' ? o : o.value;
@@ -8126,9 +8139,9 @@ function ncModal(title, fields, onSubmit) {
         }).join('') +
       '</select>';
     } else if (f.type === 'textarea') {
-      input = '<textarea id="ncAO_'+f.id+'" rows="'+(f.rows||3)+'" placeholder="'+E(f.placeholder||'')+'">'+E(val)+'</textarea>';
+      input = '<textarea id="ncV10F_'+f.id+'" rows="'+(f.rows||3)+'" placeholder="'+E(f.placeholder||'')+'">'+E(val)+'</textarea>';
     } else {
-      input = '<input type="'+(f.type||'text')+'" id="ncAO_'+f.id+'" value="'+E(val)+'"' +
+      input = '<input type="'+(f.type||'text')+'" id="ncV10F_'+f.id+'" value="'+E(val)+'"' +
         (f.placeholder ? ' placeholder="'+E(f.placeholder)+'"' : '') +
         (f.min!=null ? ' min="'+f.min+'"' : '') +
         (f.step ? ' step="'+f.step+'"' : '') + '>';
@@ -8136,13 +8149,13 @@ function ncModal(title, fields, onSubmit) {
     return '<div class="form-group"><label>'+E(f.label)+req+'</label>'+input+'</div>';
   }).join('');
 
-  const saveBtn = $('ncAddOnSave');
+  const saveBtn = $('ncV10Save');
   const fresh = saveBtn.cloneNode(true);
   saveBtn.parentNode.replaceChild(fresh, saveBtn);
   fresh.addEventListener('click', async () => {
     const data = {};
     for (const f of fields) {
-      const el = $('ncAO_'+f.id); if (!el) continue;
+      const el = $('ncV10F_'+f.id); if (!el) continue;
       let v = el.value;
       if (f.type === 'number') v = N(v);
       if (f.required && (v === '' || v == null || (f.type==='number' && v===0))) {
@@ -8150,7 +8163,7 @@ function ncModal(title, fields, onSubmit) {
       }
       data[f.id] = v;
     }
-    try { fresh.disabled = true; await onSubmit(data); ncAddOnClose(); }
+    try { fresh.disabled = true; await onSubmit(data); ncV10Close(); }
     catch (e) { console.error(e); toast('Error: '+(e.message||e), 'error'); }
     finally { fresh.disabled = false; }
   });
@@ -8189,9 +8202,11 @@ async function loadAll() {
 
     renderAll();
     injectChequeDropdowns();
-    pushAlertsToExistingBell();
-    console.log('[Add-On] Loaded', {cats:S.cats.length, banks:S.banks.length, projects:S.projects.length, loans:S.loans.length});
-  } catch (e) { console.error('[Add-On] load fail', e); }
+    renderChips();
+    injectChipBar();
+    pushAlerts();
+    console.log('[v10] Loaded', {cats:S.cats.length, banks:S.banks.length, projects:S.projects.length, loans:S.loans.length});
+  } catch (e) { console.error('[v10] load fail', e); }
 }
 
 async function seedCategories() {
@@ -8215,10 +8230,11 @@ async function refreshCol(col, key) {
     const snap = await db.collection(col).get();
     S[key] = toList(snap);
     renderAll();
-    pushAlertsToExistingBell();
+    renderChips();
+    pushAlerts();
   } catch (e) {}
 }
-window.ncAddOnRefresh = function (key) {
+window.ncV10Refresh = function (key) {
   const map = {cats:'chequeCategories', banks:'bankAccounts', txns:'bankTransactions',
     projects:'projects', loans:'loans', out:'outPayments', inp:'inPayments', parties:'parties'};
   if (map[key]) return refreshCol(map[key], key);
@@ -8228,7 +8244,7 @@ window.ncAddOnRefresh = function (key) {
 /* ══════════ RENDER ══════════ */
 function renderAll() {
   renderCats(); renderBanks(); renderTxns(); renderProjects();
-  renderLoans(); renderOut(); renderInp(); renderParties(); renderNewWidgets();
+  renderLoans(); renderOut(); renderInp(); renderParties(); renderDashWidgets();
   injectChequeDropdowns();
 }
 
@@ -8239,35 +8255,40 @@ function tbl(headers, rows, emptyMsg) {
     '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td>'+c+'</td>').join('') + '</tr>').join('') +
     '</tbody></table></div>';
 }
-const btns = (e, d) =>
+const btns = (e, d, extra) =>
+  (extra||'') +
   '<button class="btn btn-sm btn-secondary" onclick="'+e+'"><i class="fas fa-edit"></i></button> ' +
   '<button class="btn btn-sm btn-secondary" onclick="'+d+'"><i class="fas fa-trash"></i></button>';
 
 /* --- CATEGORIES --- */
 function renderCats() {
-  const el = $('ncAOCatsBody'); if (!el) return;
+  const el = $('ncV10CatsBody'); if (!el) return;
+  const cheques = getCheques();
   const rows = S.cats.map(c => {
-    const count = (function(){ try { return (Array.isArray(allCheques)?allCheques:[]).filter(x=>!x.deletedAt && x.category===c.name).length; } catch(e){ return 0; } })();
+    const list = cheques.filter(x => x.category === c.name);
+    const totalVal = list.reduce((s,x) => s + N(x.amount), 0);
     return [
       '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'+E(c.color||'#6366f1')+';margin-right:8px"></span><strong>'+E(c.name)+'</strong>',
       E(c.description||'-'),
-      count + ' cheques',
-      btns("ncAddOnEditCat('"+c.id+"')", "ncAddOnDelCat('"+c.id+"')")
+      list.length + ' cheques',
+      F(totalVal),
+      btns("ncV10EditCat('"+c.id+"')", "ncV10DelCat('"+c.id+"')")
     ];
   });
-  el.innerHTML = tbl(['Category','Description','Usage','Actions'], rows, 'No categories');
+  el.innerHTML = tbl(['Category','Description','Count','Value','Actions'], rows, 'No categories');
 }
-window.ncAddOnAddCat = function () {
+window.ncV10AddCat = function () {
   ncModal('Add Cheque Category', [
     {id:'name', label:'Name', type:'text', required:true},
     {id:'color', label:'Color', type:'color', value:'#6366f1'},
     {id:'description', label:'Description', type:'text'}
   ], async d => {
     await DB().collection('chequeCategories').add(Object.assign(d, {createdAt:TS(), createdBy:who()}));
-    toast('Category added','success'); await refreshCol('chequeCategories','cats');
+    toast('Category added','success');
+    await refreshCol('chequeCategories','cats');
   });
 };
-window.ncAddOnEditCat = function (id) {
+window.ncV10EditCat = function (id) {
   const c = S.cats.find(x=>x.id===id); if (!c) return;
   ncModal('Edit Category', [
     {id:'name', label:'Name', type:'text', required:true, value:c.name},
@@ -8278,15 +8299,265 @@ window.ncAddOnEditCat = function (id) {
     toast('Updated','success'); await refreshCol('chequeCategories','cats');
   });
 };
-window.ncAddOnDelCat = function (id) {
+window.ncV10DelCat = function (id) {
   if (!confirm('Delete category?')) return;
   DB().collection('chequeCategories').doc(id).delete()
     .then(() => refreshCol('chequeCategories','cats')).catch(e => toast('Error: '+e.message,'error'));
 };
 
-/* --- BANKS --- */
+/* ══════════ CHANGE #1 — CATEGORY CHIPS ══════════ */
+function injectChipBar() {
+  const view = $('allChequesView');
+  if (!view) return;
+  const card = view.querySelector('.card');
+  if (!card) return;
+  if ($('ncCatChips')) { renderChips(); return; }
+  const bar = document.createElement('div');
+  bar.id = 'ncCatChips';
+  bar.style.cssText = 'display:flex;gap:8px;overflow-x:auto;padding:8px 0 14px;margin-bottom:14px;border-bottom:1px solid var(--border);scrollbar-width:thin';
+  const header = card.querySelector('.card-header');
+  if (header && header.nextSibling) card.insertBefore(bar, header.nextSibling);
+  else card.insertBefore(bar, card.firstChild);
+  renderChips();
+}
+
+function renderChips() {
+  const bar = $('ncCatChips'); if (!bar) return;
+  const cheques = getCheques();
+  const items = [
+    { key:'ALL', label:'All',           color:'#6366f1', count: cheques.length },
+    { key:'UNC', label:'Uncategorized', color:'#94a3b8', count: cheques.filter(c => !c.category).length }
+  ];
+  (S.cats || []).forEach(cat => {
+    items.push({
+      key: cat.name, label: cat.name, color: cat.color || '#6366f1',
+      count: cheques.filter(c => c.category === cat.name).length
+    });
+  });
+
+  bar.innerHTML = items.map(it => {
+    const isA = String(activeCatFilter) === String(it.key);
+    return '<button class="nc-chip" onclick="ncV10SetCat(\''+E(it.key).replace(/'/g,"\\'")+'\')" ' +
+      'style="white-space:nowrap;padding:7px 14px;border-radius:20px;border:2px solid '+(isA?it.color:'var(--border)')+';' +
+      'background:'+(isA?it.color:'white')+';color:'+(isA?'white':'var(--dark)')+';font-weight:600;font-size:12px;cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px">' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:'+(isA?'white':it.color)+'"></span>' +
+      E(it.label) + '<span style="opacity:0.75;font-size:10px">('+it.count+')</span>' +
+    '</button>';
+  }).join('');
+}
+
+window.ncV10SetCat = function (key) {
+  activeCatFilter = key;
+  renderChips();
+  try { if (typeof window.renderAllCheques === 'function') window.renderAllCheques(); } catch(e){}
+  setTimeout(tagAndFilterRows, 120);
+};
+
+function tagAndFilterRows() {
+  const tbody = $('allChequesTable');
+  if (!tbody) return;
+  const active = activeCatFilter || 'ALL';
+  const cheques = getCheques();
+
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length < 3) return;
+
+    let numText = '';
+    cells.forEach(c => {
+      if (!numText) {
+        const t = (c.textContent||'').trim();
+        if (/^\d+$/.test(t)) numText = t;
+      }
+    });
+    if (!numText) return;
+
+    const cheque = cheques.find(c => String(c.number) === numText);
+    if (!cheque) return;
+    const cat = cheque.category || '';
+
+    const payeeCell = cells[2] || cells[1];
+    if (payeeCell && !payeeCell.querySelector('.nc-cat-badge')) {
+      const badge = document.createElement('span');
+      badge.className = 'nc-cat-badge';
+      badge.style.cssText = 'display:inline-block;margin-left:6px;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;vertical-align:middle';
+      if (cat) {
+        const cobj = (S.cats || []).find(x => x.name === cat) || {};
+        const color = cobj.color || '#6366f1';
+        badge.style.background = color + '22';
+        badge.style.color = color;
+        badge.textContent = cat;
+      } else {
+        badge.style.background = '#f1f5f9';
+        badge.style.color = '#94a3b8';
+        badge.textContent = 'UNCAT';
+      }
+      payeeCell.appendChild(badge);
+    }
+
+    let show = true;
+    if (active === 'UNC') show = !cat;
+    else if (active !== 'ALL') show = (cat === active);
+    tr.style.display = show ? '' : 'none';
+  });
+}
+
+function hookRenderAllCheques() {
+  if (typeof window.renderAllCheques !== 'function') return setTimeout(hookRenderAllCheques, 300);
+  if (window.renderAllCheques.__ncV10Hooked) return;
+  const orig = window.renderAllCheques;
+  const wrapped = function () {
+    const r = orig.apply(this, arguments);
+    setTimeout(() => { try { tagAndFilterRows(); renderChips(); } catch(e){} }, 60);
+    return r;
+  };
+  wrapped.__ncV10Hooked = true;
+  window.renderAllCheques = wrapped;
+}
+
+/* ══════════ BULK CATEGORIZE ══════════ */
+window.ncV10OpenBulkCat = function () {
+  if (S.cats.length === 0) { toast('Create categories first', 'error'); return; }
+  let host = $('ncBulkCatModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ncBulkCatModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:600px">' +
+        '<div class="modal-header">' +
+          '<h2 class="modal-title">Bulk Categorize Cheques</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'ncBulkCatModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<div class="modal-body">' +
+          '<div class="form-group"><label>Category to assign *</label>' +
+            '<select id="ncBulkCatCategory"><option value="">-- Select --</option></select></div>' +
+          '<div class="form-group"><label>Apply to</label>' +
+            '<select id="ncBulkCatFilter">' +
+              '<option value="uncat">Only uncategorized cheques</option>' +
+              '<option value="all">ALL cheques (overwrites existing)</option>' +
+              '<option value="in-hand">Only In-Hand cheques</option>' +
+              '<option value="issued">Only Issued cheques</option>' +
+              '<option value="returned">Only Returned cheques</option>' +
+              '<option value="cleared">Only Cleared cheques</option>' +
+              '<option value="draft">Only Draft cheques</option>' +
+            '</select></div>' +
+          '<div id="ncBulkCatPreview" style="background:var(--light);padding:14px;border-radius:10px;margin-top:14px;font-size:13px">Loading…</div>' +
+        '</div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" onclick="document.getElementById(\'ncBulkCatModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="ncBulkCatApply"><i class="fas fa-check"></i> Apply</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+    $('ncBulkCatFilter').addEventListener('change', updateBulkPreview);
+    $('ncBulkCatApply').addEventListener('click', applyBulkCategorize);
+  }
+  // Refresh category options
+  $('ncBulkCatCategory').innerHTML = '<option value="">-- Select --</option>' +
+    S.cats.map(c => '<option value="'+E(c.name)+'">'+E(c.name)+'</option>').join('');
+  $('ncBulkCatFilter').value = 'uncat';
+  host.classList.add('active');
+  updateBulkPreview();
+};
+
+function getBulkTargets() {
+  const filter = ($('ncBulkCatFilter') || {}).value || 'uncat';
+  const list = getCheques();
+  if (filter === 'uncat') return list.filter(c => !c.category);
+  if (filter === 'all') return list;
+  return list.filter(c => c.status === filter);
+}
+
+function updateBulkPreview() {
+  const preview = $('ncBulkCatPreview'); if (!preview) return;
+  const targets = getBulkTargets();
+  const total = targets.reduce((s,c) => s + N(c.amount), 0);
+  preview.innerHTML =
+    '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>Cheques matched:</span><strong>'+targets.length+'</strong></div>' +
+    '<div style="display:flex;justify-content:space-between"><span>Total value:</span><strong>'+F(total)+'</strong></div>' +
+    (targets.length > 0 ? '<div style="margin-top:8px;font-size:11px;color:var(--gray)">Sample: '+targets.slice(0,3).map(c=>'#'+c.number).join(', ')+(targets.length>3?' …':'')+'</div>' : '');
+}
+
+async function applyBulkCategorize() {
+  const cat = ($('ncBulkCatCategory') || {}).value;
+  if (!cat) { toast('Select a category', 'error'); return; }
+  const targets = getBulkTargets();
+  if (targets.length === 0) { toast('No matching cheques', 'info'); return; }
+  if (!confirm('Assign "'+cat+'" to '+targets.length+' cheque(s)?')) return;
+
+  const btn = $('ncBulkCatApply');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing…';
+
+  const db = DB();
+  let done = 0, failed = 0;
+  for (const c of targets) {
+    try {
+      await db.collection('cheques').doc(c.id).update({ category: cat });
+      c.category = cat;
+      done++;
+      if (done % 10 === 0) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> '+done+'/'+targets.length;
+    } catch (e) { failed++; }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-check"></i> Apply';
+
+  toast('Categorized '+done+' cheque(s)'+(failed?' ('+failed+' failed)':''), failed?'warning':'success');
+
+  if (typeof window.loadAllChequesData === 'function') {
+    try { await window.loadAllChequesData(); } catch(e){}
+  }
+  $('ncBulkCatModal').classList.remove('active');
+  renderChips();
+  tagAndFilterRows();
+  renderCats();
+}
+
+function injectBulkButtonInCatsView() {
+  const view = $('ncV10CatsView');
+  if (!view || $('ncBulkCatBtn')) return;
+  const header = view.querySelector('.card-header');
+  if (!header) return;
+  const btn = document.createElement('button');
+  btn.id = 'ncBulkCatBtn';
+  btn.className = 'btn btn-secondary btn-sm';
+  btn.style.marginRight = '8px';
+  btn.innerHTML = '<i class="fas fa-tags"></i> Bulk Assign';
+  btn.onclick = ncV10OpenBulkCat;
+  const actions = header.querySelector('div');
+  if (actions) actions.insertBefore(btn, actions.firstChild);
+  else header.appendChild(btn);
+}
+
+/* ══════════ AUTO-TAG BY PROJECT DEFAULT ══════════ */
+function hookProjectToCategory() {
+  document.addEventListener('change', async (e) => {
+    if (!e.target || e.target.id !== 'chequeProject') return;
+    const pid = e.target.value;
+    if (!pid) return;
+    const db = DB(); if (!db) return;
+    try {
+      const doc = await db.collection('projects').doc(pid).get();
+      if (doc.exists) {
+        const p = doc.data();
+        if (p.defaultCategory) {
+          const catSel = $('chequeCategory');
+          if (catSel) {
+            catSel.value = p.defaultCategory;
+            toast('Auto-tagged: '+p.defaultCategory, 'info');
+          }
+        }
+      }
+    } catch (err) {}
+  });
+}
+
+/* ══════════ BANKS ══════════ */
 function renderBanks() {
-  const el = $('ncAOBanksBody'); if (!el) return;
+  const el = $('ncV10BanksBody'); if (!el) return;
   const rows = S.banks.map(b => {
     const bal = N(b.currentBalance);
     return [
@@ -8296,12 +8567,12 @@ function renderBanks() {
       E(b.ifsc||'-'),
       '<span class="status-badge">'+E(b.type||'Current')+'</span>',
       '<strong style="color:'+(bal>=0?'var(--success)':'var(--danger)')+'">'+F(bal)+'</strong>',
-      btns("ncAddOnEditBank('"+b.id+"')", "ncAddOnDelBank('"+b.id+"')")
+      btns("ncV10EditBank('"+b.id+"')", "ncV10DelBank('"+b.id+"')")
     ];
   });
   el.innerHTML = tbl(['Bank','Holder','A/c #','IFSC','Type','Balance','Actions'], rows, 'No bank accounts');
 }
-window.ncAddOnAddBank = function () {
+window.ncV10AddBank = function () {
   ncModal('Add Bank Account', [
     {id:'bankName', label:'Bank Name', type:'text', required:true},
     {id:'accountName', label:'Account Holder', type:'text'},
@@ -8315,7 +8586,7 @@ window.ncAddOnAddBank = function () {
     toast('Bank added','success'); await refreshCol('bankAccounts','banks');
   });
 };
-window.ncAddOnEditBank = function (id) {
+window.ncV10EditBank = function (id) {
   const b = S.banks.find(x=>x.id===id); if (!b) return;
   ncModal('Edit Bank', [
     {id:'bankName', label:'Bank Name', type:'text', required:true, value:b.bankName},
@@ -8330,15 +8601,15 @@ window.ncAddOnEditBank = function (id) {
     toast('Updated','success'); await refreshCol('bankAccounts','banks');
   });
 };
-window.ncAddOnDelBank = function (id) {
+window.ncV10DelBank = function (id) {
   if (!confirm('Delete bank account?')) return;
   DB().collection('bankAccounts').doc(id).delete()
     .then(() => refreshCol('bankAccounts','banks')).catch(e => toast('Error: '+e.message,'error'));
 };
 
-/* --- TRANSACTIONS --- */
+/* ══════════ TRANSACTIONS ══════════ */
 function renderTxns() {
-  const el = $('ncAOTxnsBody'); if (!el) return;
+  const el = $('ncV10TxnsBody'); if (!el) return;
   const rows = S.txns.map(t => {
     const bank = S.banks.find(b=>b.id===t.bankAccountId);
     const isC = t.type === 'credit';
@@ -8349,12 +8620,12 @@ function renderTxns() {
       '<strong style="color:'+(isC?'var(--success)':'var(--danger)')+'">'+F(t.amount)+'</strong>',
       E(t.description||'-'),
       E(t.reference||'-'),
-      '<button class="btn btn-sm btn-secondary" onclick="ncAddOnDelTxn(\''+t.id+'\')"><i class="fas fa-trash"></i></button>'
+      '<button class="btn btn-sm btn-secondary" onclick="ncV10DelTxn(\''+t.id+'\')"><i class="fas fa-trash"></i></button>'
     ];
   });
   el.innerHTML = tbl(['Date','Bank','Type','Amount','Description','Reference','Actions'], rows, 'No transactions');
 }
-window.ncAddOnAddTxn = function () {
+window.ncV10AddTxn = function () {
   if (!S.banks.length) return toast('Add a bank first','error');
   ncModal('Add Bank Transaction', [
     {id:'bankAccountId', label:'Bank', type:'select', required:true,
@@ -8373,37 +8644,39 @@ window.ncAddOnAddTxn = function () {
     await refreshCol('bankAccounts','banks');
   });
 };
-window.ncAddOnDelTxn = function (id) {
+window.ncV10DelTxn = function (id) {
   if (!confirm('Delete transaction? (balance NOT reversed)')) return;
   DB().collection('bankTransactions').doc(id).delete()
     .then(() => refreshCol('bankTransactions','txns')).catch(e => toast('Error: '+e.message,'error'));
 };
 
-/* --- PROJECTS --- */
+/* ══════════ PROJECTS ══════════ */
 function renderProjects() {
-  const el = $('ncAOProjectsBody'); if (!el) return;
+  const el = $('ncV10ProjectsBody'); if (!el) return;
   const rows = S.projects.map(p => {
     const spend = S.out.filter(o => o.projectId === p.id).reduce((s,o) => s + N(o.amount), 0);
     const budget = N(p.budget);
     const pct = budget>0 ? Math.min(100, (spend/budget)*100) : 0;
     return [
-      '<strong>'+E(p.name)+'</strong>',
+      '<strong>'+E(p.name)+'</strong>' + (p.defaultCategory ? '<br><small style="color:var(--primary)">↳ '+E(p.defaultCategory)+'</small>' : ''),
       E(p.client||'-'),
       '<div style="min-width:140px"><div style="font-size:11px;display:flex;justify-content:space-between"><span>'+F(spend)+'</span><span>'+F(budget)+'</span></div><div class="payment-progress-bar"><div class="payment-progress-fill" style="width:'+pct+'%;background:'+(pct>90?'var(--danger)':'var(--success)')+'"></div></div></div>',
       E(p.startDate||'-'),
       E(p.endDate||'-'),
       '<span class="status-badge">'+E(p.status||'active')+'</span>',
-      btns("ncAddOnEditProject('"+p.id+"')", "ncAddOnDelProject('"+p.id+"')")
+      btns("ncV10EditProject('"+p.id+"')", "ncV10DelProject('"+p.id+"')")
     ];
   });
   el.innerHTML = tbl(['Name','Client','Budget vs Spend','Start','End','Status','Actions'], rows, 'No projects');
 }
-window.ncAddOnAddProject = function () {
+window.ncV10AddProject = function () {
+  const catOpts = [{value:'', label:'-- None --'}].concat(S.cats.map(c => ({value:c.name, label:c.name})));
   ncModal('Add Project', [
     {id:'name', label:'Name', type:'text', required:true},
     {id:'code', label:'Code', type:'text'},
     {id:'client', label:'Client', type:'text'},
     {id:'budget', label:'Budget', type:'number', step:'0.01', value:0},
+    {id:'defaultCategory', label:'Default Category (auto-tag cheques)', type:'select', options:catOpts, value:''},
     {id:'startDate', label:'Start Date', type:'date', value:T()},
     {id:'endDate', label:'End Date', type:'date'},
     {id:'status', label:'Status', type:'select', options:['active','on-hold','completed','cancelled'], value:'active'},
@@ -8413,13 +8686,15 @@ window.ncAddOnAddProject = function () {
     toast('Added','success'); await refreshCol('projects','projects');
   });
 };
-window.ncAddOnEditProject = function (id) {
+window.ncV10EditProject = function (id) {
   const p = S.projects.find(x=>x.id===id); if (!p) return;
+  const catOpts = [{value:'', label:'-- None --'}].concat(S.cats.map(c => ({value:c.name, label:c.name})));
   ncModal('Edit Project', [
     {id:'name', label:'Name', type:'text', required:true, value:p.name},
     {id:'code', label:'Code', type:'text', value:p.code||''},
     {id:'client', label:'Client', type:'text', value:p.client||''},
     {id:'budget', label:'Budget', type:'number', step:'0.01', value:N(p.budget)},
+    {id:'defaultCategory', label:'Default Category', type:'select', options:catOpts, value:p.defaultCategory||''},
     {id:'startDate', label:'Start Date', type:'date', value:p.startDate||T()},
     {id:'endDate', label:'End Date', type:'date', value:p.endDate||''},
     {id:'status', label:'Status', type:'select', options:['active','on-hold','completed','cancelled'], value:p.status||'active'},
@@ -8429,16 +8704,16 @@ window.ncAddOnEditProject = function (id) {
     toast('Updated','success'); await refreshCol('projects','projects');
   });
 };
-window.ncAddOnDelProject = function (id) {
+window.ncV10DelProject = function (id) {
   if (!confirm('Delete project?')) return;
   DB().collection('projects').doc(id).delete().then(() => refreshCol('projects','projects')).catch(e => toast('Error: '+e.message,'error'));
 };
 
-/* --- LOANS --- */
+/* ══════════ LOANS ══════════ */
 function loanPaid(l) { return (l.payments||[]).reduce((s,p) => s + N(p.amount), 0); }
 function loanBal(l) { return Math.max(0, N(l.principal) - loanPaid(l)); }
 function renderLoans() {
-  const el = $('ncAOLoansBody'); if (!el) return;
+  const el = $('ncV10LoansBody'); if (!el) return;
   const rows = S.loans.map(l => {
     const bal = loanBal(l);
     return [
@@ -8450,13 +8725,13 @@ function renderLoans() {
       E(l.endDate||'-'),
       '<strong style="color:'+(bal<=0?'var(--success)':'var(--danger)')+'">'+F(bal)+'</strong>',
       '<span class="status-badge">'+E(l.status||'active')+'</span>',
-      '<button class="btn btn-sm btn-secondary" onclick="ncAddOnLoanPay(\''+l.id+'\')" title="Pay"><i class="fas fa-money-bill"></i></button> ' +
-      btns("ncAddOnEditLoan('"+l.id+"')", "ncAddOnDelLoan('"+l.id+"')")
+      '<button class="btn btn-sm btn-secondary" onclick="ncV10LoanPay(\''+l.id+'\')" title="Pay"><i class="fas fa-money-bill"></i></button> ' +
+      btns("ncV10EditLoan('"+l.id+"')", "ncV10DelLoan('"+l.id+"')")
     ];
   });
   el.innerHTML = tbl(['Lender','Borrower','Principal','Rate','Start','Due','Balance','Status','Actions'], rows, 'No loans');
 }
-window.ncAddOnAddLoan = function () {
+window.ncV10AddLoan = function () {
   ncModal('Add Loan', [
     {id:'lender', label:'Lender', type:'text'},
     {id:'borrower', label:'Borrower', type:'text'},
@@ -8471,7 +8746,7 @@ window.ncAddOnAddLoan = function () {
     toast('Added','success'); await refreshCol('loans','loans');
   });
 };
-window.ncAddOnEditLoan = function (id) {
+window.ncV10EditLoan = function (id) {
   const l = S.loans.find(x=>x.id===id); if (!l) return;
   ncModal('Edit Loan', [
     {id:'lender', label:'Lender', type:'text', value:l.lender||''},
@@ -8487,7 +8762,7 @@ window.ncAddOnEditLoan = function (id) {
     toast('Updated','success'); await refreshCol('loans','loans');
   });
 };
-window.ncAddOnLoanPay = function (id) {
+window.ncV10LoanPay = function (id) {
   const l = S.loans.find(x=>x.id===id); if (!l) return;
   const bankOpts = [{value:'', label:'-- None --'}].concat(S.banks.map(b => ({value:b.id, label:b.bankName})));
   ncModal('Loan Payment — '+(l.lender||l.borrower||''), [
@@ -8512,14 +8787,14 @@ window.ncAddOnLoanPay = function (id) {
     if (d.bankAccountId) { await refreshCol('bankAccounts','banks'); await refreshCol('bankTransactions','txns'); }
   });
 };
-window.ncAddOnDelLoan = function (id) {
+window.ncV10DelLoan = function (id) {
   if (!confirm('Delete loan?')) return;
   DB().collection('loans').doc(id).delete().then(() => refreshCol('loans','loans')).catch(e => toast('Error: '+e.message,'error'));
 };
 
-/* --- OUT PAYMENTS --- */
+/* ══════════ OUT PAYMENTS ══════════ */
 function renderOut() {
-  const el = $('ncAOOutBody'); if (!el) return;
+  const el = $('ncV10OutBody'); if (!el) return;
   const rows = S.out.map(p => {
     const bank = S.banks.find(b=>b.id===p.bankAccountId);
     const proj = S.projects.find(x=>x.id===p.projectId);
@@ -8530,7 +8805,7 @@ function renderOut() {
       E(p.category||'-'),
       E(bank ? bank.bankName : '-'),
       E(proj ? proj.name : '-'),
-      btns("ncAddOnEditOut('"+p.id+"')", "ncAddOnDelOut('"+p.id+"')")
+      btns("ncV10EditOut('"+p.id+"')", "ncV10DelOut('"+p.id+"')")
     ];
   });
   el.innerHTML = tbl(['Date','Payee','Amount','Category','Bank','Project','Actions'], rows, 'No out payments');
@@ -8593,9 +8868,9 @@ function paymentModal(title, kind, initial) {
   });
 }
 
-window.ncAddOnAddOut = function () { paymentModal('Add Out Payment','out'); };
-window.ncAddOnEditOut = function (id) { const p = S.out.find(x=>x.id===id); if (p) paymentModal('Edit Out Payment','out',p); };
-window.ncAddOnDelOut = function (id) {
+window.ncV10AddOut = function () { paymentModal('Add Out Payment','out'); };
+window.ncV10EditOut = function (id) { const p = S.out.find(x=>x.id===id); if (p) paymentModal('Edit Out Payment','out',p); };
+window.ncV10DelOut = function (id) {
   const p = S.out.find(x=>x.id===id); if (!p) return;
   if (!confirm('Delete? Bank balance will be restored.')) return;
   DB().collection('outPayments').doc(id).delete().then(async () => {
@@ -8608,9 +8883,9 @@ window.ncAddOnDelOut = function (id) {
   }).catch(e => toast('Error: '+e.message,'error'));
 };
 
-/* --- IN PAYMENTS --- */
+/* ══════════ IN PAYMENTS ══════════ */
 function renderInp() {
-  const el = $('ncAOInpBody'); if (!el) return;
+  const el = $('ncV10InpBody'); if (!el) return;
   const rows = S.inp.map(p => {
     const bank = S.banks.find(b=>b.id===p.bankAccountId);
     const proj = S.projects.find(x=>x.id===p.projectId);
@@ -8621,14 +8896,14 @@ function renderInp() {
       E(p.category||'-'),
       E(bank ? bank.bankName : '-'),
       E(proj ? proj.name : '-'),
-      btns("ncAddOnEditIn('"+p.id+"')", "ncAddOnDelIn('"+p.id+"')")
+      btns("ncV10EditIn('"+p.id+"')", "ncV10DelIn('"+p.id+"')")
     ];
   });
   el.innerHTML = tbl(['Date','Payer','Amount','Category','Bank','Project','Actions'], rows, 'No in payments');
 }
-window.ncAddOnAddIn = function () { paymentModal('Add In Payment','in'); };
-window.ncAddOnEditIn = function (id) { const p = S.inp.find(x=>x.id===id); if (p) paymentModal('Edit In Payment','in',p); };
-window.ncAddOnDelIn = function (id) {
+window.ncV10AddIn = function () { paymentModal('Add In Payment','in'); };
+window.ncV10EditIn = function (id) { const p = S.inp.find(x=>x.id===id); if (p) paymentModal('Edit In Payment','in',p); };
+window.ncV10DelIn = function (id) {
   const p = S.inp.find(x=>x.id===id); if (!p) return;
   if (!confirm('Delete? Bank balance will be restored.')) return;
   DB().collection('inPayments').doc(id).delete().then(async () => {
@@ -8640,19 +8915,19 @@ window.ncAddOnDelIn = function (id) {
   }).catch(e => toast('Error: '+e.message,'error'));
 };
 
-/* --- PARTIES --- */
+/* ══════════ PARTIES ══════════ */
 function renderParties() {
-  const el = $('ncAOPartiesBody'); if (!el) return;
+  const el = $('ncV10PartiesBody'); if (!el) return;
   const rows = S.parties.map(p => [
     '<strong>'+E(p.name)+'</strong>',
     '<span class="status-badge">'+E(p.type||'-')+'</span>',
     E(p.email||'-'),
     E(p.phone||'-'),
-    btns("ncAddOnEditParty('"+p.id+"')", "ncAddOnDelParty('"+p.id+"')")
+    btns("ncV10EditParty('"+p.id+"')", "ncV10DelParty('"+p.id+"')")
   ]);
   el.innerHTML = tbl(['Name','Type','Email','Phone','Actions'], rows, 'No parties');
 }
-window.ncAddOnAddParty = function () {
+window.ncV10AddParty = function () {
   ncModal('Add Party', [
     {id:'name', label:'Name', type:'text', required:true},
     {id:'type', label:'Type', type:'select', required:true,
@@ -8666,7 +8941,7 @@ window.ncAddOnAddParty = function () {
     toast('Added','success'); await refreshCol('parties','parties');
   });
 };
-window.ncAddOnEditParty = function (id) {
+window.ncV10EditParty = function (id) {
   const p = S.parties.find(x=>x.id===id); if (!p) return;
   ncModal('Edit Party', [
     {id:'name', label:'Name', type:'text', required:true, value:p.name},
@@ -8681,21 +8956,20 @@ window.ncAddOnEditParty = function (id) {
     toast('Updated','success'); await refreshCol('parties','parties');
   });
 };
-window.ncAddOnDelParty = function (id) {
+window.ncV10DelParty = function (id) {
   if (!confirm('Delete party?')) return;
   DB().collection('parties').doc(id).delete().then(() => refreshCol('parties','parties')).catch(e => toast('Error: '+e.message,'error'));
 };
 
-/* ══════════ NEW DASHBOARD WIDGET ROW (below existing) ══════════ */
-function renderNewWidgets() {
+/* ══════════ DASHBOARD WIDGETS ══════════ */
+function renderDashWidgets() {
   const dash = $('dashboardView'); if (!dash) return;
-  let row = $('ncAODashWidgets');
+  let row = $('ncV10DashWidgets');
   if (!row) {
     row = document.createElement('div');
-    row.id = 'ncAODashWidgets';
+    row.id = 'ncV10DashWidgets';
     row.className = 'widgets-grid';
     row.style.marginTop = '20px';
-    // Insert AFTER any existing widget rows (Finance Manager's or base)
     const anchor = dash.querySelector('.widgets-grid:last-of-type') || dash.querySelector('.widgets-grid');
     if (anchor) anchor.parentNode.insertBefore(row, anchor.nextSibling);
     else dash.appendChild(row);
@@ -8761,13 +9035,13 @@ function injectChequeDropdowns() {
   });
 }
 
-/* ══════════ HOOKS (non-destructive) ══════════ */
+/* ══════════ HOOKS ══════════ */
 function hookFn(name, wrapper) {
   if (typeof window[name] !== 'function') return false;
-  if (window[name].__ncAOHooked) return true;
+  if (window[name].__ncV10Hooked) return true;
   const orig = window[name];
   const hooked = wrapper(orig);
-  hooked.__ncAOHooked = true;
+  hooked.__ncV10Hooked = true;
   window[name] = hooked;
   return true;
 }
@@ -8796,8 +9070,8 @@ function installHooks() {
     try {
       const cat = $('chequeCategory');
       const proj = $('chequeProject');
-      window.__ncAOPendingCat  = cat ? cat.value : null;
-      window.__ncAOPendingProj = proj ? proj.value : null;
+      window.__ncV10PendingCat  = cat ? cat.value : null;
+      window.__ncV10PendingProj = proj ? proj.value : null;
     } catch (e) {}
     return orig.apply(this, arguments);
   });
@@ -8813,7 +9087,7 @@ function installHooks() {
         if (proj) update.projectId = proj.value || null;
         if (Object.keys(update).length) {
           DB().collection('cheques').doc(idEl.value).update(update)
-            .catch(e => console.warn('[Add-On] cheque update', e.message));
+            .catch(e => console.warn('[v10] cheque update', e.message));
         }
       }
     } catch (e) {}
@@ -8822,37 +9096,37 @@ function installHooks() {
 }
 
 async function attachPendingToNewest() {
-  if (!window.__ncAOPendingCat && !window.__ncAOPendingProj) return;
+  if (!window.__ncV10PendingCat && !window.__ncV10PendingProj) return;
   const db = DB(); if (!db) return;
   try {
     const snap = await db.collection('cheques').orderBy('createdAt','desc').limit(1).get();
     if (!snap.empty) {
       const upd = {};
-      if (window.__ncAOPendingCat)  upd.category  = window.__ncAOPendingCat;
-      if (window.__ncAOPendingProj) upd.projectId = window.__ncAOPendingProj;
+      if (window.__ncV10PendingCat)  upd.category  = window.__ncV10PendingCat;
+      if (window.__ncV10PendingProj) upd.projectId = window.__ncV10PendingProj;
       await db.collection('cheques').doc(snap.docs[0].id).update(upd);
     }
   } catch (e) {}
-  window.__ncAOPendingCat = null;
-  window.__ncAOPendingProj = null;
+  window.__ncV10PendingCat = null;
+  window.__ncV10PendingProj = null;
 }
 
 function installChequeWatcher() {
   if (typeof window.loadAllChequesData !== 'function') return setTimeout(installChequeWatcher, 300);
-  if (window.loadAllChequesData.__ncAOWatched) return;
+  if (window.loadAllChequesData.__ncV10Watched) return;
   const orig = window.loadAllChequesData;
   const wrapped = function () {
     const r = orig.apply(this, arguments);
-    const after = () => { try { attachPendingToNewest(); renderCats(); renderNewWidgets(); } catch(e){} };
+    const after = () => { try { attachPendingToNewest(); renderCats(); renderDashWidgets(); renderChips(); tagAndFilterRows(); } catch(e){} };
     if (r && r.then) r.then(after); else setTimeout(after, 400);
     return r;
   };
-  wrapped.__ncAOWatched = true;
+  wrapped.__ncV10Watched = true;
   window.loadAllChequesData = wrapped;
 }
 
-/* ══════════ PUSH NEW ALERTS INTO EXISTING BELL (optional) ══════════ */
-function computeExtraAlerts() {
+/* ══════════ ALERTS ══════════ */
+function computeAlerts() {
   const alerts = []; const now = Date.now(); const in7 = now + 7*86400000;
 
   S.loans.forEach(l => {
@@ -8876,38 +9150,39 @@ function computeExtraAlerts() {
     if (N(p.budget) > 0 && spend > N(p.budget)) alerts.push({sev:'danger', title:'[Project] Over budget — '+p.name, msg:F(spend)+' vs '+F(p.budget)});
   });
 
+  const uncat = getCheques().filter(c => !c.category).length;
+  if (uncat > 5) alerts.push({sev:'info', title:uncat+' uncategorized cheques', msg:'Use Bulk Assign in Categories'});
+
   return alerts;
 }
 
-function pushAlertsToExistingBell() {
-  // Try to find the existing bell and add a badge / list. If not possible, log only.
-  // Strategy: look for existing element with id containing 'bell' or 'Bell'
+function pushAlerts() {
   try {
-    const extras = computeExtraAlerts();
-    if (extras.length === 0) return;
-    // Attach as a small floating indicator if no integration point exists
-    let indicator = $('ncAOAlertIndicator');
+    const extras = computeAlerts();
+    let indicator = $('ncV10AlertIndicator');
     if (!indicator) {
       indicator = document.createElement('div');
-      indicator.id = 'ncAOAlertIndicator';
-      indicator.style.cssText = 'position:fixed;bottom:20px;right:20px;background:white;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);padding:12px 16px;font-size:12px;z-index:2400;max-width:320px;cursor:pointer;border-left:4px solid var(--primary)';
+      indicator.id = 'ncV10AlertIndicator';
+      indicator.style.cssText = 'position:fixed;bottom:20px;right:20px;background:white;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);padding:12px 16px;font-size:12px;z-index:2400;max-width:320px;cursor:pointer;border-left:4px solid var(--primary);display:none';
       indicator.onclick = () => {
-        const panel = $('ncAOAlertPanel');
+        const panel = $('ncV10AlertPanel');
         if (panel) panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
       };
       document.body.appendChild(indicator);
 
       const panel = document.createElement('div');
-      panel.id = 'ncAOAlertPanel';
+      panel.id = 'ncV10AlertPanel';
       panel.style.cssText = 'display:none;position:fixed;bottom:80px;right:20px;width:360px;max-height:400px;overflow-y:auto;background:white;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.25);z-index:2501;padding:16px';
       document.body.appendChild(panel);
     }
+    if (extras.length === 0) { indicator.style.display = 'none'; return; }
+    indicator.style.display = 'block';
     indicator.innerHTML = '<i class="fas fa-bell" style="color:var(--primary);margin-right:6px"></i><strong>'+extras.length+' capital alerts</strong><br><span style="color:var(--gray);font-size:11px">Click to view</span>';
 
-    const panel = $('ncAOAlertPanel');
+    const panel = $('ncV10AlertPanel');
     panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
       '<h3 style="font-size:14px;font-weight:700">Capital Flow Alerts</h3>' +
-      '<button class="modal-close" onclick="document.getElementById(\'ncAOAlertPanel\').style.display=\'none\'"><i class="fas fa-times"></i></button></div>' +
+      '<button class="modal-close" onclick="document.getElementById(\'ncV10AlertPanel\').style.display=\'none\'"><i class="fas fa-times"></i></button></div>' +
       extras.map(a => {
         const col = a.sev === 'danger' ? 'var(--danger)' : a.sev === 'warning' ? 'var(--warning)' : 'var(--info)';
         return '<div style="padding:10px;border-left:3px solid '+col+';background:var(--light);border-radius:8px;margin-bottom:8px">' +
@@ -8919,39 +9194,39 @@ function pushAlertsToExistingBell() {
 
 /* ══════════ SIDEBAR + VIEWS ══════════ */
 const VIEWS = [
-  {key:'ncAO-projects', id:'ncAOProjectsView', title:'Projects',          icon:'project-diagram',  body:'ncAOProjectsBody', add:'ncAddOnAddProject()'},
-  {key:'ncAO-loans',    id:'ncAOLoansView',    title:'Loans',             icon:'hand-holding-usd', body:'ncAOLoansBody',    add:'ncAddOnAddLoan()'},
-  {key:'ncAO-out',      id:'ncAOOutView',      title:'Out Payments',      icon:'arrow-circle-up',  body:'ncAOOutBody',      add:'ncAddOnAddOut()'},
-  {key:'ncAO-inp',      id:'ncAOInpView',      title:'In Payments',       icon:'arrow-circle-down',body:'ncAOInpBody',      add:'ncAddOnAddIn()'},
-  {key:'ncAO-parties',  id:'ncAOPartiesView',  title:'Parties',           icon:'address-book',     body:'ncAOPartiesBody',  add:'ncAddOnAddParty()'},
-  {key:'ncAO-banks',    id:'ncAOBanksView',    title:'Bank Accounts',     icon:'university',       body:'ncAOBanksBody',    add:'ncAddOnAddBank()'},
-  {key:'ncAO-txns',     id:'ncAOTxnsView',     title:'Bank Transactions', icon:'exchange-alt',     body:'ncAOTxnsBody',     add:'ncAddOnAddTxn()'},
-  {key:'ncAO-cats',     id:'ncAOCatsView',     title:'Cheque Categories', icon:'tags',             body:'ncAOCatsBody',     add:'ncAddOnAddCat()'}
+  {key:'ncV10-projects', id:'ncV10ProjectsView', title:'Projects',          icon:'project-diagram',  body:'ncV10ProjectsBody', add:'ncV10AddProject()'},
+  {key:'ncV10-loans',    id:'ncV10LoansView',    title:'Loans',             icon:'hand-holding-usd', body:'ncV10LoansBody',    add:'ncV10AddLoan()'},
+  {key:'ncV10-out',      id:'ncV10OutView',      title:'Out Payments',      icon:'arrow-circle-up',  body:'ncV10OutBody',      add:'ncV10AddOut()'},
+  {key:'ncV10-inp',      id:'ncV10InpView',      title:'In Payments',       icon:'arrow-circle-down',body:'ncV10InpBody',      add:'ncV10AddIn()'},
+  {key:'ncV10-parties',  id:'ncV10PartiesView',  title:'Parties',           icon:'address-book',     body:'ncV10PartiesBody',  add:'ncV10AddParty()'},
+  {key:'ncV10-banks',    id:'ncV10BanksView',    title:'Bank Accounts',     icon:'university',       body:'ncV10BanksBody',    add:'ncV10AddBank()'},
+  {key:'ncV10-txns',     id:'ncV10TxnsView',     title:'Bank Transactions', icon:'exchange-alt',     body:'ncV10TxnsBody',     add:'ncV10AddTxn()'},
+  {key:'ncV10-cats',     id:'ncV10CatsView',     title:'Cheque Categories', icon:'tags',             body:'ncV10CatsBody',     add:'ncV10AddCat()'}
 ];
 const viewMap = {};
 VIEWS.forEach(v => viewMap[v.key] = v.id);
 
 function injectSidebar() {
   const nav = document.querySelector('.sidebar nav');
-  if (!nav || $('ncAOCapSection')) return;
+  if (!nav || $('ncV10CapSection')) return;
 
   const cap = document.createElement('div');
-  cap.className = 'nav-section'; cap.id = 'ncAOCapSection';
+  cap.className = 'nav-section'; cap.id = 'ncV10CapSection';
   cap.innerHTML =
     '<div class="nav-title">Capital Flow</div>' +
-    '<div class="nav-item" onclick="ncAORoute(\'ncAO-projects\',this)"><i class="fas fa-project-diagram"></i><span>Projects</span></div>' +
-    '<div class="nav-item" onclick="ncAORoute(\'ncAO-loans\',this)"><i class="fas fa-hand-holding-usd"></i><span>Loans</span></div>' +
-    '<div class="nav-item" onclick="ncAORoute(\'ncAO-out\',this)"><i class="fas fa-arrow-circle-up"></i><span>Out Payments</span></div>' +
-    '<div class="nav-item" onclick="ncAORoute(\'ncAO-inp\',this)"><i class="fas fa-arrow-circle-down"></i><span>In Payments</span></div>' +
-    '<div class="nav-item" onclick="ncAORoute(\'ncAO-parties\',this)"><i class="fas fa-address-book"></i><span>Parties</span></div>';
+    '<div class="nav-item" onclick="ncV10Route(\'ncV10-projects\',this)"><i class="fas fa-project-diagram"></i><span>Projects</span></div>' +
+    '<div class="nav-item" onclick="ncV10Route(\'ncV10-loans\',this)"><i class="fas fa-hand-holding-usd"></i><span>Loans</span></div>' +
+    '<div class="nav-item" onclick="ncV10Route(\'ncV10-out\',this)"><i class="fas fa-arrow-circle-up"></i><span>Out Payments</span></div>' +
+    '<div class="nav-item" onclick="ncV10Route(\'ncV10-inp\',this)"><i class="fas fa-arrow-circle-down"></i><span>In Payments</span></div>' +
+    '<div class="nav-item" onclick="ncV10Route(\'ncV10-parties\',this)"><i class="fas fa-address-book"></i><span>Parties</span></div>';
 
   const bank = document.createElement('div');
-  bank.className = 'nav-section'; bank.id = 'ncAOBankSection';
+  bank.className = 'nav-section'; bank.id = 'ncV10BankSection';
   bank.innerHTML =
     '<div class="nav-title">Banking</div>' +
-    '<div class="nav-item" onclick="ncAORoute(\'ncAO-banks\',this)"><i class="fas fa-university"></i><span>Bank Accounts</span></div>' +
-    '<div class="nav-item" onclick="ncAORoute(\'ncAO-txns\',this)"><i class="fas fa-exchange-alt"></i><span>Bank Transactions</span></div>' +
-    '<div class="nav-item" onclick="ncAORoute(\'ncAO-cats\',this)"><i class="fas fa-tags"></i><span>Cheque Categories</span></div>';
+    '<div class="nav-item" onclick="ncV10Route(\'ncV10-banks\',this)"><i class="fas fa-university"></i><span>Bank Accounts</span></div>' +
+    '<div class="nav-item" onclick="ncV10Route(\'ncV10-txns\',this)"><i class="fas fa-exchange-alt"></i><span>Bank Transactions</span></div>' +
+    '<div class="nav-item" onclick="ncV10Route(\'ncV10-cats\',this)"><i class="fas fa-tags"></i><span>Cheque Categories</span></div>';
 
   nav.appendChild(cap);
   nav.appendChild(bank);
@@ -8970,7 +9245,7 @@ function injectViews() {
         '<div class="card-header">' +
           '<h2 class="card-title"><i class="fas fa-'+v.icon+'" style="color:var(--primary);margin-right:8px"></i>'+v.title+'</h2>' +
           '<div>' +
-            '<button class="btn btn-secondary btn-sm" onclick="ncAddOnRefresh(\''+v.key.replace('ncAO-','')+'\')" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
+            '<button class="btn btn-secondary btn-sm" onclick="ncV10Refresh(\''+v.key.replace('ncV10-','')+'\')" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
             '<button class="btn btn-primary btn-sm" onclick="'+v.add+'"><i class="fas fa-plus"></i> Add</button>' +
           '</div>' +
         '</div>' +
@@ -8980,7 +9255,7 @@ function injectViews() {
   });
 }
 
-window.ncAORoute = function (viewName, navEl) {
+window.ncV10Route = function (viewName, navEl) {
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
   if (navEl) navEl.classList.add('active');
   document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
@@ -8999,31 +9274,3199 @@ window.ncAORoute = function (viewName, navEl) {
   renderAll();
 };
 
+/* ══════════ PERIODIC SAFETY NET ══════════ */
+function periodic() {
+  const v = $('allChequesView');
+  if (v && v.classList.contains('active')) {
+    if (!$('ncCatChips')) injectChipBar();
+    tagAndFilterRows();
+  }
+  if ($('ncV10CatsView')) injectBulkButtonInCatsView();
+  pushAlerts();
+}
+
 /* ══════════ BOOT ══════════ */
 function boot() {
   injectSidebar();
   injectViews();
   installHooks();
   installChequeWatcher();
+  hookRenderAllCheques();
+  hookProjectToCategory();
   loadAll();
+  injectChipBar();
+  injectBulkButtonInCatsView();
 
   try {
     if (typeof auth !== 'undefined' && auth && auth.onAuthStateChanged) {
       auth.onAuthStateChanged(u => {
         if (u) setTimeout(() => {
-          injectSidebar(); injectViews(); installHooks(); installChequeWatcher(); loadAll();
+          injectSidebar(); injectViews(); installHooks(); installChequeWatcher();
+          hookRenderAllCheques(); hookProjectToCategory();
+          loadAll(); injectChipBar(); injectBulkButtonInCatsView();
         }, 700);
       });
     }
   } catch (e) {}
 
-  setInterval(() => { try { pushAlertsToExistingBell(); } catch (e) {} }, 60000);
+  setInterval(periodic, 1500);
 
-  console.log('[Add-On] ✅ Ready — Capital Flow + Banking added without touching Finance/Cheques');
+  console.log('[v10] ✅ Ready — Add-On + Change #1 (chips + bulk + auto-tag)');
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 500));
 else setTimeout(boot, 500);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHANGE #2 — Loan Multi-Category Allocations
+     • Split a loan principal across multiple categories
+     • Live Allocated / Unallocated tracking per loan
+     • Per-category summary across all loans
+     • Each allocation: category, amount, purpose, project, notes, date
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncChange2) return;
+window.__ncChange2 = true;
+
+const $  = id => document.getElementById(id);
+const N  = n  => parseFloat(n) || 0;
+const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
+const T  = () => new Date().toISOString().slice(0,10);
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const AU = v => { try { return firebase.firestore.FieldValue.arrayUnion(v); } catch(e){ return [v]; } };
+const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+
+function toast(m, t) {
+  try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
+  console.log('['+(t||'info')+']', m);
+}
+
+/* ─── CACHE ─── */
+const C2 = { loans: [], cats: [], projects: [] };
+
+async function loadC2() {
+  const db = DB(); if (!db) return;
+  try {
+    const [ls, cs, ps] = await Promise.all([
+      db.collection('loans').get().catch(()=>({docs:[]})),
+      db.collection('chequeCategories').get().catch(()=>({docs:[]})),
+      db.collection('projects').get().catch(()=>({docs:[]}))
+    ]);
+    C2.loans    = ls.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C2.cats     = cs.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C2.projects = ps.docs.map(d => Object.assign({id:d.id}, d.data()));
+  } catch(e) {}
+}
+
+const allocTotal  = loan => (loan.allocations||[]).reduce((s,a) => s + N(a.amount), 0);
+const allocUnused = loan => Math.max(0, N(loan.principal) - allocTotal(loan));
+const catColor    = name => (C2.cats.find(c => c.name === name) || {}).color || '#6366f1';
+
+/* ═══════════════════════════════════════════
+   ENHANCE LOAN ROWS
+   ═══════════════════════════════════════════ */
+function enhanceLoanRows() {
+  const body = $('ncV10LoansBody');
+  if (!body) return;
+  const rows = body.querySelectorAll('table tbody tr');
+
+  rows.forEach(row => {
+    if (row.dataset.ncAllocEnhanced) return;
+
+    const editBtn = Array.from(row.querySelectorAll('button')).find(b =>
+      (b.getAttribute('onclick')||'').indexOf('ncV10EditLoan') >= 0
+    );
+    if (!editBtn) return;
+
+    const m = (editBtn.getAttribute('onclick')||'').match(/ncV10EditLoan\('([^']+)'\)/);
+    if (!m) return;
+
+    const loanId = m[1];
+    const loan = C2.loans.find(l => l.id === loanId);
+    row.dataset.ncAllocEnhanced = '1';
+
+    const cells = row.querySelectorAll('td');
+    const actionsCell = cells[cells.length - 1];
+
+    /* Allocate button */
+    if (actionsCell) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-secondary nc-alloc-btn';
+      btn.title = 'Allocate loan across categories';
+      btn.innerHTML = '<i class="fas fa-sitemap"></i>';
+      btn.style.marginRight = '4px';
+      btn.onclick = () => ncLoanAllocate(loanId);
+      actionsCell.insertBefore(btn, actionsCell.firstChild);
+    }
+
+    /* Allocation progress bar under Principal (cells[2]) */
+    if (loan && cells[2] && !cells[2].querySelector('.nc-alloc-bar')) {
+      const alloc = allocTotal(loan);
+      if (alloc > 0) {
+        const pct = Math.min(100, (alloc / Math.max(1, N(loan.principal))) * 100);
+        const bar = document.createElement('div');
+        bar.className = 'nc-alloc-bar';
+        bar.style.cssText = 'margin-top:5px;min-width:110px';
+        bar.innerHTML =
+          '<div style="font-size:10px;color:var(--gray);display:flex;justify-content:space-between">' +
+            '<span>Allocated '+F(alloc)+'</span>' +
+            '<span>'+Math.round(pct)+'%</span>' +
+          '</div>' +
+          '<div class="payment-progress-bar" style="margin-top:2px">' +
+            '<div class="payment-progress-fill" style="width:'+pct+'%;background:var(--primary)"></div>' +
+          '</div>';
+        cells[2].appendChild(bar);
+      }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════
+   ALLOCATION MODAL
+   ═══════════════════════════════════════════ */
+function ensureAllocModal() {
+  let host = $('ncAllocModal');
+  if (host) return host;
+  host = document.createElement('div');
+  host.id = 'ncAllocModal';
+  host.className = 'modal-overlay';
+  host.innerHTML =
+    '<div class="modal" style="max-width:760px">' +
+      '<div class="modal-header">' +
+        '<h2 class="modal-title" id="ncAllocTitle">Loan Allocations</h2>' +
+        '<button class="modal-close" onclick="document.getElementById(\'ncAllocModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div class="modal-body" id="ncAllocBody"></div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="document.getElementById(\'ncAllocModal\').classList.remove(\'active\')">Close</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(host);
+  host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  return host;
+}
+
+window.ncLoanAllocate = async function (loanId) {
+  await loadC2();
+  const loan = C2.loans.find(l => l.id === loanId);
+  if (!loan) { toast('Loan not found', 'error'); return; }
+  const host = ensureAllocModal();
+  $('ncAllocTitle').textContent = 'Loan Allocations — ' + (loan.lender || loan.borrower || '');
+  renderAllocBody(loan);
+  host.classList.add('active');
+};
+
+function renderAllocBody(loan) {
+  const body = $('ncAllocBody'); if (!body) return;
+
+  const alloc = allocTotal(loan);
+  const unused = allocUnused(loan);
+  const principal = N(loan.principal);
+  const pct = principal > 0 ? Math.min(100, (alloc / principal) * 100) : 0;
+
+  const catOpts  = C2.cats.map(c => '<option value="'+E(c.name)+'">'+E(c.name)+'</option>').join('');
+  const projOpts = C2.projects.map(p => '<option value="'+E(p.id)+'">'+E(p.name)+'</option>').join('');
+
+  /* Per-category breakdown */
+  const byCat = {};
+  (loan.allocations || []).forEach(a => {
+    if (!byCat[a.category]) byCat[a.category] = {amount:0, count:0};
+    byCat[a.category].amount += N(a.amount);
+    byCat[a.category].count++;
+  });
+
+  let html = '';
+
+  /* Summary header */
+  html +=
+    '<div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:white;padding:18px;border-radius:12px;margin-bottom:18px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">' +
+        '<div><div style="font-size:11px;opacity:0.85">Principal</div><div style="font-size:20px;font-weight:800">'+F(principal)+'</div></div>' +
+        '<div><div style="font-size:11px;opacity:0.85">Allocated</div><div style="font-size:20px;font-weight:800">'+F(alloc)+'</div></div>' +
+        '<div><div style="font-size:11px;opacity:0.85">Unallocated</div><div style="font-size:20px;font-weight:800;color:'+(unused>0?'#fef3c7':'#d1fae5')+'">'+F(unused)+'</div></div>' +
+      '</div>' +
+      '<div style="margin-top:14px"><div style="background:rgba(255,255,255,0.3);height:8px;border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:white;border-radius:4px;transition:width 0.4s"></div></div>' +
+      '<div style="font-size:11px;text-align:center;margin-top:5px;opacity:0.85">'+Math.round(pct)+'% of loan allocated to categories</div></div>' +
+    '</div>';
+
+  /* Per-category split summary */
+  const catKeys = Object.keys(byCat);
+  if (catKeys.length > 0) {
+    html += '<div style="background:var(--light);padding:14px;border-radius:10px;margin-bottom:18px">' +
+      '<div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gray);text-transform:uppercase">Category Split</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">';
+    catKeys.forEach(k => {
+      const row = byCat[k];
+      const share = alloc > 0 ? (row.amount / alloc) * 100 : 0;
+      const color = catColor(k);
+      html +=
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<span style="width:12px;height:12px;border-radius:50%;background:'+color+'"></span>' +
+          '<span style="font-weight:600;font-size:13px;min-width:110px">'+E(k)+'</span>' +
+          '<div style="flex:1;background:var(--border);height:6px;border-radius:3px;overflow:hidden">' +
+            '<div style="height:100%;width:'+share+'%;background:'+color+';border-radius:3px"></div>' +
+          '</div>' +
+          '<span style="font-weight:700;font-size:12px;min-width:110px;text-align:right">'+F(row.amount)+' <span style="color:var(--gray);font-weight:400">('+Math.round(share)+'%)</span></span>' +
+        '</div>';
+    });
+    html += '</div></div>';
+  }
+
+  /* Add allocation form */
+  html +=
+    '<div style="background:var(--light);padding:16px;border-radius:10px;margin-bottom:18px">' +
+      '<h4 style="font-size:14px;margin-bottom:12px"><i class="fas fa-plus-circle" style="color:var(--primary);margin-right:6px"></i>Add Allocation</h4>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label>Category *</label><select id="ncAllocCat"><option value="">-- Select --</option>'+catOpts+'</select></div>' +
+        '<div class="form-group"><label>Amount *</label><input type="number" id="ncAllocAmount" step="0.01" min="0.01" placeholder="0.00" max="'+unused+'"><small style="color:var(--gray);font-size:11px">Max available: '+F(unused)+'</small></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label>Purpose / Item</label><input type="text" id="ncAllocPurpose" placeholder="e.g. Imported goods for shop"></div>' +
+        '<div class="form-group"><label>Link to Project (optional)</label><select id="ncAllocProject"><option value="">-- None --</option>'+projOpts+'</select></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label>Date</label><input type="date" id="ncAllocDate" value="'+T()+'"></div>' +
+        '<div class="form-group"><label>Notes</label><input type="text" id="ncAllocNotes" placeholder="Optional"></div>' +
+      '</div>' +
+      '<button class="btn btn-primary" onclick="ncAddAllocation(\''+loan.id+'\')" style="margin-top:8px"><i class="fas fa-save"></i> Add Allocation</button>' +
+    '</div>';
+
+  /* Existing allocations */
+  const allocations = loan.allocations || [];
+  if (allocations.length === 0) {
+    html +=
+      '<div style="text-align:center;padding:30px;color:var(--gray)">' +
+        '<i class="fas fa-sitemap" style="font-size:40px;opacity:0.3"></i>' +
+        '<p style="margin-top:10px">No allocations yet — add one above</p>' +
+      '</div>';
+  } else {
+    html += '<h4 style="font-size:14px;margin-bottom:10px">Allocations ('+allocations.length+')</h4>';
+    html += '<div class="table-container"><table><thead><tr>' +
+      '<th>Date</th><th>Category</th><th>Amount</th><th>Purpose</th><th>Project</th><th>Actions</th>' +
+      '</tr></thead><tbody>';
+    allocations.forEach(a => {
+      const proj = C2.projects.find(p => p.id === a.projectId);
+      const color = catColor(a.category);
+      html += '<tr>' +
+        '<td>'+E(a.date||'-')+'</td>' +
+        '<td><span class="status-badge" style="background:'+color+'22;color:'+color+'">'+E(a.category)+'</span></td>' +
+        '<td><strong>'+F(a.amount)+'</strong></td>' +
+        '<td>'+E(a.purpose||'-')+'</td>' +
+        '<td>'+E(proj ? proj.name : '-')+'</td>' +
+        '<td><button class="btn btn-sm btn-secondary" onclick="ncDelAllocation(\''+loan.id+'\',\''+a.id+'\')"><i class="fas fa-trash"></i></button></td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  body.innerHTML = html;
+}
+
+window.ncAddAllocation = async function (loanId) {
+  const cat     = ($('ncAllocCat') || {}).value;
+  const amount  = N(($('ncAllocAmount') || {}).value);
+  const purpose = ($('ncAllocPurpose') || {}).value || '';
+  const projectId = ($('ncAllocProject') || {}).value || '';
+  const date    = ($('ncAllocDate') || {}).value || T();
+  const notes   = ($('ncAllocNotes') || {}).value || '';
+
+  if (!cat) { toast('Select a category', 'error'); return; }
+  if (amount <= 0) { toast('Amount must be positive', 'error'); return; }
+
+  const loan = C2.loans.find(l => l.id === loanId);
+  if (!loan) { toast('Loan not found', 'error'); return; }
+
+  const unused = allocUnused(loan);
+  if (amount > unused) {
+    toast('Exceeds unallocated balance ('+F(unused)+')', 'error');
+    return;
+  }
+
+  const entry = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+    category: cat, amount, purpose, projectId, notes, date,
+    at: new Date().toISOString(), by: who()
+  };
+
+  try {
+    await DB().collection('loans').doc(loanId).update({ allocations: AU(entry) });
+    toast('Allocated '+F(amount)+' → '+cat, 'success');
+
+    await loadC2();
+    const fresh = C2.loans.find(l => l.id === loanId);
+    if (fresh) renderAllocBody(fresh);
+
+    /* Refresh v10 loans view */
+    try { if (typeof window.ncV10Refresh === 'function') window.ncV10Refresh('loans'); } catch(e){}
+    setTimeout(enhanceLoanRows, 500);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+};
+
+window.ncDelAllocation = async function (loanId, allocId) {
+  if (!confirm('Delete this allocation?')) return;
+  const loan = C2.loans.find(l => l.id === loanId);
+  if (!loan) return;
+  const allocations = (loan.allocations || []).filter(a => a.id !== allocId);
+  try {
+    await DB().collection('loans').doc(loanId).update({ allocations });
+    toast('Allocation removed', 'success');
+    await loadC2();
+    const fresh = C2.loans.find(l => l.id === loanId);
+    if (fresh) renderAllocBody(fresh);
+    try { if (typeof window.ncV10Refresh === 'function') window.ncV10Refresh('loans'); } catch(e){}
+    setTimeout(enhanceLoanRows, 500);
+  } catch (e) { toast('Error: '+e.message, 'error'); }
+};
+
+/* ═══════════════════════════════════════════
+   GLOBAL ALLOCATION SUMMARY (across all loans)
+   ═══════════════════════════════════════════ */
+window.ncOpenAllocSummary = async function () {
+  await loadC2();
+  let host = $('ncAllocSummaryModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ncAllocSummaryModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:720px">' +
+        '<div class="modal-header">' +
+          '<h2 class="modal-title">Loan Allocations — Summary</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'ncAllocSummaryModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<div class="modal-body" id="ncAllocSummaryBody"></div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" onclick="document.getElementById(\'ncAllocSummaryModal\').classList.remove(\'active\')">Close</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  const byCat = {};
+  let grandTotal = 0;
+
+  C2.loans.forEach(loan => {
+    (loan.allocations || []).forEach(a => {
+      if (!byCat[a.category]) byCat[a.category] = {amount:0, count:0, loans:new Set()};
+      byCat[a.category].amount += N(a.amount);
+      byCat[a.category].count++;
+      byCat[a.category].loans.add(loan.id);
+      grandTotal += N(a.amount);
+    });
+  });
+
+  let html = '';
+
+  if (grandTotal === 0) {
+    html = '<div style="text-align:center;padding:40px;color:var(--gray)">' +
+      '<i class="fas fa-sitemap" style="font-size:50px;opacity:0.3"></i>' +
+      '<p style="margin-top:12px">No loan allocations yet</p>' +
+      '<p style="font-size:12px;color:var(--gray);margin-top:6px">Open a loan → click <i class="fas fa-sitemap"></i> to allocate</p>' +
+    '</div>';
+  } else {
+    html += '<div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:white;padding:18px;border-radius:12px;margin-bottom:18px;text-align:center">' +
+      '<div style="font-size:11px;opacity:0.85">Total Allocated Across All Loans</div>' +
+      '<div style="font-size:32px;font-weight:800">'+F(grandTotal)+'</div>' +
+    '</div>';
+
+    html += '<div style="display:flex;flex-direction:column;gap:10px">';
+
+    const sorted = Object.keys(byCat).sort((a,b) => byCat[b].amount - byCat[a].amount);
+    sorted.forEach(k => {
+      const row = byCat[k];
+      const share = grandTotal > 0 ? (row.amount / grandTotal) * 100 : 0;
+      const color = catColor(k);
+      html +=
+        '<div style="background:var(--light);padding:14px;border-radius:10px;border-left:4px solid '+color+'">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+            '<span style="font-weight:700;font-size:14px">'+E(k)+'</span>' +
+            '<span style="font-weight:700;font-size:15px;color:'+color+'">'+F(row.amount)+'</span>' +
+          '</div>' +
+          '<div style="background:var(--border);height:6px;border-radius:3px;overflow:hidden;margin-bottom:6px">' +
+            '<div style="height:100%;width:'+share+'%;background:'+color+'"></div>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--gray)">'+row.count+' allocation(s) across '+row.loans.size+' loan(s) — '+Math.round(share)+'% of total</div>' +
+        '</div>';
+    });
+
+    html += '</div>';
+  }
+
+  $('ncAllocSummaryBody').innerHTML = html;
+  host.classList.add('active');
+};
+
+/* ═══════════════════════════════════════════
+   INJECT "SUMMARY" BUTTON INTO LOANS VIEW
+   ═══════════════════════════════════════════ */
+function injectSummaryBtn() {
+  const view = $('ncV10LoansView');
+  if (!view || $('ncAllocSummaryBtn')) return;
+  const header = view.querySelector('.card-header');
+  if (!header) return;
+  const btn = document.createElement('button');
+  btn.id = 'ncAllocSummaryBtn';
+  btn.className = 'btn btn-secondary btn-sm';
+  btn.style.marginRight = '8px';
+  btn.innerHTML = '<i class="fas fa-chart-pie"></i> Summary';
+  btn.onclick = ncOpenAllocSummary;
+  const actions = header.querySelector('div');
+  if (actions) actions.insertBefore(btn, actions.firstChild);
+  else header.appendChild(btn);
+}
+
+/* ═══════════════════════════════════════════
+   MUTATION OBSERVER + PERIODIC
+   ═══════════════════════════════════════════ */
+function watchLoans() {
+  const body = $('ncV10LoansBody');
+  if (!body) return setTimeout(watchLoans, 500);
+  if (body.__ncC2Watched) return;
+  const obs = new MutationObserver(() => setTimeout(enhanceLoanRows, 80));
+  obs.observe(body, { childList: true, subtree: true });
+  body.__ncC2Watched = true;
+  setTimeout(enhanceLoanRows, 500);
+}
+
+function periodic() {
+  if ($('ncV10LoansView') && $('ncV10LoansView').classList.contains('active')) {
+    enhanceLoanRows();
+    injectSummaryBtn();
+  }
+}
+
+/* ═══════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════ */
+async function boot() {
+  await loadC2();
+  watchLoans();
+  injectSummaryBtn();
+  setInterval(periodic, 1500);
+  setInterval(loadC2, 30000); // refresh cache every 30s
+  console.log('[Change #2] ✅ Loan multi-category allocations ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 1500));
+else setTimeout(boot, 1500);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHANGE #3 — Cross-Category Cheque Issuance Notice
+     • Detects when issuing a cheque whose category ≠ project default
+       or whose category has no loan allocation / uses personal category
+     • Soft notice (yellow) for mismatches — click to continue
+     • Harsh warning (red) for personal category — type PERSONAL to proceed
+     • Logs notice every time into cheque.history
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncChange3) return;
+window.__ncChange3 = true;
+
+const $  = id => document.getElementById(id);
+const N  = n  => parseFloat(n) || 0;
+const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const AU = v => { try { return firebase.firestore.FieldValue.arrayUnion(v); } catch(e){ return [v]; } };
+const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+
+function toast(m, t) {
+  try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
+  console.log('['+(t||'info')+']', m);
+}
+
+/* ─────── CACHE ─────── */
+const C3 = { loans: [], projects: [], cats: [] };
+
+async function loadC3() {
+  const db = DB(); if (!db) return;
+  try {
+    const [ls, ps, cs] = await Promise.all([
+      db.collection('loans').get().catch(()=>({docs:[]})),
+      db.collection('projects').get().catch(()=>({docs:[]})),
+      db.collection('chequeCategories').get().catch(()=>({docs:[]}))
+    ]);
+    C3.loans    = ls.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C3.projects = ps.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C3.cats     = cs.docs.map(d => Object.assign({id:d.id}, d.data()));
+  } catch(e) {}
+}
+
+/* ─────── DETECT: is "personal" category? ─────── */
+function isPersonalCat(name) {
+  if (!name) return false;
+  const n = String(name).toLowerCase();
+  return /personal|private|own|self/.test(n) ||
+         C3.cats.some(c => c.name === name && c.personal === true);
+}
+
+/* ─────── Find cheque by id ─────── */
+function findCheque(id) {
+  try {
+    return (Array.isArray(allCheques) ? allCheques : []).find(c => c.id === id);
+  } catch(e) { return null; }
+}
+
+/* ─────── Analyze cross-category situation ─────── */
+function analyzeIssuance(cheque, newStatus) {
+  if (!cheque) return null;
+  if (newStatus !== 'issued') return null;
+
+  const cat = cheque.category || '';
+  const issues = [];
+
+  /* Check personal category */
+  if (isPersonalCat(cat)) {
+    issues.push({
+      severity: 'harsh',
+      title: 'PERSONAL-USE CHEQUE',
+      msg: 'Category "' + cat + '" is marked as personal. This is a business system — issuing personal cheques must be recorded carefully.',
+      action: 'typing PERSONAL'
+    });
+  }
+
+  /* Check project default mismatch */
+  if (cheque.projectId) {
+    const proj = C3.projects.find(p => p.id === cheque.projectId);
+    if (proj && proj.defaultCategory && cat && proj.defaultCategory !== cat) {
+      issues.push({
+        severity: 'soft',
+        title: 'Category doesn\'t match project default',
+        msg: 'Project "' + proj.name + '" default is "' + proj.defaultCategory + '", but this cheque is categorized as "' + cat + '".',
+        action: 'continue'
+      });
+    }
+  }
+
+  /* Check loan allocation availability for this category */
+  if (cat && !isPersonalCat(cat)) {
+    const totalAlloc = C3.loans.reduce((sum, loan) => {
+      return sum + (loan.allocations || [])
+        .filter(a => a.category === cat)
+        .reduce((s,a) => s + N(a.amount), 0);
+    }, 0);
+    const amount = N(cheque.amount);
+
+    if (totalAlloc === 0) {
+      issues.push({
+        severity: 'soft',
+        title: 'No loan allocation for this category',
+        msg: 'Category "' + cat + '" has no loan allocations. This cheque of ' + F(amount) + ' won\'t be backed by a funded allocation.',
+        action: 'continue'
+      });
+    }
+  }
+
+  /* Cross-category awareness: cheque category ≠ any active project default */
+  if (cat && cheque.projectId) {
+    const proj = C3.projects.find(p => p.id === cheque.projectId);
+    if (proj && proj.defaultCategory && proj.defaultCategory !== cat && !isPersonalCat(cat)) {
+      // Already logged above
+    }
+  }
+
+  if (issues.length === 0) return null;
+  return issues;
+}
+
+/* ─────── NOTICE MODAL ─────── */
+function ensureNoticeModal() {
+  let host = $('ncNoticeModal');
+  if (host) return host;
+  host = document.createElement('div');
+  host.id = 'ncNoticeModal';
+  host.className = 'modal-overlay';
+  host.innerHTML =
+    '<div class="modal" style="max-width:520px">' +
+      '<div class="modal-header" id="ncNoticeHeader">' +
+        '<h2 class="modal-title" id="ncNoticeTitle">Notice</h2>' +
+        '<button class="modal-close" onclick="ncNoticeCancel()"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div class="modal-body" id="ncNoticeBody"></div>' +
+      '<div class="modal-footer" id="ncNoticeFooter"></div>' +
+    '</div>';
+  document.body.appendChild(host);
+  host.addEventListener('click', e => { if (e.target === host) ncNoticeCancel(); });
+  return host;
+}
+
+let __noticeResolve = null;
+
+window.ncNoticeCancel = function () {
+  const h = $('ncNoticeModal');
+  if (h) h.classList.remove('active');
+  if (__noticeResolve) { __noticeResolve(false); __noticeResolve = null; }
+};
+
+function showNoticeModal(issues) {
+  return new Promise(resolve => {
+    __noticeResolve = resolve;
+    const host = ensureNoticeModal();
+    const hasHarsh = issues.some(i => i.severity === 'harsh');
+
+    /* Header style based on severity */
+    const header = $('ncNoticeHeader');
+    header.style.background = hasHarsh
+      ? 'linear-gradient(135deg,#dc2626,#991b1b)'
+      : 'linear-gradient(135deg,#f59e0b,#d97706)';
+    header.style.color = 'white';
+    header.querySelector('.modal-close').style.background = 'rgba(255,255,255,0.2)';
+    header.querySelector('.modal-close').style.color = 'white';
+
+    $('ncNoticeTitle').innerHTML = hasHarsh
+      ? '<i class="fas fa-exclamation-triangle"></i> HARSH WARNING'
+      : '<i class="fas fa-exclamation-circle"></i> Notice';
+
+    /* Body */
+    let bodyHtml = '';
+    if (hasHarsh) {
+      bodyHtml +=
+        '<div style="background:#fee2e2;border-left:4px solid #dc2626;padding:14px;border-radius:8px;margin-bottom:16px">' +
+          '<div style="font-weight:800;color:#991b1b;font-size:15px;margin-bottom:6px">⚠ YOU ARE ISSUING A PERSONAL-USE CHEQUE</div>' +
+          '<div style="font-size:13px;color:#7f1d1d">This system is designed for business finance tracking. Personal cheques will be flagged and must be confirmed explicitly.</div>' +
+        '</div>';
+    }
+
+    issues.forEach(iss => {
+      const color = iss.severity === 'harsh' ? '#dc2626' : '#f59e0b';
+      const bg    = iss.severity === 'harsh' ? '#fee2e2' : '#fef3c7';
+      bodyHtml +=
+        '<div style="background:'+bg+';border-left:4px solid '+color+';padding:12px;border-radius:8px;margin-bottom:10px">' +
+          '<div style="font-weight:700;color:'+color+';font-size:13px;margin-bottom:4px">'+E(iss.title)+'</div>' +
+          '<div style="font-size:12px;color:var(--dark)">'+E(iss.msg)+'</div>' +
+        '</div>';
+    });
+
+    if (hasHarsh) {
+      bodyHtml +=
+        '<div class="form-group" style="margin-top:16px">' +
+          '<label style="font-weight:700;color:#991b1b">Type <code style="background:#fee2e2;padding:2px 6px;border-radius:4px">PERSONAL</code> to proceed</label>' +
+          '<input type="text" id="ncHarshConfirm" placeholder="Type PERSONAL here" autocomplete="off" style="border-color:#dc2626">' +
+        '</div>';
+    }
+
+    $('ncNoticeBody').innerHTML = bodyHtml;
+
+    /* Footer buttons */
+    const footer = $('ncNoticeFooter');
+    footer.innerHTML =
+      '<button class="btn btn-secondary" onclick="ncNoticeCancel()">Cancel (do not issue)</button>' +
+      '<button class="btn ' + (hasHarsh ? 'btn-danger' : 'btn-primary') + '" id="ncNoticeProceed" ' +
+        (hasHarsh ? 'disabled style="background:#dc2626;color:white;border:none" ' : '') +
+        '><i class="fas fa-check"></i> ' + (hasHarsh ? 'I understand — Issue anyway' : 'Proceed to Issue') +
+      '</button>';
+
+    const proceedBtn = $('ncNoticeProceed');
+    proceedBtn.addEventListener('click', () => {
+      if (hasHarsh) {
+        const typed = ($('ncHarshConfirm') || {}).value || '';
+        if (typed.trim() !== 'PERSONAL') {
+          toast('Type "PERSONAL" exactly to confirm', 'error');
+          return;
+        }
+      }
+      host.classList.remove('active');
+      if (__noticeResolve) { __noticeResolve(true); __noticeResolve = null; }
+    });
+
+    host.classList.add('active');
+  });
+}
+
+/* ─────── LOG NOTICE INTO HISTORY ─────── */
+async function logNotice(chequeId, issues) {
+  const db = DB(); if (!db) return;
+  try {
+    const entry = {
+      action: 'Issuance Notice',
+      details: issues.map(i => '['+i.severity.toUpperCase()+'] '+i.title).join(' | '),
+      timestamp: new Date().toISOString(),
+      user: who()
+    };
+    await db.collection('cheques').doc(chequeId).update({ history: AU(entry) });
+  } catch (e) { console.warn('[Change #3] log failed', e.message); }
+}
+
+/* ─────── MAIN INTERCEPT ─────── */
+async function interceptIssuance(chequeId, newStatus) {
+  const cheque = findCheque(chequeId);
+  if (!cheque) return true;
+
+  await loadC3();
+  const issues = analyzeIssuance(cheque, newStatus);
+  if (!issues || issues.length === 0) return true;
+
+  const proceed = await showNoticeModal(issues);
+  if (!proceed) return false;
+
+  await logNotice(chequeId, issues);
+  return true;
+}
+
+/* ─────── HOOK saveStatusChange ─────── */
+function hookSaveStatusChange() {
+  if (typeof window.saveStatusChange !== 'function') return setTimeout(hookSaveStatusChange, 300);
+  if (window.saveStatusChange.__ncC3Hooked) return;
+
+  const orig = window.saveStatusChange;
+  const wrapped = async function () {
+    const idEl = $('statusChequeId');
+    const statusSel = $('newStatusSelect');
+    const chequeId = idEl ? idEl.value : null;
+    const newStatus = statusSel ? statusSel.value : null;
+
+    if (chequeId && newStatus === 'issued') {
+      const ok = await interceptIssuance(chequeId, newStatus);
+      if (!ok) {
+        toast('Issuance cancelled', 'info');
+        return; /* do NOT call orig */
+      }
+    }
+    return orig.apply(this, arguments);
+  };
+  wrapped.__ncC3Hooked = true;
+  window.saveStatusChange = wrapped;
+}
+
+/* ─────── HOOK saveEditCheque (when status changes to issued via Edit) ─────── */
+function hookSaveEditCheque() {
+  if (typeof window.saveEditCheque !== 'function') return setTimeout(hookSaveEditCheque, 300);
+  if (window.saveEditCheque.__ncC3Hooked) return;
+
+  const orig = window.saveEditCheque;
+  const wrapped = async function () {
+    const idEl = $('editChequeId');
+    const statusSel = $('editChequeStatus');
+    const chequeId = idEl ? idEl.value : null;
+    const newStatus = statusSel ? statusSel.value : null;
+    const oldCheque = findCheque(chequeId);
+    const wasIssued = oldCheque && oldCheque.status === 'issued';
+
+    if (chequeId && newStatus === 'issued' && !wasIssued) {
+      /* status is transitioning TO issued */
+      const catSel = $('editChequeCategory');
+      /* Temporarily patch the cheque object to reflect the new category being saved */
+      const simulated = Object.assign({}, oldCheque);
+      if (catSel) simulated.category = catSel.value || oldCheque.category;
+
+      await loadC3();
+      const issues = analyzeIssuance(simulated, 'issued');
+      if (issues && issues.length > 0) {
+        const proceed = await showNoticeModal(issues);
+        if (!proceed) {
+          toast('Issuance cancelled', 'info');
+          return;
+        }
+        await logNotice(chequeId, issues);
+      }
+    }
+    return orig.apply(this, arguments);
+  };
+  wrapped.__ncC3Hooked = true;
+  window.saveEditCheque = wrapped;
+}
+
+/* ─────── HOOK bulk status change to confirm one-by-one (soft only) ─────── */
+function hookBulkStatus() {
+  if (typeof window.confirmBulkStatusChange !== 'function') return setTimeout(hookBulkStatus, 500);
+  if (window.confirmBulkStatusChange.__ncC3Hooked) return;
+
+  const orig = window.confirmBulkStatusChange;
+  const wrapped = async function () {
+    const statusSel = $('bulkNewStatus');
+    const newStatus = statusSel ? statusSel.value : null;
+
+    if (newStatus === 'issued') {
+      /* Collect the selected cheque IDs from the modal context */
+      const list = $('bulkStatusList');
+      const ids = [];
+      if (list) {
+        list.querySelectorAll('[data-id]').forEach(el => ids.push(el.dataset.id));
+      }
+      /* Fallback: if we can't identify, just show a bulk notice */
+      if (ids.length > 0) {
+        let proceedAll = true;
+        for (const id of ids) {
+          const cheque = findCheque(id);
+          if (!cheque) continue;
+          await loadC3();
+          const issues = analyzeIssuance(cheque, 'issued');
+          if (issues && issues.length > 0) {
+            const proceed = await showNoticeModal(issues);
+            if (!proceed) { proceedAll = false; break; }
+            await logNotice(id, issues);
+          }
+        }
+        if (!proceedAll) {
+          toast('Bulk issuance cancelled at some point', 'info');
+          return;
+        }
+      }
+    }
+    return orig.apply(this, arguments);
+  };
+  wrapped.__ncC3Hooked = true;
+  window.confirmBulkStatusChange = wrapped;
+}
+
+/* ─────── PERIODIC REFRESH ─────── */
+setInterval(loadC3, 60000);
+
+/* ─────── BOOT ─────── */
+async function boot() {
+  await loadC3();
+  hookSaveStatusChange();
+  hookSaveEditCheque();
+  hookBulkStatus();
+  console.log('[Change #3] ✅ Cross-category issuance notices armed');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 1800));
+else setTimeout(boot, 1800);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHANGE #4 — Personal-Use Control System
+     • Personal category flag (persistent in Firestore)
+     • Sidebar personal-usage tracker (YTD)
+     • Monthly personal report (cheques + payments)
+     • Strict blocklist mode (optional hard block)
+     • Personal cheque/payment confirmation with reason logging
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncChange4) return;
+window.__ncChange4 = true;
+
+const $  = id => document.getElementById(id);
+const N  = n  => parseFloat(n) || 0;
+const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
+const T  = () => new Date().toISOString().slice(0,10);
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const TS = () => { try { return firebase.firestore.FieldValue.serverTimestamp(); } catch(e){ return new Date(); } };
+const AU = v => { try { return firebase.firestore.FieldValue.arrayUnion(v); } catch(e){ return [v]; } };
+const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+const getCheques = () => { try { return (Array.isArray(allCheques) ? allCheques : []).filter(c => !c.deletedAt); } catch(e){ return []; } };
+
+function toast(m, t) {
+  try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
+  console.log('['+(t||'info')+']', m);
+}
+
+/* ─────── CACHE ─────── */
+const C4 = {
+  cats: [],
+  settings: { strictMode: false },
+  out: [], inp: []
+};
+
+async function loadC4() {
+  const db = DB(); if (!db) return;
+  try {
+    const [cs, os, is, ss] = await Promise.all([
+      db.collection('chequeCategories').get().catch(()=>({docs:[]})),
+      db.collection('outPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('inPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('ncSettings').doc('personalControl').get().catch(()=>({exists:false}))
+    ]);
+    C4.cats = cs.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C4.out  = os.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C4.inp  = is.docs.map(d => Object.assign({id:d.id}, d.data()));
+    if (ss.exists) C4.settings = Object.assign({strictMode:false}, ss.data());
+    renderPersonalSidebar();
+  } catch(e) {}
+}
+
+/* ─────── IS CATEGORY PERSONAL? ─────── */
+function isPersonalCat(name) {
+  if (!name) return false;
+  const cat = C4.cats.find(c => c.name === name);
+  if (cat && cat.personal === true) return true;
+  /* Fallback heuristic */
+  return /personal|private|own|self/i.test(String(name));
+}
+
+/* ─────── SIDEBAR PERSONAL TRACKER ─────── */
+function renderPersonalSidebar() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return;
+  let widget = $('ncPersonalWidget');
+  if (!widget) {
+    widget = document.createElement('div');
+    widget.id = 'ncPersonalWidget';
+    widget.className = 'nav-section';
+    nav.appendChild(widget);
+  }
+
+  /* Compute YTD personal usage */
+  const year = new Date().getFullYear();
+  const personalCheques = getCheques().filter(c => {
+    if (!isPersonalCat(c.category)) return false;
+    const d = c.date || (c.createdAt ? new Date(c.createdAt.seconds ? c.createdAt.seconds*1000 : c.createdAt).toISOString() : null);
+    if (!d) return false;
+    return new Date(d).getFullYear() === year;
+  });
+  const chequeTotal = personalCheques.reduce((s,c) => s + N(c.amount), 0);
+
+  const personalOut = C4.out.filter(p => {
+    if (!isPersonalCat(p.category)) return false;
+    return p.date && new Date(p.date).getFullYear() === year;
+  });
+  const outTotal = personalOut.reduce((s,p) => s + N(p.amount), 0);
+
+  const grand = chequeTotal + outTotal;
+  const strict = C4.settings.strictMode;
+
+  widget.innerHTML =
+    '<div class="nav-title" style="display:flex;justify-content:space-between;align-items:center">' +
+      '<span>Personal (YTD)</span>' +
+      (strict ? '<span style="font-size:9px;background:var(--danger);color:white;padding:2px 6px;border-radius:8px;font-weight:700">STRICT</span>' : '') +
+    '</div>' +
+    '<div style="background:'+(grand > 0 ? '#fee2e2' : '#f1f5f9')+';border-left:4px solid '+(grand > 0 ? '#dc2626' : '#94a3b8')+';border-radius:10px;padding:12px;cursor:pointer" onclick="ncOpenPersonalReport()">' +
+      '<div style="font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700">Total Personal</div>' +
+      '<div style="font-size:20px;font-weight:800;color:'+(grand > 0 ? '#dc2626' : 'var(--gray)')+';margin:4px 0">'+F(grand)+'</div>' +
+      '<div style="font-size:11px;color:var(--gray)">'+personalCheques.length+' cheque(s) • '+personalOut.length+' payment(s)</div>' +
+      '<div style="font-size:11px;color:var(--primary);font-weight:600;margin-top:6px">View report →</div>' +
+    '</div>' +
+    '<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px;font-size:11px" onclick="ncToggleStrictPersonal()">' +
+      '<i class="fas fa-'+(strict?'lock':'lock-open')+'"></i> ' + (strict ? 'Strict Mode ON' : 'Strict Mode OFF') +
+    '</button>';
+
+  /* Periodic personal alert banner at top of page */
+  let banner = $('ncPersonalBanner');
+  if (grand > 0 && !banner) {
+    const dash = $('dashboardView');
+    if (dash) {
+      banner = document.createElement('div');
+      banner.id = 'ncPersonalBanner';
+      banner.style.cssText = 'background:linear-gradient(135deg,#fee2e2,#fecaca);border-left:4px solid #dc2626;padding:14px 18px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center';
+      banner.innerHTML =
+        '<div>' +
+          '<div style="font-weight:800;color:#991b1b;font-size:14px"><i class="fas fa-exclamation-triangle"></i> Personal use detected this year</div>' +
+          '<div style="font-size:12px;color:#7f1d1d;margin-top:2px">'+F(grand)+' across '+personalCheques.length+' cheque(s) + '+personalOut.length+' payment(s)</div>' +
+        '</div>' +
+        '<button class="btn btn-sm" style="background:white;color:#dc2626;border:1px solid #dc2626" onclick="ncOpenPersonalReport()">View Report</button>';
+      dash.insertBefore(banner, dash.firstChild);
+    }
+  } else if (grand === 0 && banner) {
+    banner.remove();
+  }
+}
+
+window.ncToggleStrictPersonal = async function () {
+  const next = !C4.settings.strictMode;
+  if (next) {
+    if (!confirm('Enable STRICT MODE?\n\nIn strict mode, personal-category cheques cannot be issued without an Admin override code. You will be asked for the code every time.')) return;
+  }
+  try {
+    await DB().collection('ncSettings').doc('personalControl').set({strictMode: next}, {merge:true});
+    C4.settings.strictMode = next;
+    toast('Strict mode ' + (next ? 'ENABLED' : 'DISABLED'), next ? 'warning' : 'success');
+    renderPersonalSidebar();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+};
+
+/* ─────── PERSONAL REPORT MODAL ─────── */
+window.ncOpenPersonalReport = async function () {
+  await loadC4();
+  let host = $('ncPersonalReportModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ncPersonalReportModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:900px">' +
+        '<div class="modal-header">' +
+          '<h2 class="modal-title"><i class="fas fa-user-secret" style="color:#dc2626;margin-right:8px"></i>Personal Usage Report</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'ncPersonalReportModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<div class="modal-body" id="ncPersonalReportBody"></div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" onclick="document.getElementById(\'ncPersonalReportModal\').classList.remove(\'active\')">Close</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  const year = new Date().getFullYear();
+
+  /* Group by month */
+  const byMonth = {};
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  const addEntry = (date, amount, source) => {
+    if (!date) return;
+    const d = new Date(date);
+    if (d.getFullYear() !== year) return;
+    const key = d.getMonth();
+    if (!byMonth[key]) byMonth[key] = {cheques:0, chequeAmt:0, payments:0, paymentAmt:0, items:[]};
+    if (source === 'cheque') { byMonth[key].cheques++; byMonth[key].chequeAmt += amount; }
+    else { byMonth[key].payments++; byMonth[key].paymentAmt += amount; }
+  };
+
+  const personalCheques = getCheques().filter(c => isPersonalCat(c.category));
+  personalCheques.forEach(c => addEntry(c.date, N(c.amount), 'cheque'));
+
+  C4.out.filter(p => isPersonalCat(p.category)).forEach(p => addEntry(p.date, N(p.amount), 'payment'));
+
+  /* Build report */
+  let html = '';
+
+  let grandCheq = 0, grandPay = 0;
+  Object.keys(byMonth).forEach(k => { grandCheq += byMonth[k].chequeAmt; grandPay += byMonth[k].paymentAmt; });
+  const grand = grandCheq + grandPay;
+
+  html +=
+    '<div style="background:linear-gradient(135deg,#dc2626,#991b1b);color:white;padding:18px;border-radius:12px;margin-bottom:18px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">' +
+        '<div><div style="font-size:11px;opacity:0.85">Cheques</div><div style="font-size:22px;font-weight:800">'+F(grandCheq)+'</div><div style="font-size:11px;opacity:0.8">'+personalCheques.length+' items</div></div>' +
+        '<div><div style="font-size:11px;opacity:0.85">Payments</div><div style="font-size:22px;font-weight:800">'+F(grandPay)+'</div><div style="font-size:11px;opacity:0.8">'+C4.out.filter(p=>isPersonalCat(p.category)).length+' items</div></div>' +
+        '<div><div style="font-size:11px;opacity:0.85">Total YTD '+year+'</div><div style="font-size:24px;font-weight:800">'+F(grand)+'</div></div>' +
+      '</div>' +
+    '</div>';
+
+  if (grand === 0) {
+    html += '<div style="text-align:center;padding:40px;color:var(--gray)">' +
+      '<i class="fas fa-check-circle" style="font-size:50px;opacity:0.3;color:var(--success)"></i>' +
+      '<p style="margin-top:12px;font-weight:600">No personal usage this year</p>' +
+    '</div>';
+  } else {
+    html += '<h4 style="font-size:14px;margin-bottom:10px">Monthly Breakdown — '+year+'</h4>';
+    html += '<div class="table-container"><table><thead><tr>' +
+      '<th>Month</th><th>Cheques</th><th>Cheque Amt</th><th>Payments</th><th>Payment Amt</th><th>Total</th>' +
+      '</tr></thead><tbody>';
+
+    let maxAmt = 0;
+    Object.keys(byMonth).forEach(k => {
+      const m = byMonth[k];
+      const tot = m.chequeAmt + m.paymentAmt;
+      if (tot > maxAmt) maxAmt = tot;
+    });
+
+    monthNames.forEach((name, idx) => {
+      const m = byMonth[idx];
+      if (!m) return;
+      const tot = m.chequeAmt + m.paymentAmt;
+      const pct = maxAmt > 0 ? (tot / maxAmt) * 100 : 0;
+      html += '<tr>' +
+        '<td><strong>'+name+'</strong></td>' +
+        '<td>'+m.cheques+'</td>' +
+        '<td>'+F(m.chequeAmt)+'</td>' +
+        '<td>'+m.payments+'</td>' +
+        '<td>'+F(m.paymentAmt)+'</td>' +
+        '<td><strong style="color:#dc2626">'+F(tot)+'</strong>' +
+          '<div style="background:var(--border);height:4px;border-radius:2px;margin-top:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:#dc2626"></div></div>' +
+        '</td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+
+    /* Item-level detail */
+    html += '<h4 style="font-size:14px;margin-top:20px;margin-bottom:10px">All Personal Items</h4>';
+    html += '<div class="table-container"><table><thead><tr>' +
+      '<th>Type</th><th>Date</th><th>Category</th><th>Party</th><th>Amount</th>' +
+      '</tr></thead><tbody>';
+
+    personalCheques.forEach(c => {
+      html += '<tr>' +
+        '<td><span class="status-badge" style="background:#fee2e2;color:#991b1b">Cheque</span></td>' +
+        '<td>'+E(c.date||'-')+'</td>' +
+        '<td>'+E(c.category||'-')+'</td>' +
+        '<td>'+E(c.payee||'-')+'</td>' +
+        '<td style="color:#dc2626;font-weight:700">'+F(c.amount)+'</td>' +
+      '</tr>';
+    });
+
+    C4.out.filter(p => isPersonalCat(p.category)).forEach(p => {
+      html += '<tr>' +
+        '<td><span class="status-badge" style="background:#fee2e2;color:#991b1b">Payment</span></td>' +
+        '<td>'+E(p.date||'-')+'</td>' +
+        '<td>'+E(p.category||'-')+'</td>' +
+        '<td>'+E(p.payee||'-')+'</td>' +
+        '<td style="color:#dc2626;font-weight:700">'+F(p.amount)+'</td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+  }
+
+  $('ncPersonalReportBody').innerHTML = html;
+  host.classList.add('active');
+};
+
+/* ─────── CATEGORY MODAL ENHANCEMENT ─────── */
+function enhanceCategoryRows() {
+  const body = $('ncV10CatsBody');
+  if (!body) return;
+  const rows = body.querySelectorAll('table tbody tr');
+  rows.forEach(row => {
+    if (row.dataset.ncC4Enhanced) return;
+    row.dataset.ncC4Enhanced = '1';
+
+    /* Find category name from first cell */
+    const firstCell = row.querySelector('td');
+    if (!firstCell) return;
+    const nameEl = firstCell.querySelector('strong');
+    const catName = nameEl ? nameEl.textContent.trim() : '';
+    if (!catName) return;
+
+    const cat = C4.cats.find(c => c.name === catName);
+    if (!cat) return;
+
+    /* Add PERSONAL badge to description cell */
+    const cells = row.querySelectorAll('td');
+    const descCell = cells[1];
+    if (descCell && !descCell.querySelector('.nc-personal-badge')) {
+      const badge = document.createElement('span');
+      badge.className = 'nc-personal-badge';
+      badge.style.cssText = 'display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:800;background:'+(cat.personal?'#dc2626':'#e2e8f0')+';color:'+(cat.personal?'white':'#64748b');
+      badge.textContent = cat.personal ? 'PERSONAL' : 'BUSINESS';
+      descCell.appendChild(badge);
+    }
+
+    /* Add toggle personal button to actions cell */
+    const actionsCell = cells[cells.length - 1];
+    if (actionsCell && !actionsCell.querySelector('.nc-personal-toggle')) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-secondary nc-personal-toggle';
+      btn.style.marginRight = '4px';
+      btn.title = 'Toggle personal/business flag';
+      btn.innerHTML = '<i class="fas fa-user-secret"></i>';
+      btn.onclick = () => ncToggleCategoryPersonal(cat.id, cat.name, !!cat.personal);
+      actionsCell.insertBefore(btn, actionsCell.firstChild);
+    }
+  });
+}
+
+window.ncToggleCategoryPersonal = async function (catId, catName, current) {
+  const next = !current;
+  const msg = next
+    ? 'Mark "'+catName+'" as PERSONAL?\n\nAll cheques/payments in this category will be tracked as personal use, and issuing them will trigger a harsh warning.'
+    : 'Mark "'+catName+'" as BUSINESS?\n\nPersonal warnings will be removed for this category.';
+  if (!confirm(msg)) return;
+  try {
+    await DB().collection('chequeCategories').doc(catId).update({ personal: next });
+    toast('"'+catName+'" → ' + (next ? 'PERSONAL' : 'BUSINESS'), next ? 'warning' : 'success');
+    await loadC4();
+    /* Force refresh category view */
+    try { if (typeof window.ncV10Refresh === 'function') window.ncV10Refresh('cats'); } catch(e){}
+    setTimeout(enhanceCategoryRows, 500);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+};
+
+/* ─────── STRICT MODE OVERRIDE CODE ─────── */
+window.ncPromptStrictOverride = function () {
+  return new Promise(resolve => {
+    let host = $('ncStrictOverrideModal');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'ncStrictOverrideModal';
+      host.className = 'modal-overlay';
+      host.innerHTML =
+        '<div class="modal" style="max-width:440px">' +
+          '<div class="modal-header" style="background:linear-gradient(135deg,#dc2626,#991b1b);color:white">' +
+            '<h2 class="modal-title"><i class="fas fa-lock"></i> Strict Mode Active</h2>' +
+            '<button class="modal-close" onclick="ncStrictCancel()" style="background:rgba(255,255,255,0.2);color:white"><i class="fas fa-times"></i></button>' +
+          '</div>' +
+          '<div class="modal-body">' +
+            '<div style="background:#fee2e2;padding:12px;border-radius:8px;margin-bottom:14px;font-size:13px;color:#991b1b">' +
+              '<strong>Personal cheques are BLOCKED.</strong> Admin override required to proceed.' +
+            '</div>' +
+            '<div class="form-group"><label>Override Code *</label><input type="password" id="ncStrictCode" placeholder="Enter admin override code" autocomplete="off"></div>' +
+            '<div class="form-group"><label>Reason *</label><textarea id="ncStrictReason" rows="2" placeholder="Why is this personal cheque being issued?"></textarea></div>' +
+          '</div>' +
+          '<div class="modal-footer">' +
+            '<button class="btn btn-secondary" onclick="ncStrictCancel()">Cancel</button>' +
+            '<button class="btn btn-primary" id="ncStrictProceed" style="background:#dc2626;border:none"><i class="fas fa-unlock"></i> Override & Proceed</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(host);
+    }
+
+    const proceed = $('ncStrictProceed');
+    const fresh = proceed.cloneNode(true);
+    proceed.parentNode.replaceChild(fresh, proceed);
+    fresh.addEventListener('click', () => {
+      const code = ($('ncStrictCode') || {}).value || '';
+      const reason = ($('ncStrictReason') || {}).value || '';
+      if (code !== 'PERSONAL') { toast('Invalid override code', 'error'); return; }
+      if (reason.length < 5) { toast('Reason required (5+ chars)', 'error'); return; }
+      host.classList.remove('active');
+      resolve({ ok: true, reason });
+    });
+
+    window.ncStrictCancel = function () {
+      host.classList.remove('active');
+      resolve({ ok: false });
+    };
+
+    host.classList.add('active');
+  });
+};
+
+/* ─────── HOOK INTO CHANGE #3 (extend the harsh path) ─────── */
+function hookNoticeModal() {
+  if (!window.ncNoticeCancel) return setTimeout(hookNoticeModal, 500);
+  if (window.__ncC4NoticeHooked) return;
+  window.__ncC4NoticeHooked = true;
+
+  /* Override the Change #3 notice modal to enforce strict mode */
+  const origShowNotice = window.showNoticeModal;
+  /* Change #3 doesn't expose showNoticeModal globally, so we hook at the
+     interceptIssuance boundary by observing the notice modal in the DOM. */
+  const observer = new MutationObserver(async (mutations) => {
+    const modal = $('ncNoticeModal');
+    if (!modal || !modal.classList.contains('active')) return;
+    if (!C4.settings.strictMode) return;
+    /* Check if this is a harsh modal (personal) */
+    const title = $('ncNoticeTitle');
+    if (!title || title.textContent.indexOf('HARSH') < 0) return;
+    if (modal.dataset.ncStrictPrompted) return;
+    modal.dataset.ncStrictPrompted = '1';
+
+    /* Close the harsh notice and show strict override instead */
+    modal.classList.remove('active');
+    const result = await ncPromptStrictOverride();
+    if (result.ok) {
+      /* Re-open harsh notice — but auto-approve since strict override done */
+      /* Simpler approach: directly proceed. But we can't reach the internal resolve.
+         So we just allow the flow to continue by re-activating the notice and typing auto. */
+      modal.classList.add('active');
+      const inp = $('ncHarshConfirm');
+      const btn = $('ncNoticeProceed');
+      if (inp) inp.value = 'PERSONAL';
+      if (btn) {
+        btn.disabled = false;
+        /* Log the strict override reason into the cheque history */
+        try {
+          const idEl = $('statusChequeId');
+          if (idEl && idEl.value && DB()) {
+            DB().collection('cheques').doc(idEl.value).update({
+              history: AU({
+                action: 'Strict Override',
+                details: 'Reason: ' + result.reason,
+                timestamp: new Date().toISOString(),
+                user: who()
+              })
+            }).catch(()=>{});
+          }
+        } catch (e) {}
+        btn.click();
+      }
+    } else {
+      modal.dataset.ncStrictPrompted = '';
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+}
+
+/* ─────── HOOK PAYMENT MODALS (warn on personal category) ─────── */
+function hookPaymentsForPersonal() {
+  /* Intercept the payment save flow: if category is personal, confirm */
+  const origAdd = window.ncV10AddOut;
+  const origEdit = window.ncV10EditOut;
+  const origAddIn = window.ncV10AddIn;
+  const origEditIn = window.ncV10EditIn;
+
+  if (window.__ncC4PayHooked) return;
+  window.__ncC4PayHooked = true;
+
+  /* We can't easily intercept the internal save. Use form observer on payment modals instead. */
+  const observer = new MutationObserver(() => {
+    const host = $('ncAddOnModalHost');
+    if (!host || !host.classList.contains('active')) return;
+    const title = $('ncAddOnTitle');
+    if (!title) return;
+    if (title.textContent.indexOf('Payment') < 0) return;
+    const catSel = $('ncV10F_category');
+    if (!catSel || catSel.dataset.ncC4Bound) return;
+    catSel.dataset.ncC4Bound = '1';
+    catSel.addEventListener('change', () => {
+      if (isPersonalCat(catSel.value)) {
+        toast('⚠ Personal category selected — this payment will be tracked as personal use', 'warning');
+      }
+    });
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+/* ─────── MUTATION WATCHERS ─────── */
+function watchCategoriesView() {
+  const view = $('ncV10CatsView');
+  if (!view) return setTimeout(watchCategoriesView, 500);
+  if (view.__ncC4Watched) return;
+  const obs = new MutationObserver(() => setTimeout(enhanceCategoryRows, 100));
+  obs.observe(view, { childList: true, subtree: true });
+  view.__ncC4Watched = true;
+  setTimeout(enhanceCategoryRows, 500);
+}
+
+function periodic() {
+  if ($('ncV10CatsView') && $('ncV10CatsView').classList.contains('active')) {
+    enhanceCategoryRows();
+  }
+  /* Refresh personal widget every 60s */
+  if (Date.now() - (window.__ncC4LastWidget || 0) > 60000) {
+    renderPersonalSidebar();
+    window.__ncC4LastWidget = Date.now();
+  }
+}
+
+/* ─────── BOOT ─────── */
+async function boot() {
+  await loadC4();
+  renderPersonalSidebar();
+  watchCategoriesView();
+  hookNoticeModal();
+  hookPaymentsForPersonal();
+  setInterval(periodic, 1500);
+  setInterval(loadC4, 30000);
+  console.log('[Change #4] ✅ Personal-use control system ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 2000));
+else setTimeout(boot, 2000);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHANGE #5 — Explicit "Issue to Finance" Flow
+     • Dedicated Finance category (seeded automatically)
+     • "Issue to Finance" button inside cheque modals
+     • Reason capture (Investment / Operational / Capital / Personal-Finance)
+     • Finance Ledger view (all finance-directed cheques)
+     • Sidebar YTD Finance tracker + report
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncChange5) return;
+window.__ncChange5 = true;
+
+const $  = id => document.getElementById(id);
+const N  = n  => parseFloat(n) || 0;
+const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
+const T  = () => new Date().toISOString().slice(0,10);
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const TS = () => { try { return firebase.firestore.FieldValue.serverTimestamp(); } catch(e){ return new Date(); } };
+const AU = v => { try { return firebase.firestore.FieldValue.arrayUnion(v); } catch(e){ return [v]; } };
+const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+const getCheques = () => { try { return (Array.isArray(allCheques) ? allCheques : []).filter(c => !c.deletedAt); } catch(e){ return []; } };
+
+function toast(m, t) {
+  try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
+  console.log('['+(t||'info')+']', m);
+}
+
+/* ─────── CONFIG ─────── */
+const FINANCE_CATEGORY = 'Finance';      /* the seed name */
+const FINANCE_COLOR    = '#0ea5e9';      /* sky blue — distinct from red/purple */
+const FINANCE_REASONS  = [
+  'Investment',
+  'Operational',
+  'Capital',
+  'Personal-Finance',
+  'Loan Repayment',
+  'Other'
+];
+
+/* ─────── CACHE ─────── */
+const C5 = { cats: [], out: [], inp: [] };
+
+async function loadC5() {
+  const db = DB(); if (!db) return;
+  try {
+    const [cs, os, is] = await Promise.all([
+      db.collection('chequeCategories').get().catch(()=>({docs:[]})),
+      db.collection('outPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('inPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]}))
+    ]);
+    C5.cats = cs.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C5.out  = os.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C5.inp  = is.docs.map(d => Object.assign({id:d.id}, d.data()));
+  } catch(e) {}
+}
+
+/* ─────── ENSURE FINANCE CATEGORY EXISTS ─────── */
+async function ensureFinanceCategory() {
+  const db = DB(); if (!db) return;
+  const existing = C5.cats.find(c => c.name === FINANCE_CATEGORY);
+  if (existing) return;
+  try {
+    await db.collection('chequeCategories').add({
+      name: FINANCE_CATEGORY,
+      color: FINANCE_COLOR,
+      description: 'Cheques issued to Finance (investment / operational / capital)',
+      isFinance: true,
+      personal: false,
+      createdAt: TS(),
+      createdBy: 'system-seed'
+    });
+    await loadC5();
+    /* Refresh categories view if open */
+    try { if (typeof window.ncV10Refresh === 'function') window.ncV10Refresh('cats'); } catch(e){}
+  } catch (e) { console.warn('[Change #5] seed failed', e.message); }
+}
+
+/* ─────── IS FINANCE? ─────── */
+function isFinanceCheque(c) {
+  if (!c) return false;
+  if (c.category === FINANCE_CATEGORY) return true;
+  if (c.financeReason) return true;
+  return false;
+}
+
+/* ─────── "ISSUE TO FINANCE" MODAL ─────── */
+function ensureFinanceModal() {
+  let host = $('ncFinanceIssueModal');
+  if (host) return host;
+  host = document.createElement('div');
+  host.id = 'ncFinanceIssueModal';
+  host.className = 'modal-overlay';
+  host.innerHTML =
+    '<div class="modal" style="max-width:560px">' +
+      '<div class="modal-header" style="background:linear-gradient(135deg,'+FINANCE_COLOR+',#0369a1);color:white">' +
+        '<h2 class="modal-title"><i class="fas fa-piggy-bank"></i> Issue to Finance</h2>' +
+        '<button class="modal-close" onclick="ncFinanceCancel()" style="background:rgba(255,255,255,0.2);color:white"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div class="modal-body" id="ncFinanceBody"></div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="ncFinanceCancel()">Cancel</button>' +
+        '<button class="btn btn-primary" id="ncFinanceConfirm" style="background:'+FINANCE_COLOR+';border:none"><i class="fas fa-check"></i> Issue to Finance</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(host);
+  host.addEventListener('click', e => { if (e.target === host) ncFinanceCancel(); });
+  return host;
+}
+
+let __financeResolve = null;
+
+window.ncFinanceCancel = function () {
+  const h = $('ncFinanceIssueModal');
+  if (h) h.classList.remove('active');
+  if (__financeResolve) { __financeResolve({ ok: false }); __financeResolve = null; }
+};
+
+function openFinanceModal(cheque, mode) {
+  /* mode: 'issue' | 'edit' */
+  return new Promise(resolve => {
+    __financeResolve = resolve;
+    const host = ensureFinanceModal();
+
+    const existingReason = cheque.financeReason || '';
+    const existingNotes  = cheque.financeNotes  || '';
+    const amount = N(cheque.amount);
+
+    $('ncFinanceBody').innerHTML =
+      '<div style="background:#f0f9ff;border-left:4px solid '+FINANCE_COLOR+';padding:14px;border-radius:8px;margin-bottom:16px">' +
+        '<div style="font-weight:700;color:#0369a1;font-size:13px;margin-bottom:4px">' +
+          (mode === 'issue' ? 'Issuing cheque to Finance' : 'Update Finance tag') +
+        '</div>' +
+        '<div style="font-size:12px;color:#075985">Cheque #'+E(cheque.number||'-')+' • '+E(cheque.payee||'-')+' • '+F(amount)+'</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Reason *</label>' +
+        '<select id="ncFinReason">' +
+          '<option value="">-- Select reason --</option>' +
+          FINANCE_REASONS.map(r => '<option value="'+E(r)+'"'+(r===existingReason?' selected':'')+'>'+E(r)+'</option>').join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Details / Purpose</label>' +
+        '<textarea id="ncFinNotes" rows="3" placeholder="e.g. Sourced to cover shop stock purchase for October">'+E(existingNotes)+'</textarea>' +
+      '</div>' +
+      '<div style="background:#fef3c7;padding:12px;border-radius:8px;font-size:12px;color:#92400e">' +
+        '<i class="fas fa-info-circle"></i> This cheque will be tagged <strong>Finance</strong> and tracked separately from business categories. It will appear in the Finance Ledger.' +
+      '</div>';
+
+    const btn = $('ncFinanceConfirm');
+    const fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener('click', () => {
+      const reason = ($('ncFinReason') || {}).value;
+      const notes  = ($('ncFinNotes') || {}).value || '';
+      if (!reason) { toast('Select a reason', 'error'); return; }
+      host.classList.remove('active');
+      if (__financeResolve) { __financeResolve({ ok:true, reason, notes }); __financeResolve = null; }
+    });
+
+    host.classList.add('active');
+  });
+}
+
+/* ─────── PERSIST FINANCE TAG ─────── */
+async function applyFinanceTag(chequeId, reason, notes, mode) {
+  const db = DB(); if (!db) return;
+  try {
+    const cheque = getCheques().find(c => c.id === chequeId);
+    const histEntry = {
+      action: mode === 'issue' ? 'Issued to Finance' : 'Finance tag updated',
+      details: 'Reason: ' + reason + (notes ? ' | ' + notes : ''),
+      timestamp: new Date().toISOString(),
+      user: who()
+    };
+    await db.collection('cheques').doc(chequeId).update({
+      category: FINANCE_CATEGORY,
+      financeReason: reason,
+      financeNotes: notes,
+      financeAt: new Date().toISOString(),
+      financeBy: who(),
+      history: AU(histEntry)
+    });
+    toast('Tagged to Finance — ' + reason, 'success');
+
+    /* Refresh cheques */
+    if (typeof window.loadAllChequesData === 'function') {
+      try { await window.loadAllChequesData(); } catch(e){}
+    }
+    setTimeout(() => {
+      try { if (typeof window.ncV10Refresh === 'function') window.ncV10Refresh('cats'); } catch(e){}
+      renderFinanceSidebar();
+      refreshFinanceLedgerIfOpen();
+    }, 300);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+/* ─────── BUTTON INJECTION: ADD CHEQUE MODAL ─────── */
+function injectFinanceBtnInAddModal() {
+  const modal = $('addChequeModal');
+  if (!modal || modal.querySelector('.nc-finance-btn')) return;
+  const footer = modal.querySelector('.modal-footer');
+  if (!footer) return;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-secondary nc-finance-btn';
+  btn.style.cssText = 'background:'+FINANCE_COLOR+';color:white;border:none;margin-right:auto';
+  btn.innerHTML = '<i class="fas fa-piggy-bank"></i> Issue to Finance';
+  btn.onclick = async () => {
+    /* Read current form values and quickly create a minimal cheque */
+    const number = ($('chequeNumber') || {}).value || '';
+    const payee  = ($('chequePayee')  || {}).value || '';
+    const amount = N(($('chequeAmount') || {}).value);
+
+    if (!number || !payee || amount <= 0) {
+      toast('Fill Number, Payee and Amount first', 'error');
+      return;
+    }
+
+    const res = await openFinanceModal({ number, payee, amount }, 'issue');
+    if (!res.ok) return;
+
+    /* Save cheque via existing saveCheque, but with category=Finance pre-set */
+    try {
+      /* Pre-set the category dropdown to Finance */
+      const catSel = $('chequeCategory');
+      if (catSel) catSel.value = FINANCE_CATEGORY;
+
+      /* Let the existing saveCheque run */
+      if (typeof window.saveCheque === 'function') {
+        await window.saveCheque();
+      }
+
+      /* Now find the newest cheque and apply the finance tag */
+      setTimeout(async () => {
+        try {
+          const snap = await DB().collection('cheques').orderBy('createdAt','desc').limit(1).get();
+          if (!snap.empty) {
+            const newest = snap.docs[0];
+            /* Only tag if it matches */
+            const data = newest.data();
+            if (String(data.number) === String(number)) {
+              await applyFinanceTag(newest.id, res.reason, res.notes, 'issue');
+            }
+          }
+        } catch (e) {}
+      }, 800);
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  };
+  footer.insertBefore(btn, footer.firstChild);
+}
+
+/* ─────── BUTTON INJECTION: EDIT CHEQUE MODAL ─────── */
+function injectFinanceBtnInEditModal() {
+  const modal = $('editChequeModal');
+  if (!modal || modal.querySelector('.nc-finance-btn')) return;
+  const footer = modal.querySelector('.modal-footer');
+  if (!footer) return;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-secondary nc-finance-btn';
+  btn.style.cssText = 'background:'+FINANCE_COLOR+';color:white;border:none;margin-right:auto';
+  btn.innerHTML = '<i class="fas fa-piggy-bank"></i> Tag Finance';
+  btn.onclick = async () => {
+    const idEl = $('editChequeId');
+    if (!idEl || !idEl.value) return;
+    const cheque = getCheques().find(c => c.id === idEl.value);
+    if (!cheque) { toast('Cheque not found', 'error'); return; }
+
+    const res = await openFinanceModal(cheque, 'edit');
+    if (!res.ok) return;
+
+    /* Apply directly */
+    await applyFinanceTag(idEl.value, res.reason, res.notes, 'edit');
+  };
+  footer.insertBefore(btn, footer.firstChild);
+}
+
+/* ─────── BUTTON INJECTION: STATUS CHANGE MODAL ─────── */
+function injectFinanceBtnInStatusModal() {
+  const modal = $('statusChangeModal');
+  if (!modal || modal.querySelector('.nc-finance-btn-status')) return;
+  const footer = modal.querySelector('.modal-footer');
+  if (!footer) return;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-secondary nc-finance-btn-status';
+  btn.style.cssText = 'background:'+FINANCE_COLOR+';color:white;border:none;margin-right:auto';
+  btn.innerHTML = '<i class="fas fa-piggy-bank"></i> Issue to Finance';
+  btn.onclick = async () => {
+    const idEl = $('statusChequeId');
+    if (!idEl || !idEl.value) return;
+    const cheque = getCheques().find(c => c.id === idEl.value);
+    if (!cheque) { toast('Cheque not found', 'error'); return; }
+
+    const res = await openFinanceModal(cheque, 'issue');
+    if (!res.ok) return;
+
+    /* Set status to issued + apply tag */
+    try {
+      /* Force the status select to "issued" so the underlying saveStatusChange uses it */
+      const sel = $('newStatusSelect');
+      if (sel) {
+        sel.value = 'issued';
+        sel.dispatchEvent(new Event('change'));
+      }
+      /* Apply the tag first (persists category=Finance) */
+      await applyFinanceTag(idEl.value, res.reason, res.notes, 'issue');
+
+      /* Now trigger the normal saveStatusChange */
+      if (typeof window.saveStatusChange === 'function') {
+        await window.saveStatusChange();
+      }
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  };
+  footer.insertBefore(btn, footer.firstChild);
+}
+
+/* ─────── FINANCE LEDGER VIEW ─────── */
+function injectFinanceLedgerView() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('ncFinanceLedgerView')) return;
+
+  const div = document.createElement('div');
+  div.id = 'ncFinanceLedgerView';
+  div.className = 'view-content';
+  div.innerHTML =
+    '<div class="card">' +
+      '<div class="card-header">' +
+        '<h2 class="card-title"><i class="fas fa-piggy-bank" style="color:'+FINANCE_COLOR+';margin-right:8px"></i>Finance Ledger</h2>' +
+        '<div>' +
+          '<button class="btn btn-secondary btn-sm" onclick="ncFinanceRefreshLedger()" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
+          '<button class="btn btn-primary btn-sm" onclick="ncFinanceExportLedger()" style="background:'+FINANCE_COLOR+';border:none"><i class="fas fa-download"></i> Export</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="ncFinanceLedgerBody"></div>' +
+    '</div>';
+  main.appendChild(div);
+}
+
+/* ─────── SIDEBAR FINANCE WIDGET ─────── */
+function renderFinanceSidebar() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return;
+  let section = $('ncFinanceSection');
+
+  const financeCheques = getCheques().filter(isFinanceCheque);
+  const year = new Date().getFullYear();
+  const yearCheques = financeCheques.filter(c => {
+    if (!c.date) return false;
+    return new Date(c.date).getFullYear() === year;
+  });
+
+  const totalY = financeCheques.reduce((s,c) => s + N(c.amount), 0);
+  const totalYear = yearCheques.reduce((s,c) => s + N(c.amount), 0);
+
+  /* Break down by reason */
+  const byReason = {};
+  financeCheques.forEach(c => {
+    const r = c.financeReason || 'Unclassified';
+    byReason[r] = (byReason[r] || 0) + N(c.amount);
+  });
+
+  if (!section) {
+    section = document.createElement('div');
+    section.className = 'nav-section';
+    section.id = 'ncFinanceSection';
+    nav.appendChild(section);
+  }
+
+  section.innerHTML =
+    '<div class="nav-title">Finance</div>' +
+    '<div style="background:linear-gradient(135deg,'+FINANCE_COLOR+',#0369a1);color:white;border-radius:10px;padding:12px;cursor:pointer" onclick="ncFinanceRoute()">' +
+      '<div style="font-size:10px;text-transform:uppercase;font-weight:700;opacity:0.9">Finance Issued (YTD)</div>' +
+      '<div style="font-size:22px;font-weight:800;margin:4px 0">'+F(totalYear)+'</div>' +
+      '<div style="font-size:11px;opacity:0.9">'+yearCheques.length+' cheque(s) • Lifetime: '+F(totalY)+'</div>' +
+      '<div style="font-size:11px;font-weight:600;margin-top:6px;opacity:0.95">Open Ledger →</div>' +
+    '</div>' +
+    '<div class="nav-item" onclick="ncFinanceRoute()" style="margin-top:6px">' +
+      '<i class="fas fa-list"></i><span>Finance Ledger</span>' +
+    '</div>';
+
+  /* Update the Finance Ledger view */
+  const ledgerBody = $('ncFinanceLedgerBody');
+  if (ledgerBody) renderFinanceLedger();
+}
+
+/* ─────── FINANCE LEDGER RENDER ─────── */
+function renderFinanceLedger() {
+  const body = $('ncFinanceLedgerBody');
+  if (!body) return;
+
+  const financeCheques = getCheques().filter(isFinanceCheque);
+  if (financeCheques.length === 0) {
+    body.innerHTML =
+      '<div style="text-align:center;padding:50px;color:var(--gray)">' +
+        '<i class="fas fa-piggy-bank" style="font-size:50px;opacity:0.3;color:'+FINANCE_COLOR+'"></i>' +
+        '<h3 style="margin-top:12px">No finance cheques yet</h3>' +
+        '<p style="font-size:13px;margin-top:6px">Open any cheque → click <strong>Issue to Finance</strong> to get started</p>' +
+      '</div>';
+    return;
+  }
+
+  /* Summary */
+  const total = financeCheques.reduce((s,c) => s + N(c.amount), 0);
+  const byReason = {};
+  financeCheques.forEach(c => {
+    const r = c.financeReason || 'Unclassified';
+    if (!byReason[r]) byReason[r] = { amount:0, count:0 };
+    byReason[r].amount += N(c.amount);
+    byReason[r].count++;
+  });
+
+  /* Status breakdown */
+  const byStatus = {};
+  financeCheques.forEach(c => {
+    byStatus[c.status] = (byStatus[c.status] || 0) + 1;
+  });
+
+  let html = '';
+
+  html +=
+    '<div style="background:linear-gradient(135deg,'+FINANCE_COLOR+',#0369a1);color:white;padding:18px;border-radius:12px;margin-bottom:18px">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">' +
+        '<div><div style="font-size:11px;opacity:0.85">Total Finance Issued</div><div style="font-size:24px;font-weight:800">'+F(total)+'</div></div>' +
+        '<div><div style="font-size:11px;opacity:0.85">Total Cheques</div><div style="font-size:24px;font-weight:800">'+financeCheques.length+'</div></div>' +
+        '<div><div style="font-size:11px;opacity:0.85">Reasons</div><div style="font-size:24px;font-weight:800">'+Object.keys(byReason).length+'</div></div>' +
+      '</div>' +
+    '</div>';
+
+  /* By reason */
+  if (Object.keys(byReason).length > 0) {
+    html += '<h4 style="font-size:14px;margin-bottom:10px">Breakdown by Reason</h4>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">';
+    const sorted = Object.keys(byReason).sort((a,b) => byReason[b].amount - byReason[a].amount);
+    sorted.forEach(k => {
+      const row = byReason[k];
+      const share = total > 0 ? (row.amount / total) * 100 : 0;
+      html +=
+        '<div style="background:var(--light);padding:12px;border-radius:10px;border-left:4px solid '+FINANCE_COLOR+'">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+            '<span style="font-weight:700">'+E(k)+'</span>' +
+            '<span style="font-weight:700;color:'+FINANCE_COLOR+'">'+F(row.amount)+'</span>' +
+          '</div>' +
+          '<div style="background:var(--border);height:5px;border-radius:3px;overflow:hidden;margin-bottom:4px">' +
+            '<div style="height:100%;width:'+share+'%;background:'+FINANCE_COLOR+'"></div>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--gray)">'+row.count+' cheque(s) • '+Math.round(share)+'%</div>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+
+  /* Status breakdown */
+  html += '<h4 style="font-size:14px;margin-bottom:10px">By Status</h4>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">';
+  Object.keys(byStatus).forEach(s => {
+    html += '<div style="background:var(--light);padding:8px 14px;border-radius:20px;font-size:12px"><strong>'+E(s)+'</strong>: '+byStatus[s]+'</span></div>';
+  });
+  html += '</div>';
+
+  /* Cheque list */
+  html += '<h4 style="font-size:14px;margin-bottom:10px">All Finance Cheques</h4>';
+  html += '<div class="table-container"><table><thead><tr>' +
+    '<th>Date</th><th>#</th><th>Payee</th><th>Amount</th><th>Reason</th><th>Status</th><th>Notes</th>' +
+    '</tr></thead><tbody>';
+
+  financeCheques
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+    .forEach(c => {
+      html += '<tr>' +
+        '<td>'+E(c.date||'-')+'</td>' +
+        '<td><strong>'+E(c.number||'-')+'</strong></td>' +
+        '<td>'+E(c.payee||'-')+'</td>' +
+        '<td style="font-weight:700;color:'+FINANCE_COLOR+'">'+F(c.amount)+'</td>' +
+        '<td><span class="status-badge" style="background:'+FINANCE_COLOR+'22;color:'+FINANCE_COLOR+'">'+E(c.financeReason||'-')+'</span></td>' +
+        '<td><span class="status-badge status-'+E(c.status)+'">'+E(c.status)+'</span></td>' +
+        '<td style="font-size:12px;color:var(--gray)">'+E(c.financeNotes||'-')+'</td>' +
+      '</tr>';
+    });
+
+  html += '</tbody></table></div>';
+
+  body.innerHTML = html;
+}
+
+window.ncFinanceRefreshLedger = function () {
+  if (typeof window.loadAllChequesData === 'function') {
+    window.loadAllChequesData().then(() => {
+      loadC5().then(() => {
+        renderFinanceLedger();
+        renderFinanceSidebar();
+      });
+    });
+  } else {
+    renderFinanceLedger();
+  }
+};
+
+function refreshFinanceLedgerIfOpen() {
+  const v = $('ncFinanceLedgerView');
+  if (v && v.classList.contains('active')) renderFinanceLedger();
+}
+
+window.ncFinanceRoute = function () {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const el = $('ncFinanceLedgerView');
+  if (el) el.classList.add('active');
+  const titleEl = $('pageTitle');
+  if (titleEl) titleEl.textContent = 'Finance Ledger';
+  if (window.innerWidth <= 768) {
+    const sb = $('sidebar'), ov = $('sidebarOverlay');
+    if (sb) sb.classList.remove('active');
+    if (ov) ov.classList.remove('active');
+  }
+  renderFinanceLedger();
+  renderFinanceSidebar();
+};
+
+window.ncFinanceExportLedger = function () {
+  const financeCheques = getCheques().filter(isFinanceCheque);
+  if (financeCheques.length === 0) { toast('No finance cheques to export', 'error'); return; }
+  const headers = ['Date','Number','Payee','Amount','Reason','Status','Notes'];
+  const rows = financeCheques.map(c => [
+    c.date || '',
+    c.number || '',
+    (c.payee || '').replace(/,/g, ' '),
+    N(c.amount),
+    c.financeReason || '',
+    c.status || '',
+    (c.financeNotes || '').replace(/,/g, ' ').replace(/\n/g, ' ')
+  ]);
+  const csv = [headers.join(',')].concat(rows.map(r => r.join(','))).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'finance-ledger-' + T() + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Exported ' + financeCheques.length + ' finance cheques', 'success');
+};
+
+/* ─────── MUTATION OBSERVER FOR MODALS ─────── */
+function watchModals() {
+  const observer = new MutationObserver(() => {
+    if ($('addChequeModal') && $('addChequeModal').classList.contains('active')) {
+      injectFinanceBtnInAddModal();
+    }
+    if ($('editChequeModal') && $('editChequeModal').classList.contains('active')) {
+      injectFinanceBtnInEditModal();
+    }
+    if ($('statusChangeModal') && $('statusChangeModal').classList.contains('active')) {
+      injectFinanceBtnInStatusModal();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+
+  /* Also try immediate injection in case modals already exist */
+  setTimeout(() => {
+    injectFinanceBtnInAddModal();
+    injectFinanceBtnInEditModal();
+    injectFinanceBtnInStatusModal();
+  }, 1000);
+}
+
+/* ─────── INTEGRATE WITH CHANGE #3 (skip finance cross-category notice) ─────── */
+function hookChange3ToSkipFinance() {
+  /* Change #3 analyzes cross-category. Finance should not trigger that notice.
+     We hook analyzeIssuance indirectly by setting the finance cheque category to
+     "Finance" and adding a special-category marker so Change #3 can skip.
+     Since we can't reach Change #3's internals, we simply ensure financeReason
+     is set, and Change #3 will only warn if the category != project default.
+     Add "Finance" to a soft-skip list via the cats collection: isFinance flag. */
+  /* Nothing to do here — our cat has isFinance:true. Future change #3 updates
+     will honor that flag. */
+}
+
+/* ─────── PERIODIC ─────── */
+function periodic() {
+  if ($('ncFinanceLedgerView') && $('ncFinanceLedgerView').classList.contains('active')) {
+    renderFinanceLedger();
+  }
+  /* Refresh sidebar every 45s */
+  if (Date.now() - (window.__ncC5LastSidebar || 0) > 45000) {
+    renderFinanceSidebar();
+    window.__ncC5LastSidebar = Date.now();
+  }
+}
+
+/* ─────── HOOK loadAllChequesData to refresh ledger ─────── */
+function hookLoadCheques() {
+  if (typeof window.loadAllChequesData !== 'function') return setTimeout(hookLoadCheques, 500);
+  if (window.loadAllChequesData.__ncC5Hooked) return;
+  const orig = window.loadAllChequesData;
+  const wrapped = function () {
+    const r = orig.apply(this, arguments);
+    const after = () => { try { renderFinanceSidebar(); refreshFinanceLedgerIfOpen(); } catch(e){} };
+    if (r && r.then) r.then(after); else setTimeout(after, 400);
+    return r;
+  };
+  wrapped.__ncC5Hooked = true;
+  window.loadAllChequesData = wrapped;
+}
+
+/* ─────── BOOT ─────── */
+async function boot() {
+  await loadC5();
+  await ensureFinanceCategory();
+  injectFinanceLedgerView();
+  renderFinanceSidebar();
+  watchModals();
+  hookChange3ToSkipFinance();
+  hookLoadCheques();
+  setInterval(periodic, 2000);
+  setInterval(loadC5, 30000);
+  console.log('[Change #5] ✅ Finance issue flow ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 2500));
+else setTimeout(boot, 2500);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHANGE #6 — Bank Deposit Categorization
+     • Category field on every bank transaction
+     • Auto-tag from linked cheque / in-payment / out-payment
+     • Per-bank category breakdown widget
+     • Category filter in Bank Transactions view
+     • Full source traceability (sourceType + sourceId)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncChange6) return;
+window.__ncChange6 = true;
+
+const $  = id => document.getElementById(id);
+const N  = n  => parseFloat(n) || 0;
+const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
+const T  = () => new Date().toISOString().slice(0,10);
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+const getCheques = () => { try { return (Array.isArray(allCheques) ? allCheques : []).filter(c => !c.deletedAt); } catch(e){ return []; } };
+
+function toast(m, t) {
+  try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
+  console.log('['+(t||'info')+']', m);
+}
+
+/* ─────── CACHE ─────── */
+const C6 = {
+  cats: [],
+  banks: [],
+  txns: [],
+  out: [],
+  inp: [],
+  loans: [],
+  activeCatFilter: 'ALL'
+};
+
+async function loadC6() {
+  const db = DB(); if (!db) return;
+  try {
+    const [cs, bs, ts, os, is, ls] = await Promise.all([
+      db.collection('chequeCategories').get().catch(()=>({docs:[]})),
+      db.collection('bankAccounts').get().catch(()=>({docs:[]})),
+      db.collection('bankTransactions').orderBy('date','desc').limit(1000).get().catch(()=>({docs:[]})),
+      db.collection('outPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('inPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('loans').get().catch(()=>({docs:[]}))
+    ]);
+    C6.cats  = cs.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C6.banks = bs.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C6.txns  = ts.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C6.out   = os.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C6.inp   = is.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C6.loans = ls.docs.map(d => Object.assign({id:d.id}, d.data()));
+    renderBankCategoryWidget();
+    renderBankTxnsView();
+  } catch(e) { console.warn('[Change #6] load', e.message); }
+}
+
+const catColor = name => (C6.cats.find(c => c.name === name) || {}).color || '#64748b';
+
+/* ─────── CATEGORY SELECT OPTIONS HELPER ─────── */
+function categoryOptions(includeBlank, selectedValue) {
+  const opts = (includeBlank ? '<option value="">-- None --</option>' : '') +
+    C6.cats.map(c => '<option value="'+E(c.name)+'"'+(c.name===selectedValue?' selected':'')+'>'+E(c.name)+'</option>').join('');
+  return opts;
+}
+
+/* ─────── 1. AUTO-TAG NEW TXNS FROM SOURCES ─────── */
+
+/**
+ * Given a bank transaction being created with a `reference` like "cheque:ID",
+ * "inpayment:ID", "outpayment:ID", "loan:ID" — look up the source and return
+ * its category (if any).
+ */
+async function resolveCategoryFromSource(txn) {
+  const ref = txn.reference || '';
+  if (!ref) return null;
+
+  const m = ref.match(/^(cheque|inpayment|outpayment|loan)[:_](.+)$/i);
+  if (!m) return null;
+
+  const type = m[1].toLowerCase();
+  const id   = m[2];
+
+  try {
+    if (type === 'cheque') {
+      const snap = await DB().collection('cheques').doc(id).get();
+      if (snap.exists) return snap.data().category || null;
+    } else if (type === 'inpayment') {
+      const snap = await DB().collection('inPayments').doc(id).get();
+      if (snap.exists) return snap.data().category || null;
+    } else if (type === 'outpayment') {
+      const snap = await DB().collection('outPayments').doc(id).get();
+      if (snap.exists) return snap.data().category || null;
+    } else if (type === 'loan') {
+      /* loan payments don't have a category per-se, but allocations might.
+         Try to grab the first allocation's category as a hint. */
+      const snap = await DB().collection('loans').doc(id).get();
+      if (snap.exists) {
+        const l = snap.data();
+        const allocs = l.allocations || [];
+        if (allocs.length > 0) return allocs[0].category || null;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
+/** Extract source info from a txn reference */
+function parseSourceFromReference(ref) {
+  if (!ref) return { sourceType:null, sourceId:null };
+  const m = ref.match(/^(cheque|inpayment|outpayment|loan)[:_](.+)$/i);
+  if (!m) return { sourceType:null, sourceId:null };
+  return { sourceType: m[1].toLowerCase(), sourceId: m[2] };
+}
+
+/* ─────── 2. HOOK BANK TRANSACTION CREATION ─────── */
+/**
+ * Payment modal (v10) creates bank txns with reference like "cheque:ID".
+ * We intercept BEFORE the save by pre-tagging the txns. But the v10 flow
+ * happens internally — so we use a listener approach:
+ *  - Listen for changes on bankTransactions collection (via polling new txns)
+ *  - Auto-tag any untagged txn with a valid source reference
+ */
+async function autoTagUntaggedTxns() {
+  const db = DB(); if (!db) return;
+  try {
+    const snap = await db.collection('bankTransactions')
+      .where('category', '==', null)
+      .limit(50).get().catch(() => null);
+
+    /* Fallback: also fetch recent and check in-memory */
+    const recentSnap = await db.collection('bankTransactions')
+      .orderBy('date','desc').limit(30).get().catch(()=>({docs:[]}));
+
+    for (const doc of recentSnap.docs) {
+      const txn = Object.assign({ id: doc.id }, doc.data());
+      if (txn.category) continue;
+      const cat = await resolveCategoryFromSource(txn);
+      if (cat) {
+        const src = parseSourceFromReference(txn.reference);
+        await db.collection('bankTransactions').doc(doc.id).update({
+          category: cat,
+          sourceType: src.sourceType,
+          sourceId: src.sourceId,
+          autoTaggedAt: new Date().toISOString()
+        });
+      }
+    }
+  } catch(e) {}
+}
+
+/* ─────── 3. HOOK v10 ADD TXN (enhance modal with category) ─────── */
+function enhanceAddTxnModal() {
+  const host = $('ncAddOnModalHost');
+  if (!host || !host.classList.contains('active')) return;
+  const title = $('ncAddOnTitle');
+  if (!title || title.textContent !== 'Add Bank Transaction') return;
+  if ($('ncAO_category')) return; /* already injected */
+
+  const body = $('ncAddOnBody');
+  if (!body) return;
+
+  /* Insert category field after the description field */
+  const descGroup = $('ncAO_description');
+  if (!descGroup) return;
+  const wrapper = descGroup.closest('.form-group');
+  if (!wrapper) return;
+
+  const div = document.createElement('div');
+  div.className = 'form-group';
+  div.innerHTML =
+    '<label>Category</label>' +
+    '<select id="ncAO_category">' + categoryOptions(true, '') + '</select>' +
+    '<small style="color:var(--gray);font-size:11px">Which business category does this money belong to?</small>';
+  wrapper.parentElement.insertBefore(div, wrapper.nextSibling);
+}
+
+/* ─────── 4. OVERRIDE v10 ADD TXN HANDLER TO INCLUDE CATEGORY ─────── */
+function patchAddTxnHandler() {
+  if (window.__ncV10AddTxnPatched) return;
+  window.__ncV10AddTxnPatched = true;
+
+  const orig = window.ncV10AddTxn;
+  if (typeof orig !== 'function') return setTimeout(patchAddTxnHandler, 500);
+
+  const wrapped = function () {
+    /* Let the original open the modal */
+    const result = orig.apply(this, arguments);
+
+    /* The v10 modal save handler reads `data` from all inputs matching `ncV10F_<id>`.
+       We injected `ncAO_category`, not `ncV10F_category`, so it won't be picked up.
+       Instead, patch: rename our input id to match v10 convention. */
+    setTimeout(() => {
+      const our = $('ncAO_category');
+      if (our && !$('ncV10F_category')) {
+        our.id = 'ncV10F_category';
+      }
+    }, 100);
+
+    return result;
+  };
+  window.ncV10AddTxn = wrapped;
+}
+
+/* ─────── 5. OVERRIDE EDIT TXN TOO (edit modal doesn't exist for txns in v10,
+              so we skip editing — deletion is the only option) ─────── */
+
+/* ─────── 6. PER-BANK CATEGORY BREAKDOWN WIDGET ─────── */
+function renderBankCategoryWidget() {
+  const view = $('ncV10BanksView');
+  if (!view) return;
+  let widget = $('ncBankCatWidget');
+  if (!widget) {
+    widget = document.createElement('div');
+    widget.id = 'ncBankCatWidget';
+    widget.style.marginTop = '20px';
+    const card = view.querySelector('.card');
+    if (card) card.appendChild(widget);
+    else view.appendChild(widget);
+  }
+
+  /* Aggregate bank balances by category — using bank txns with category */
+  const byBankCat = {};
+  C6.txns.forEach(t => {
+    if (!t.bankAccountId) return;
+    const cat = t.category || '(Uncategorized)';
+    if (!byBankCat[t.bankAccountId]) byBankCat[t.bankAccountId] = {};
+    if (!byBankCat[t.bankAccountId][cat]) byBankCat[t.bankAccountId][cat] = 0;
+    const delta = t.type === 'credit' ? N(t.amount) : -N(t.amount);
+    byBankCat[t.bankAccountId][cat] += delta;
+  });
+
+  let html = '<div class="card" style="margin-top:12px">' +
+    '<div class="card-header"><h3 class="card-title">' +
+      '<i class="fas fa-layer-group" style="color:var(--primary);margin-right:8px"></i>Balance by Category (per bank)' +
+    '</h3></div>';
+
+  if (C6.banks.length === 0) {
+    html += '<div style="text-align:center;padding:30px;color:var(--gray)">Add a bank account to see category breakdown</div>';
+  } else {
+    C6.banks.forEach(b => {
+      const splits = byBankCat[b.id] || {};
+      const catKeys = Object.keys(splits).filter(k => splits[k] !== 0);
+      const total = catKeys.reduce((s,k) => s + splits[k], 0);
+
+      html += '<div style="background:var(--light);padding:14px;border-radius:10px;margin-bottom:12px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+        '<div><strong style="font-size:14px">'+E(b.bankName)+'</strong>' +
+        '<div style="font-size:11px;color:var(--gray)">'+E(b.accountNumber||'')+'</div></div>' +
+        '<div style="font-weight:700;font-size:15px;color:'+(N(b.currentBalance)>=0?'var(--success)':'var(--danger)')+'">'+F(b.currentBalance)+'</div>' +
+      '</div>';
+
+      if (catKeys.length === 0) {
+        html += '<div style="font-size:12px;color:var(--gray);text-align:center;padding:8px">No categorized transactions yet</div>';
+      } else {
+        const sorted = catKeys.sort((a,b2) => Math.abs(splits[b2]) - Math.abs(splits[a]));
+        sorted.forEach(k => {
+          const amt = splits[k];
+          const share = total !== 0 ? Math.abs(amt / total) * 100 : 0;
+          const color = k === '(Uncategorized)' ? '#94a3b8' : catColor(k);
+          html +=
+            '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">' +
+              '<span style="width:10px;height:10px;border-radius:50%;background:'+color+'"></span>' +
+              '<span style="font-size:12px;min-width:120px;font-weight:600">'+E(k)+'</span>' +
+              '<div style="flex:1;background:var(--border);height:5px;border-radius:3px;overflow:hidden">' +
+                '<div style="height:100%;width:'+share+'%;background:'+color+'"></div>' +
+              '</div>' +
+              '<span style="font-size:12px;font-weight:700;min-width:100px;text-align:right;color:'+(amt>=0?'var(--success)':'var(--danger)')+'">'+F(amt)+'</span>' +
+            '</div>';
+        });
+      }
+
+      html += '</div>';
+    });
+  }
+
+  html += '</div>';
+  widget.innerHTML = html;
+}
+
+/* ─────── 7. CATEGORY FILTER + ENHANCED VIEW IN BANK TRANSACTIONS ─────── */
+function injectTxnCategoryFilter() {
+  const view = $('ncV10TxnsView');
+  if (!view || $('ncTxnCatFilter')) return;
+  const card = view.querySelector('.card');
+  if (!card) return;
+
+  const bar = document.createElement('div');
+  bar.id = 'ncTxnCatFilter';
+  bar.style.cssText = 'display:flex;gap:8px;overflow-x:auto;padding:8px 0 14px;margin-bottom:14px;border-bottom:1px solid var(--border)';
+  const header = card.querySelector('.card-header');
+  if (header && header.nextSibling) card.insertBefore(bar, header.nextSibling);
+  else card.insertBefore(bar, card.firstChild);
+
+  renderTxnFilterChips();
+}
+
+function renderTxnFilterChips() {
+  const bar = $('ncTxnCatFilter'); if (!bar) return;
+  const txns = C6.txns;
+  const active = C6.activeCatFilter || 'ALL';
+
+  const items = [
+    { key:'ALL', label:'All', color:'#6366f1', count: txns.length },
+    { key:'UNC', label:'Uncategorized', color:'#94a3b8', count: txns.filter(t => !t.category).length }
+  ];
+  C6.cats.forEach(cat => {
+    items.push({
+      key: cat.name, label: cat.name, color: cat.color || '#6366f1',
+      count: txns.filter(t => t.category === cat.name).length
+    });
+  });
+
+  bar.innerHTML = items.map(it => {
+    const isA = String(active) === String(it.key);
+    return '<button onclick="ncSetTxnCat(\''+E(it.key).replace(/'/g,"\\'")+'\')" ' +
+      'style="white-space:nowrap;padding:7px 14px;border-radius:20px;border:2px solid '+(isA?it.color:'var(--border)')+';' +
+      'background:'+(isA?it.color:'white')+';color:'+(isA?'white':'var(--dark)')+';font-weight:600;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:'+(isA?'white':it.color)+'"></span>' +
+      E(it.label) + '<span style="opacity:0.75;font-size:10px">('+it.count+')</span>' +
+    '</button>';
+  }).join('');
+}
+
+window.ncSetTxnCat = function (key) {
+  C6.activeCatFilter = key;
+  renderTxnFilterChips();
+  renderBankTxnsView();
+};
+
+/* Re-render the v10 Txns table with our category badge + filter */
+function renderBankTxnsView() {
+  const body = $('ncV10TxnsBody');
+  if (!body) return;
+  const active = C6.activeCatFilter || 'ALL';
+
+  const filtered = C6.txns.filter(t => {
+    if (active === 'ALL') return true;
+    if (active === 'UNC') return !t.category;
+    return t.category === active;
+  });
+
+  if (filtered.length === 0) {
+    body.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No matching transactions</h3></div>';
+    return;
+  }
+
+  let html = '<div class="table-container"><table><thead><tr>' +
+    '<th>Date</th><th>Bank</th><th>Type</th><th>Amount</th><th>Category</th><th>Description</th><th>Reference</th><th>Actions</th>' +
+    '</tr></thead><tbody>';
+
+  filtered.forEach(t => {
+    const bank = C6.banks.find(b => b.id === t.bankAccountId);
+    const isC = t.type === 'credit';
+    const cat = t.category || '';
+    const catBadge = cat
+      ? '<span class="status-badge" style="background:'+catColor(cat)+'22;color:'+catColor(cat)+'">'+E(cat)+'</span>'
+      : '<span class="status-badge" style="background:#f1f5f9;color:#94a3b8">UNCAT</span>';
+
+    /* Source indicator */
+    let srcTag = '';
+    if (t.sourceType) {
+      const icons = { cheque:'fa-money-check-alt', inpayment:'fa-arrow-circle-down', outpayment:'fa-arrow-circle-up', loan:'fa-hand-holding-usd' };
+      srcTag = ' <i class="fas '+(icons[t.sourceType]||'fa-link')+'" style="color:var(--gray);font-size:10px" title="From '+E(t.sourceType)+'"></i>';
+    }
+
+    html += '<tr>' +
+      '<td>'+E(t.date||'-')+'</td>' +
+      '<td>'+E(bank ? bank.bankName : '(deleted)')+'</td>' +
+      '<td><span class="status-badge '+(isC?'status-cleared':'status-returned')+'">'+E(t.type)+'</span></td>' +
+      '<td style="font-weight:700;color:'+(isC?'var(--success)':'var(--danger)')+'">'+F(t.amount)+'</td>' +
+      '<td>'+catBadge+' <button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="ncEditTxnCategory(\''+t.id+'\')" title="Change category"><i class="fas fa-tag"></i></button></td>' +
+      '<td>'+E(t.description||'-')+srcTag+'</td>' +
+      '<td>'+E(t.reference||'-')+'</td>' +
+      '<td><button class="btn btn-sm btn-secondary" onclick="ncV10DelTxn(\''+t.id+'\')"><i class="fas fa-trash"></i></button></td>' +
+    '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  body.innerHTML = html;
+}
+
+/* ─────── 8. CHANGE CATEGORY OF EXISTING TXN ─────── */
+window.ncEditTxnCategory = function (txnId) {
+  const txn = C6.txns.find(t => t.id === txnId);
+  if (!txn) { toast('Transaction not found', 'error'); return; }
+
+  let host = $('ncEditTxnCatModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ncEditTxnCatModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:440px">' +
+        '<div class="modal-header">' +
+          '<h2 class="modal-title">Change Category</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'ncEditTxnCatModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<div class="modal-body" id="ncEditTxnCatBody"></div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" onclick="document.getElementById(\'ncEditTxnCatModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="ncEditTxnCatSave"><i class="fas fa-save"></i> Save</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  $('ncEditTxnCatBody').innerHTML =
+    '<div style="background:var(--light);padding:12px;border-radius:8px;margin-bottom:14px;font-size:12px">' +
+      '<div><strong>'+E(txn.date||'-')+' • '+F(txn.amount)+' • '+E(txn.type)+'</strong></div>' +
+      '<div style="color:var(--gray);margin-top:4px">'+E(txn.description||'-')+'</div>' +
+    '</div>' +
+    '<div class="form-group"><label>Category</label>' +
+      '<select id="ncEditTxnCatSel">' + categoryOptions(true, txn.category||'') + '</select>' +
+    '</div>';
+
+  const btn = $('ncEditTxnCatSave');
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  fresh.addEventListener('click', async () => {
+    const cat = ($('ncEditTxnCatSel') || {}).value || '';
+    try {
+      await DB().collection('bankTransactions').doc(txnId).update({
+        category: cat || null,
+        categoryEditedAt: new Date().toISOString(),
+        categoryEditedBy: who()
+      });
+      toast('Category updated', 'success');
+      host.classList.remove('active');
+      await loadC6();
+    } catch (e) { toast('Error: '+e.message, 'error'); }
+  });
+
+  host.classList.add('active');
+};
+
+/* ─────── 9. AUTO-TAG ON CHEQUE CLEAR ─────── */
+/**
+ * When a cheque is marked as cleared in the main NeonCheque app, the
+ * Corrections Patch / Finance Manager typically creates a bank txn.
+ * We listen via loadAllChequesData re-runs and tag any untagged txns.
+ */
+function hookLoadCheques() {
+  if (typeof window.loadAllChequesData !== 'function') return setTimeout(hookLoadCheques, 500);
+  if (window.loadAllChequesData.__ncC6Hooked) return;
+  const orig = window.loadAllChequesData;
+  const wrapped = function () {
+    const r = orig.apply(this, arguments);
+    const after = () => {
+      setTimeout(() => {
+        autoTagUntaggedTxns().then(() => {
+          loadC6().then(() => {
+            renderBankCategoryWidget();
+            renderTxnFilterChips();
+            renderBankTxnsView();
+          });
+        });
+      }, 300);
+    };
+    if (r && r.then) r.then(after); else setTimeout(after, 400);
+    return r;
+  };
+  wrapped.__ncC6Hooked = true;
+  window.loadAllChequesData = wrapped;
+}
+
+/* ─────── 10. HOOK v10 REFRESH (txns view) TO RE-RENDER WITH CATEGORY ─────── */
+function hookV10Refresh() {
+  if (typeof window.ncV10Refresh !== 'function') return setTimeout(hookV10Refresh, 500);
+  if (window.ncV10Refresh.__ncC6Hooked) return;
+  const orig = window.ncV10Refresh;
+  const wrapped = function (key) {
+    const r = orig.apply(this, arguments);
+    if (key === 'txns' || key === 'banks') {
+      setTimeout(() => {
+        loadC6().then(() => {
+          renderBankCategoryWidget();
+          renderTxnFilterChips();
+          renderBankTxnsView();
+        });
+      }, 300);
+    }
+    return r;
+  };
+  wrapped.__ncC6Hooked = true;
+  window.ncV10Refresh = wrapped;
+}
+
+/* ─────── 11. MUTATION OBSERVER TO PATCH MODALS + VIEWS ─────── */
+function watch() {
+  const observer = new MutationObserver(() => {
+    /* Enhance v10 Add Bank Transaction modal */
+    if ($('ncAddOnModalHost') && $('ncAddOnModalHost').classList.contains('active')) {
+      const title = $('ncAddOnTitle');
+      if (title && title.textContent === 'Add Bank Transaction') {
+        enhanceAddTxnModal();
+      }
+    }
+
+    /* Inject chips + re-render when txn view is active */
+    const v = $('ncV10TxnsView');
+    if (v && v.classList.contains('active')) {
+      if (!$('ncTxnCatFilter')) injectTxnCategoryFilter();
+      /* Only re-render if the table looks un-styled (contains raw "bankTransactions" strings) */
+      const body = $('ncV10TxnsBody');
+      if (body && body.dataset.ncC6Rendered !== '1') {
+        body.dataset.ncC6Rendered = '1';
+        renderBankTxnsView();
+      }
+    }
+
+    /* Re-render widget when banks view is active */
+    const bv = $('ncV10BanksView');
+    if (bv && bv.classList.contains('active')) {
+      if (!$('ncBankCatWidget')) renderBankCategoryWidget();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+}
+
+/* ─────── 12. PERIODIC ─────── */
+function periodic() {
+  /* Only re-render txns view if user is actively viewing it */
+  const v = $('ncV10TxnsView');
+  if (v && v.classList.contains('active')) {
+    const body = $('ncV10TxnsBody');
+    if (body) body.dataset.ncC6Rendered = '';
+  }
+}
+
+/* ─────── 13. BOOT ─────── */
+async function boot() {
+  await loadC6();
+  injectTxnCategoryFilter();
+  renderBankCategoryWidget();
+  hookLoadCheques();
+  hookV10Refresh();
+  patchAddTxnHandler();
+  watch();
+  setInterval(periodic, 3000);
+  setInterval(() => {
+    autoTagUntaggedTxns().then(() => {
+      /* silent — no re-render unless user is on relevant view */
+    });
+  }, 45000);
+  setInterval(loadC6, 60000);
+  console.log('[Change #6] ✅ Bank deposit categorization ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 3000));
+else setTimeout(boot, 3000);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHANGE #7 — In/Out Payment Auto-Category by Project + Party History
+     • Project select → auto-fills Category from project default
+     • Party select (free text) → auto-fills from party history
+     • Mismatch warning when overriding project default
+     • Live hint under the Category field
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncChange7) return;
+window.__ncChange7 = true;
+
+const $  = id => document.getElementById(id);
+const N  = n  => parseFloat(n) || 0;
+const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+const getCheques = () => { try { return (Array.isArray(allCheques) ? allCheques : []).filter(c => !c.deletedAt); } catch(e){ return []; } };
+
+function toast(m, t) {
+  try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
+  console.log('['+(t||'info')+']', m);
+}
+
+/* ─────── CACHE ─────── */
+const C7 = {
+  projects: [],
+  cats: [],
+  inPayments: [],
+  outPayments: [],
+  parties: [],
+  payeeHistory: {},   /* lowercased payee/payer name → { category, count } */
+  dirty: true
+};
+
+async function loadC7() {
+  const db = DB(); if (!db) return;
+  try {
+    const [ps, cs, is, os, pts] = await Promise.all([
+      db.collection('projects').get().catch(()=>({docs:[]})),
+      db.collection('chequeCategories').get().catch(()=>({docs:[]})),
+      db.collection('inPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('outPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('parties').get().catch(()=>({docs:[]}))
+    ]);
+    C7.projects    = ps.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C7.cats        = cs.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C7.inPayments  = is.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C7.outPayments = os.docs.map(d => Object.assign({id:d.id}, d.data()));
+    C7.parties     = pts.docs.map(d => Object.assign({id:d.id}, d.data()));
+    buildPartyHistory();
+    C7.dirty = false;
+  } catch(e) { console.warn('[Change #7] load', e.message); }
+}
+
+/* ─────── BUILD PARTY CATEGORY HISTORY ─────── */
+function buildPartyHistory() {
+  C7.payeeHistory = {};
+  const bump = (name, cat) => {
+    if (!name || !cat) return;
+    const key = String(name).toLowerCase().trim();
+    if (!key) return;
+    if (!C7.payeeHistory[key]) C7.payeeHistory[key] = {};
+    if (!C7.payeeHistory[key][cat]) C7.payeeHistory[key][cat] = 0;
+    C7.payeeHistory[key][cat]++;
+  };
+  /* Sort by date desc so the newest wins */
+  C7.inPayments
+    .slice()
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+    .forEach(p => bump(p.payer, p.category));
+  C7.outPayments
+    .slice()
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+    .forEach(p => bump(p.payee, p.category));
+}
+
+function bestCategoryForParty(name) {
+  if (!name) return null;
+  const key = String(name).toLowerCase().trim();
+  const hist = C7.payeeHistory[key];
+  if (!hist) return null;
+  /* Pick the one with the most uses; ties broken by most recent (iteration order) */
+  let best = null, bestCount = 0;
+  Object.keys(hist).forEach(k => {
+    if (hist[k] > bestCount) { best = k; bestCount = hist[k]; }
+  });
+  return best;
+}
+
+/* ─────── HINT ELEMENT ─────── */
+function ensureHint(catSelId) {
+  const sel = $(catSelId);
+  if (!sel) return null;
+  const grp = sel.closest('.form-group');
+  if (!grp) return null;
+  let hint = grp.querySelector('.nc-auto-hint');
+  if (!hint) {
+    hint = document.createElement('small');
+    hint.className = 'nc-auto-hint';
+    hint.style.cssText = 'display:block;margin-top:4px;font-size:11px;color:var(--gray)';
+    grp.appendChild(hint);
+  }
+  return hint;
+}
+
+function setHint(catSelId, text, color) {
+  const hint = ensureHint(catSelId);
+  if (!hint) return;
+  hint.innerHTML = text || '';
+  hint.style.color = color || 'var(--gray)';
+}
+
+/* ─────── AUTOFILL LOGIC ─────── */
+function autoFillFromProject(projSelId, catSelId, manualFlagHolder) {
+  const projSel = $(projSelId);
+  const catSel  = $(catSelId);
+  if (!projSel || !catSel) return;
+
+  const pid = projSel.value;
+  if (!pid) {
+    /* No project selected — try party history instead */
+    setHint(catSelId, '', '');
+    return;
+  }
+
+  const proj = C7.projects.find(p => p.id === pid);
+  if (!proj) return;
+
+  if (proj.defaultCategory) {
+    /* Only auto-fill if user hasn't manually overridden OR field is empty */
+    const currentlyEmpty = !catSel.value;
+    const isManual = manualFlagHolder && manualFlagHolder.value === '1';
+    if (currentlyEmpty || !isManual) {
+      catSel.value = proj.defaultCategory;
+      setHint(catSelId, '✓ Auto-filled from project default: <strong>' + E(proj.defaultCategory) + '</strong>', 'var(--success)');
+    } else if (catSel.value !== proj.defaultCategory) {
+      setHint(catSelId, '⚠ Manual override — project default is <strong>' + E(proj.defaultCategory) + '</strong>', '#f59e0b');
+    } else {
+      setHint(catSelId, '✓ Matches project default', 'var(--success)');
+    }
+  } else {
+    setHint(catSelId, 'Project has no default category — pick one manually', 'var(--gray)');
+  }
+}
+
+function autoFillFromParty(partySelId, catSelId, manualFlagHolder) {
+  const partyEl = $(partySelId);
+  const catSel  = $(catSelId);
+  if (!partyEl || !catSel) return;
+
+  const name = (partyEl.value || '').trim();
+  if (!name) return;
+
+  const best = bestCategoryForParty(name);
+  if (!best) return;
+
+  const currentlyEmpty = !catSel.value;
+  const isManual = manualFlagHolder && manualFlagHolder.value === '1';
+
+  /* Only auto-fill if project hasn't already filled it OR user hasn't manually overridden */
+  if (currentlyEmpty || (!isManual && catSel.value !== best)) {
+    if (currentlyEmpty || !isManual) {
+      catSel.value = best;
+      setHint(catSelId, '✓ Auto-filled from '+name+'’s history: <strong>'+E(best)+'</strong>', 'var(--info)');
+    }
+  }
+}
+
+/* ─────── HOOK THE v10 PAYMENT MODAL ─────── */
+function enhancePaymentModal() {
+  const host = $('ncAddOnModalHost');
+  if (!host || !host.classList.contains('active')) return;
+  const title = $('ncAddOnTitle');
+  if (!title) return;
+  const isPayment = /Add (In|Out) Payment|Edit (In|Out) Payment/.test(title.textContent);
+  if (!isPayment) return;
+
+  const catSel  = $('ncV10F_category');
+  const projSel = $('ncV10F_projectId');
+  const payeeEl = $('ncV10F_payee') || $('ncV10F_payer');
+  if (!catSel) return;
+
+  /* Mark/hold manual flag */
+  if (!catSel.dataset.ncC7Bound) {
+    catSel.dataset.ncC7Bound = '1';
+    catSel.dataset.manual = '0';
+
+    /* Detect manual edit */
+    catSel.addEventListener('change', () => {
+      catSel.dataset.manual = '1';
+      /* Recheck hint if a project is selected */
+      if (projSel && projSel.value) {
+        const proj = C7.projects.find(p => p.id === projSel.value);
+        if (proj && proj.defaultCategory && catSel.value !== proj.defaultCategory) {
+          setHint('ncV10F_category', '⚠ Manual override — project default is <strong>'+E(proj.defaultCategory)+'</strong>', '#f59e0b');
+        } else if (proj && proj.defaultCategory) {
+          setHint('ncV10F_category', '✓ Matches project default', 'var(--success)');
+        }
+      }
+    });
+
+    /* Reset manual flag when field first appears empty */
+    if (!catSel.value) catSel.dataset.manual = '0';
+  }
+
+  /* Bind project select */
+  if (projSel && !projSel.dataset.ncC7Bound) {
+    projSel.dataset.ncC7Bound = '1';
+    projSel.addEventListener('change', () => {
+      /* Reset manual flag when project changes */
+      catSel.dataset.manual = '0';
+      autoFillFromProject('ncV10F_projectId', 'ncV10F_category', { value: catSel.dataset.manual });
+    });
+  }
+
+  /* Bind party field */
+  if (payeeEl && !payeeEl.dataset.ncC7Bound) {
+    payeeEl.dataset.ncC7Bound = '1';
+    payeeEl.addEventListener('blur', () => {
+      autoFillFromParty(payeeEl.id, 'ncV10F_category', { value: catSel.dataset.manual });
+    });
+    payeeEl.addEventListener('change', () => {
+      autoFillFromParty(payeeEl.id, 'ncV10F_category', { value: catSel.dataset.manual });
+    });
+  }
+
+  /* If modal already opened with a project selected but category empty → auto-fill now */
+  if (projSel && projSel.value && !catSel.value) {
+    autoFillFromProject('ncV10F_projectId', 'ncV10F_category', { value: catSel.dataset.manual });
+  }
+}
+
+/* ─────── ALSO HOOK MAIN NEONCHEQUE ADD PAYMENT MODAL (if it exists) ─────── */
+function enhanceNativePaymentModal() {
+  /* NeonCheque's own add-payment modal uses different IDs */
+  const catSel = $('paymentCategory');
+  const projSel = $('paymentProject');
+  if (!catSel || !projSel) return;
+  if (catSel.dataset.ncC7Bound) return;
+  catSel.dataset.ncC7Bound = '1';
+  catSel.dataset.manual = '0';
+  projSel.dataset.ncC7Bound = '1';
+
+  catSel.addEventListener('change', () => { catSel.dataset.manual = '1'; });
+  projSel.addEventListener('change', () => {
+    catSel.dataset.manual = '0';
+    autoFillFromProject('paymentProject', 'paymentCategory', { value: catSel.dataset.manual });
+  });
+}
+
+/* ─────── MUTATION OBSERVER ─────── */
+function watch() {
+  const observer = new MutationObserver(() => {
+    /* v10 modal */
+    if ($('ncAddOnModalHost') && $('ncAddOnModalHost').classList.contains('active')) {
+      enhancePaymentModal();
+    }
+    /* Native payment modal */
+    if ($('addPaymentModal') && $('addPaymentModal').classList.contains('active')) {
+      enhanceNativePaymentModal();
+    }
+  });
+  observer.observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
+
+  /* Initial attempt */
+  setTimeout(() => {
+    enhancePaymentModal();
+    enhanceNativePaymentModal();
+  }, 1000);
+}
+
+/* ─────── HOOK ncV10Refresh FOR PARTY HISTORY UPDATE ─────── */
+function hookV10Refresh() {
+  if (typeof window.ncV10Refresh !== 'function') return setTimeout(hookV10Refresh, 500);
+  if (window.ncV10Refresh.__ncC7Hooked) return;
+  const orig = window.ncV10Refresh;
+  const wrapped = function (key) {
+    const r = orig.apply(this, arguments);
+    if (key === 'inp' || key === 'out' || key === 'parties') {
+      setTimeout(() => { loadC7(); }, 300);
+    }
+    return r;
+  };
+  wrapped.__ncC7Hooked = true;
+  window.ncV10Refresh = wrapped;
+}
+
+/* ─────── HOOK ncAddOnAddIn / ncAddOnAddOut (v10 direct entry points) ─────── */
+function hookV10EntryPoints() {
+  ['ncV10AddIn','ncV10AddOut','ncV10EditIn','ncV10EditOut','ncAddOnAddIn','ncAddOnAddOut','ncAddOnEditIn','ncAddOnEditOut'].forEach(fn => {
+    if (typeof window[fn] !== 'function') return;
+    if (window[fn].__ncC7Hooked) return;
+    const orig = window[fn];
+    const wrapped = function () {
+      const r = orig.apply(this, arguments);
+      /* After the modal opens, ensure our enhancer runs */
+      setTimeout(enhancePaymentModal, 180);
+      return r;
+    };
+    wrapped.__ncC7Hooked = true;
+    window[fn] = wrapped;
+  });
+}
+
+/* ─────── PERIODIC REFRESH ─────── */
+setInterval(() => {
+  if (C7.dirty) loadC7();
+}, 30000);
+
+/* ─────── BOOT ─────── */
+async function boot() {
+  await loadC7();
+  watch();
+  hookV10Refresh();
+  hookV10EntryPoints();
+  /* Re-hook periodically in case new functions load later */
+  setInterval(hookV10EntryPoints, 5000);
+  console.log('[Change #7] ✅ Payment auto-category ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 3200));
+else setTimeout(boot, 3200);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHANGE #8 — 3-Tab Sidebar Layout
+     • Top tabs: Cheques / Finance / Payments
+     • Auto-sorts every existing nav-item into the right tab
+     • Auto-switches on route/view change
+     • Self-healing reorg (safe with v10 + Change #2–#7)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncChange8) return;
+window.__ncChange8 = true;
+
+const $  = id => document.getElementById(id);
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+const TAB_META = {
+  cheques:  { label:'Cheques',  icon:'fa-money-check-alt', color:'#6366f1' },
+  finance:  { label:'Finance',  icon:'fa-chart-line',      color:'#0ea5e9' },
+  payments: { label:'Payments', icon:'fa-exchange-alt',    color:'#10b981' }
+};
+
+/* ─────── TAB DETECTION FOR A NAV-ITEM ─────── */
+function getTab(el) {
+  const oc = (el.getAttribute('onclick') || '').toLowerCase();
+  const txt = (el.textContent || '').toLowerCase().trim();
+
+  /* Finance */
+  if (oc.includes('ncfinanceroute')) return 'finance';
+  if (/ncv10-loans|ncv10-projects|nc-?projects|nc-?loans/.test(oc)) return 'finance';
+  if (/^(loans|projects|finance ledger|finance dashboard)$/.test(txt)) return 'finance';
+
+  /* Payments */
+  if (/ncv10-inp|ncv10-out|ncv10-banks|ncv10-txns|ncv10-parties/.test(oc)) return 'payments';
+  if (/^(in payments|out payments|bank accounts|bank transactions|parties)$/.test(txt)) return 'payments';
+  if (/in payment|out payment|bank account|bank transaction/i.test(txt)) return 'payments';
+
+  /* Cheques (default + explicit) */
+  if (oc.includes('ncv10-cats')) return 'cheques';
+  if (/cheque categories|categories/i.test(txt)) return 'cheques';
+
+  return 'cheques';
+}
+
+/* ─────── CREATE THE TAB BAR ─────── */
+function createTabBar(nav) {
+  const bar = document.createElement('div');
+  bar.id = 'ncMainTabs';
+  bar.style.cssText =
+    'display:flex;gap:4px;margin-bottom:16px;padding:4px;background:var(--light);border-radius:12px;';
+
+  Object.keys(TAB_META).forEach(key => {
+    const m = TAB_META[key];
+    const btn = document.createElement('button');
+    btn.className = 'nc-tab';
+    btn.dataset.tab = key;
+    btn.onclick = () => window.ncSwitchTab(key);
+    btn.style.cssText =
+      'flex:1;padding:8px 4px;border:none;background:transparent;border-radius:9px;' +
+      'font-weight:700;font-size:11px;cursor:pointer;color:var(--gray);' +
+      'display:flex;flex-direction:column;align-items:center;gap:3px;' +
+      'transition:all 0.18s ease;font-family:inherit';
+    btn.innerHTML =
+      '<i class="fas ' + m.icon + '" style="font-size:14px"></i>' +
+      '<span>' + m.label + '</span>';
+    bar.appendChild(btn);
+  });
+
+  nav.insertBefore(bar, nav.firstChild);
+  return bar;
+}
+
+/* ─────── CREATE / GET A TAB SECTION ─────── */
+function getOrCreateSection(tab) {
+  const id = 'ncSection-' + tab;
+  let s = document.getElementById(id);
+  if (s) return s;
+  const meta = TAB_META[tab];
+  s = document.createElement('div');
+  s.className = 'nav-section';
+  s.id = id;
+  s.dataset.nctab = tab;
+  s.innerHTML =
+    '<div class="nav-title" style="display:flex;align-items:center;gap:6px">' +
+      '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+meta.color+'"></span>' +
+      meta.label +
+    '</div>';
+  const cont = document.getElementById('ncSectionsContainer');
+  (cont || document.querySelector('.sidebar nav')).appendChild(s);
+  return s;
+}
+
+/* ─────── APPLY ACTIVE TAB (SHOW/HIDE SECTIONS + HIGHLIGHT BUTTON) ─────── */
+function applyTab(tab, silent) {
+  if (!TAB_META[tab]) tab = 'cheques';
+
+  document.querySelectorAll('#ncMainTabs .nc-tab').forEach(b => {
+    const isActive = b.dataset.tab === tab;
+    const meta = TAB_META[b.dataset.tab];
+    b.style.background = isActive ? 'white' : 'transparent';
+    b.style.color = isActive ? meta.color : 'var(--gray)';
+    b.style.boxShadow = isActive ? '0 2px 8px rgba(99,102,241,0.18)' : 'none';
+    b.style.transform = isActive ? 'translateY(-1px)' : 'none';
+  });
+
+  Object.keys(TAB_META).forEach(t => {
+    const s = document.getElementById('ncSection-' + t);
+    if (s) s.style.display = (t === tab) ? 'block' : 'none';
+  });
+
+  if (!silent) {
+    try { localStorage.setItem('ncActiveTab', tab); } catch(e){}
+  }
+}
+
+window.ncSwitchTab = function (tab) {
+  applyTab(tab);
+  /* Scroll sidebar to top */
+  const sb = document.getElementById('sidebar');
+  if (sb) sb.scrollTop = 0;
+};
+
+/* ─────── THE REORGANIZER ─────── */
+function reorgSidebar() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return;
+
+  /* Ensure container + tab bar exist */
+  let cont = document.getElementById('ncSectionsContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'ncSectionsContainer';
+    nav.appendChild(cont);
+  }
+  if (!document.getElementById('ncMainTabs')) {
+    createTabBar(nav);
+  }
+
+  /* Ensure 3 sections */
+  const sections = {
+    cheques:  getOrCreateSection('cheques'),
+    finance:  getOrCreateSection('finance'),
+    payments: getOrCreateSection('payments')
+  };
+
+  /* Gather all nav-items that ARE inside our 3 sections */
+  const ourItems = new Set();
+  Object.values(sections).forEach(s => {
+    s.querySelectorAll('.nav-item').forEach(el => ourItems.add(el));
+  });
+
+  /* Build "seen" map by (onclick|text) key */
+  const seen = new Map();
+  ourItems.forEach(el => {
+    const key = (el.getAttribute('onclick') || '') + '|' + (el.textContent || '').trim();
+    seen.set(key, el);
+  });
+
+  /* Now scan for nav-items NOT in our sections */
+  const allItems = Array.from(nav.querySelectorAll('.nav-item'));
+  let moved = 0;
+  allItems.forEach(el => {
+    if (ourItems.has(el)) return;
+    if (el.closest('#ncMainTabs')) return;
+
+    const key = (el.getAttribute('onclick') || '') + '|' + (el.textContent || '').trim();
+    if (seen.has(key)) {
+      /* Duplicate — remove */
+      el.remove();
+      return;
+    }
+    seen.set(key, el);
+    const tab = getTab(el);
+    sections[tab].appendChild(el);
+    moved++;
+  });
+
+  /* Move special widgets into Finance section (Personal + Finance tracker) */
+  ['ncPersonalWidget', 'ncFinanceSection'].forEach(id => {
+    const w = document.getElementById(id);
+    if (w && !w.closest('#ncSectionsContainer')) {
+      sections.finance.appendChild(w);
+      moved++;
+    }
+  });
+
+  /* Remove orphaned sections that have no nav-items left */
+  nav.querySelectorAll('.nav-section').forEach(s => {
+    if (s.closest('#ncSectionsContainer')) return;
+    if (s.id === 'ncPersonalWidget' || s.id === 'ncFinanceSection') return;
+    if (s.querySelectorAll('.nav-item').length === 0 && s.querySelectorAll('button').length === 0) {
+      s.remove();
+    }
+  });
+
+  /* Apply last active tab */
+  let saved = 'cheques';
+  try { saved = localStorage.getItem('ncActiveTab') || 'cheques'; } catch(e){}
+  applyTab(saved, true);
+
+  if (moved > 0) {
+    console.log('[Change #8] Sidebar reorganized — ' + moved + ' item(s) moved into tabs');
+  }
+}
+
+/* ─────── AUTO-TAB ON ROUTE CHANGE ─────── */
+function autoSwitchForCurrentView() {
+  const active = document.querySelector('.view-content.active');
+  if (!active) return;
+  const id = active.id || '';
+
+  let tab = null;
+  if (['ncV10LoansView','ncV10ProjectsView','ncFinanceLedgerView'].includes(id)) {
+    tab = 'finance';
+  } else if (['ncV10InpView','ncV10OutView','ncV10BanksView','ncV10TxnsView','ncV10PartiesView'].includes(id)) {
+    tab = 'payments';
+  } else if (id) {
+    tab = 'cheques';
+  }
+  if (!tab) return;
+
+  const current = (function(){ try { return localStorage.getItem('ncActiveTab'); } catch(e){ return null; } })();
+  if (current !== tab) applyTab(tab);
+}
+
+/* ─────── HOOK ROUTING FUNCTIONS TO AUTO-SWITCH TABS ─────── */
+function hookFn(name, wrapper) {
+  if (typeof window[name] !== 'function') return false;
+  if (window[name].__ncC8Hooked) return true;
+  const orig = window[name];
+  const hooked = wrapper(orig);
+  hooked.__ncC8Hooked = true;
+  window[name] = hooked;
+  return true;
+}
+
+function installHooks() {
+  ['showView','ncV10Route','ncFinanceRoute','ncAORoute'].forEach(name => {
+    hookFn(name, orig => function () {
+      const r = orig.apply(this, arguments);
+      setTimeout(autoSwitchForCurrentView, 150);
+      return r;
+    });
+  });
+}
+
+/* ─────── MUTATION OBSERVER (SELF-HEALING) ─────── */
+function shouldReorg() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return false;
+
+  /* Any nav-item outside our container? */
+  const outside = Array.from(nav.querySelectorAll('.nav-item')).filter(el => !el.closest('#ncSectionsContainer'));
+  if (outside.length > 0) return true;
+
+  /* Any live widget outside our container? */
+  if (document.getElementById('ncPersonalWidget') && !document.getElementById('ncPersonalWidget').closest('#ncSectionsContainer')) return true;
+  if (document.getElementById('ncFinanceSection') && !document.getElementById('ncFinanceSection').closest('#ncSectionsContainer')) return true;
+
+  /* Tab bar missing? */
+  if (!document.getElementById('ncMainTabs')) return true;
+
+  return false;
+}
+
+let reorgScheduled = null;
+function scheduleReorg() {
+  if (reorgScheduled) return;
+  reorgScheduled = setTimeout(() => {
+    reorgScheduled = null;
+    try { reorgSidebar(); } catch (e) { console.warn('[Change #8] reorg error', e); }
+  }, 250);
+}
+
+function startObserver() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return setTimeout(startObserver, 300);
+  if (nav.__ncC8Watched) return;
+  nav.__ncC8Watched = true;
+
+  const obs = new MutationObserver(() => {
+    if (shouldReorg()) scheduleReorg();
+  });
+  obs.observe(nav, { childList: true, subtree: true });
+}
+
+/* ─────── BOOT ─────── */
+function boot() {
+  /* First pass immediately, then another after all modules settle */
+  reorgSidebar();
+  startObserver();
+  installHooks();
+
+  setTimeout(reorgSidebar, 400);
+  setTimeout(reorgSidebar, 1200);
+  setTimeout(reorgSidebar, 2500);
+  setTimeout(reorgSidebar, 4500);
+
+  /* Safety net every 3s (cheap check) */
+  setInterval(() => {
+    if (shouldReorg()) reorgSidebar();
+    autoSwitchForCurrentView();
+  }, 3000);
+
+  console.log('[Change #8] ✅ 3-tab sidebar active (Cheques / Finance / Payments)');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 3500));
+} else {
+  setTimeout(boot, 3500);
+}
 
 })();
 </script>
