@@ -13025,6 +13025,4231 @@ else setTimeout(boot, 4000);
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART A
+     Money Sources (loans / own money / reinvestment) + Deployments
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizA) return; window.__ncBizA = true;
+
+window.NB = window.NB || {
+  db: () => (typeof db !== 'undefined' ? db : null),
+  $: id => document.getElementById(id),
+  N: n => parseFloat(n) || 0,
+  F: n => 'Rs. ' + Math.round(parseFloat(n)||0).toLocaleString('en-IN'),
+  E: s => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])),
+  T: () => new Date().toISOString().slice(0,10),
+  TS: () => { try { return firebase.firestore.FieldValue.serverTimestamp(); } catch(e){ return new Date(); } },
+  who: () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } },
+  toast: (m,t) => { try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){} console.log('['+t+']', m); },
+  load: async (col) => { const db = NB.db(); if (!db) return []; try { const s = await db.collection(col).get(); return s.docs.map(d => Object.assign({id:d.id}, d.data())); } catch(e){ return []; } },
+  projects: [], sources: [], deployments: [], cats: []
+};
+
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+async function loadData() {
+  NB.sources = await NB.load('ncMoneySources');
+  NB.deployments = await NB.load('ncDeployments');
+  NB.projects = await NB.load('projects');
+  NB.cats = await NB.load('chequeCategories');
+  renderSources();
+  renderDeployments();
+}
+
+/* ─── MODAL ─── */
+function modal(title, fields, onSave) {
+  let host = $('nbModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'nbModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:560px">' +
+        '<div class="modal-header"><h2 class="modal-title" id="nbModalTitle">Modal</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'nbModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button></div>' +
+        '<div class="modal-body" id="nbModalBody"></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById(\'nbModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="nbModalSave"><i class="fas fa-save"></i> Save</button></div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+  $('nbModalTitle').textContent = title;
+  $('nbModalBody').innerHTML = fields.map(f => {
+    const req = f.required ? ' *' : '';
+    const v = f.value == null ? '' : String(f.value);
+    if (f.type === 'select') {
+      return '<div class="form-group"><label>'+E(f.label)+req+'</label><select id="nbF_'+f.id+'">' +
+        (f.placeholder ? '<option value="">'+E(f.placeholder)+'</option>' : '') +
+        (f.options||[]).map(o => {
+          const val = typeof o === 'string' ? o : o.value;
+          const lbl = typeof o === 'string' ? o : o.label;
+          return '<option value="'+E(val)+'"'+(String(f.value)===String(val)?' selected':'')+'>'+E(lbl)+'</option>';
+        }).join('') + '</select></div>';
+    }
+    if (f.type === 'textarea') return '<div class="form-group"><label>'+E(f.label)+req+'</label><textarea id="nbF_'+f.id+'" rows="3">'+E(v)+'</textarea></div>';
+    return '<div class="form-group"><label>'+E(f.label)+req+'</label><input type="'+(f.type||'text')+'" id="nbF_'+f.id+'" value="'+E(v)+'"' +
+      (f.min!=null?' min="'+f.min+'"':'') + (f.step?' step="'+f.step+'"':'') + '></div>';
+  }).join('');
+
+  const btn = $('nbModalSave');
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  fresh.addEventListener('click', async () => {
+    const data = {};
+    for (const f of fields) {
+      const el = $('nbF_' + f.id); if (!el) continue;
+      let v = el.value;
+      if (f.type === 'number') v = N(v);
+      if (f.required && !v) { NB.toast('Required: ' + f.label, 'error'); return; }
+      data[f.id] = v;
+    }
+    try { fresh.disabled = true; await onSave(data); host.classList.remove('active'); }
+    catch (e) { NB.toast('Error: ' + e.message, 'error'); }
+    finally { fresh.disabled = false; }
+  });
+  host.classList.add('active');
+}
+
+/* ─── RENDER: SOURCES ─── */
+function renderSources() {
+  const el = $('nbSourcesBody'); if (!el) return;
+  if (NB.sources.length === 0) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-hand-holding-usd"></i><h3>No money sources yet</h3><p>Add loans or own capital to begin tracking</p></div>';
+    return;
+  }
+  const rows = NB.sources.map(s => {
+    const deployed = NB.deployments.filter(d => d.sourceId === s.id).reduce((sum,d) => sum + N(d.amount), 0);
+    const remaining = N(s.amount) - deployed;
+    const typeColor = s.type === 'loan' ? '#dc2626' : s.type === 'own' ? '#10b981' : '#0ea5e9';
+    return '<tr>' +
+      '<td><span class="status-badge" style="background:'+typeColor+'22;color:'+typeColor+'">'+E(s.type)+'</span></td>' +
+      '<td><strong>'+E(s.party || '-')+'</strong></td>' +
+      '<td>'+F(s.amount)+'</td>' +
+      '<td>'+F(deployed)+'</td>' +
+      '<td style="color:'+(remaining>0?'var(--warning)':'var(--success)')+';font-weight:700">'+F(remaining)+'</td>' +
+      '<td>'+E(s.date||'-')+'</td>' +
+      '<td>' +
+        '<button class="btn btn-sm btn-secondary" onclick="nbDeployFrom(\''+s.id+'\')" title="Deploy to project"><i class="fas fa-arrow-right"></i></button> ' +
+        '<button class="btn btn-sm btn-secondary" onclick="nbDeleteSource(\''+s.id+'\')"><i class="fas fa-trash"></i></button>' +
+      '</td></tr>';
+  }).join('');
+  el.innerHTML = '<div class="table-container"><table><thead><tr>' +
+    '<th>Type</th><th>Party</th><th>Total</th><th>Deployed</th><th>Available</th><th>Date</th><th>Actions</th>' +
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+/* ─── RENDER: DEPLOYMENTS ─── */
+function renderDeployments() {
+  const el = $('nbDeploymentsBody'); if (!el) return;
+  if (NB.deployments.length === 0) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-boxes"></i><h3>No deployments yet</h3></div>';
+    return;
+  }
+  const rows = NB.deployments.map(d => {
+    const src = NB.sources.find(s => s.id === d.sourceId);
+    const proj = NB.projects.find(p => p.id === d.projectId);
+    return '<tr>' +
+      '<td>'+E(d.date||'-')+'</td>' +
+      '<td>'+E(proj ? proj.name : '(deleted)')+'</td>' +
+      '<td>'+E(d.category||'-')+'</td>' +
+      '<td>'+E(d.purpose||'-')+'</td>' +
+      '<td>'+F(d.amount)+'</td>' +
+      '<td><small>'+E(src ? (src.type + ' / ' + (src.party||'')) : '-')+'</small></td>' +
+      '<td><button class="btn btn-sm btn-secondary" onclick="nbDeleteDeployment(\''+d.id+'\')"><i class="fas fa-trash"></i></button></td>' +
+      '</tr>';
+  }).join('');
+  el.innerHTML = '<div class="table-container"><table><thead><tr>' +
+    '<th>Date</th><th>Project</th><th>Category</th><th>Purpose</th><th>Amount</th><th>Source</th><th></th>' +
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+/* ─── ADD SOURCE ─── */
+window.nbAddSource = function() {
+  const projOpts = [{value:'', label:'-- None --'}].concat(NB.projects.map(p => ({value:p.id, label:p.name})));
+  modal('Add Money Source', [
+    {id:'type', label:'Type', type:'select', required:true, options:[
+      {value:'loan', label:'Loan from party'},
+      {value:'own', label:'Own money / capital'},
+      {value:'reinvest', label:'Reinvestment'}
+    ], value:'loan'},
+    {id:'party', label:'Party / Source name', type:'text', placeholder:'e.g. ABC Bank, My savings'},
+    {id:'amount', label:'Total amount', type:'number', required:true, step:'0.01', min:0.01},
+    {id:'date', label:'Date received', type:'date', required:true, value:T()},
+    {id:'primaryProjectId', label:'Primary project (optional)', type:'select', options:projOpts},
+    {id:'notes', label:'Notes', type:'textarea'}
+  ], async d => {
+    const db = NB.db();
+    await db.collection('ncMoneySources').add(Object.assign(d, {
+      createdAt: NB.TS(),
+      createdBy: NB.who(),
+      deployed: 0
+    }));
+    NB.toast('Source added', 'success');
+    await loadData();
+  });
+};
+
+window.nbDeleteSource = async function(id) {
+  const d = NB.deployments.filter(x => x.sourceId === id);
+  if (d.length > 0) { NB.toast('Cannot delete — ' + d.length + ' deployments use this source', 'error'); return; }
+  if (!confirm('Delete this money source?')) return;
+  await NB.db().collection('ncMoneySources').doc(id).delete();
+  await loadData();
+};
+
+/* ─── DEPLOY FROM SOURCE ─── */
+window.nbDeployFrom = function(sourceId) {
+  const src = NB.sources.find(s => s.id === sourceId);
+  if (!src) return;
+  const deployed = NB.deployments.filter(d => d.sourceId === sourceId).reduce((s,d) => s + N(d.amount), 0);
+  const available = N(src.amount) - deployed;
+  if (available <= 0) { NB.toast('No available balance to deploy', 'error'); return; }
+
+  const projOpts = NB.projects.map(p => ({value:p.id, label:p.name}));
+  const catOpts = NB.cats.map(c => ({value:c.name, label:c.name}));
+
+  modal('Deploy ' + F(available) + ' from ' + (src.party||src.type), [
+    {id:'projectId', label:'Project', type:'select', required:true, options:projOpts, placeholder:'-- Select project --'},
+    {id:'category', label:'Business category', type:'select', required:true, options:catOpts, placeholder:'-- Select --'},
+    {id:'amount', label:'Amount to deploy', type:'number', required:true, step:'0.01', min:0.01, value:available},
+    {id:'date', label:'Date', type:'date', required:true, value:T()},
+    {id:'purpose', label:'Purpose', type:'text', placeholder:'e.g. Purchased 500 shoes'},
+    {id:'notes', label:'Notes', type:'textarea'}
+  ], async d => {
+    if (N(d.amount) > available) { NB.toast('Exceeds available ' + F(available), 'error'); throw new Error('exceeds'); }
+    const db = NB.db();
+    await db.collection('ncDeployments').add(Object.assign(d, {
+      sourceId: sourceId,
+      createdAt: NB.TS(),
+      createdBy: NB.who()
+    }));
+    await db.collection('ncMoneySources').doc(sourceId).update({ deployed: NB.db().constructor ? firebase.firestore.FieldValue.increment(N(d.amount)) : N(d.amount) });
+    NB.toast('Deployed ' + F(d.amount) + ' to project', 'success');
+    await loadData();
+  });
+};
+
+window.nbDeleteDeployment = async function(id) {
+  const d = NB.deployments.find(x => x.id === id);
+  if (!d) return;
+  if (!confirm('Delete this deployment? Source balance will be restored.')) return;
+  const db = NB.db();
+  await db.collection('ncDeployments').doc(id).delete();
+  if (d.sourceId) {
+    try { await db.collection('ncMoneySources').doc(d.sourceId).update({ deployed: firebase.firestore.FieldValue.increment(-N(d.amount)) }); } catch(e){}
+  }
+  await loadData();
+};
+
+/* ─── VIEWS ─── */
+function injectViews() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('nbSourcesView')) return;
+
+  const srcView = document.createElement('div');
+  srcView.id = 'nbSourcesView';
+  srcView.className = 'view-content';
+  srcView.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-hand-holding-usd" style="color:var(--primary);margin-right:8px"></i>Money Sources</h2>' +
+      '<div><button class="btn btn-secondary btn-sm" onclick="loadData()" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="nbAddSource()"><i class="fas fa-plus"></i> Add Source</button></div>' +
+    '</div>' +
+    '<div style="background:#dbeafe;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#1e40af">' +
+      '<i class="fas fa-info-circle"></i> Every loan, own money, or reinvestment starts here. Then deploy to projects.' +
+    '</div>' +
+    '<div id="nbSourcesBody"></div></div>';
+  main.appendChild(srcView);
+
+  const depView = document.createElement('div');
+  depView.id = 'nbDeploymentsView';
+  depView.className = 'view-content';
+  depView.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-boxes" style="color:var(--primary);margin-right:8px"></i>Deployments (Money Out to Projects)</h2>' +
+      '<div><button class="btn btn-secondary btn-sm" onclick="loadData()" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="nbPickSourceToDeploy()"><i class="fas fa-plus"></i> Deploy</button></div>' +
+    '</div><div id="nbDeploymentsBody"></div></div>';
+  main.appendChild(depView);
+}
+
+window.nbPickSourceToDeploy = function() {
+  if (NB.sources.length === 0) { NB.toast('Add a money source first', 'error'); return; }
+  const opts = NB.sources.map(s => ({value:s.id, label:(s.party||s.type) + ' — ' + F(N(s.amount))}));
+  modal('Select Source to Deploy', [
+    {id:'sourceId', label:'Money source', type:'select', required:true, options:opts, placeholder:'-- Select --'}
+  ], async d => {
+    setTimeout(() => nbDeployFrom(d.sourceId), 200);
+  });
+};
+
+/* ─── SIDEBAR INJECTION ─── */
+function injectSidebar() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('nbSidebarSection')) return;
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'nbSidebarSection';
+  sect.dataset.nctab = 'finance';
+  sect.innerHTML =
+    '<div class="nav-title">Business Ledger</div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbSourcesView\',\'Money Sources\',this)"><i class="fas fa-hand-holding-usd"></i><span>Money Sources</span></div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbDeploymentsView\',\'Deployments\',this)"><i class="fas fa-boxes"></i><span>Deployments</span></div>';
+  const cont = $('ncSectionsContainer') || nav;
+  const finSec = $('ncSection-finance') || cont;
+  finSec.appendChild(sect);
+}
+
+window.nbGo = function(viewId, title, navEl) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  if (navEl) navEl.classList.add('active');
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const el = $(viewId); if (el) el.classList.add('active');
+  const t = $('pageTitle'); if (t) t.textContent = title;
+  if (window.innerWidth <= 768) {
+    const sb = $('sidebar'), ov = $('sidebarOverlay');
+    if (sb) sb.classList.remove('active'); if (ov) ov.classList.remove('active');
+  }
+  loadData();
+};
+
+/* ─── BOOT ─── */
+async function boot() {
+  injectViews();
+  injectSidebar();
+  await loadData();
+  setInterval(() => { if ($('nbSourcesView')?.classList.contains('active') || $('nbDeploymentsView')?.classList.contains('active')) loadData(); }, 15000);
+  console.log('[Biz A] ✅ Money Sources + Deployments ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 5000));
+else setTimeout(boot, 5000);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART B
+     Shop Payments (cheque/cash/bank multi-method) + Cash In Hand
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizB) return; window.__ncBizB = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+NB.payments = [];
+NB.cash = [];
+
+async function loadB() {
+  NB.payments = await NB.load('ncShopPayments');
+  NB.cash = await NB.load('ncCashLedger');
+  renderPayments();
+  renderCash();
+}
+
+/* ─── MODAL (reuse from A if exists, else simple) ─── */
+function modalB(title, fields, onSave) {
+  let host = $('nbModal');
+  if (!host) { NB.toast('Part A not loaded', 'error'); return; }
+  $('nbModalTitle').textContent = title;
+  $('nbModalBody').innerHTML = fields.map(f => {
+    const req = f.required ? ' *' : '';
+    const v = f.value == null ? '' : String(f.value);
+    if (f.type === 'select') {
+      return '<div class="form-group"><label>'+E(f.label)+req+'</label><select id="nbF_'+f.id+'">' +
+        (f.placeholder ? '<option value="">'+E(f.placeholder)+'</option>' : '') +
+        (f.options||[]).map(o => {
+          const val = typeof o === 'string' ? o : o.value;
+          const lbl = typeof o === 'string' ? o : o.label;
+          return '<option value="'+E(val)+'"'+(String(f.value)===String(val)?' selected':'')+'>'+E(lbl)+'</option>';
+        }).join('') + '</select></div>';
+    }
+    if (f.type === 'textarea') return '<div class="form-group"><label>'+E(f.label)+req+'</label><textarea id="nbF_'+f.id+'" rows="3">'+E(v)+'</textarea></div>';
+    return '<div class="form-group"><label>'+E(f.label)+req+'</label><input type="'+(f.type||'text')+'" id="nbF_'+f.id+'" value="'+E(v)+'"' +
+      (f.min!=null?' min="'+f.min+'"':'') + (f.step?' step="'+f.step+'"':'') + '></div>';
+  }).join('');
+
+  const btn = $('nbModalSave');
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  fresh.addEventListener('click', async () => {
+    const data = {};
+    for (const f of fields) {
+      const el = $('nbF_' + f.id); if (!el) continue;
+      let v = el.value;
+      if (f.type === 'number') v = N(v);
+      if (f.required && !v) { NB.toast('Required: ' + f.label, 'error'); return; }
+      data[f.id] = v;
+    }
+    try { fresh.disabled = true; await onSave(data); host.classList.remove('active'); }
+    catch (e) { NB.toast('Error: ' + e.message, 'error'); }
+    finally { fresh.disabled = false; }
+  });
+  host.classList.add('active');
+}
+
+/* ─── RENDER: SHOP PAYMENTS ─── */
+function renderPayments() {
+  const el = $('nbPaymentsBody'); if (!el) return;
+  if (NB.payments.length === 0) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-store"></i><h3>No shop payments yet</h3><p>Record payments you receive from the shop</p></div>';
+    return;
+  }
+  const rows = NB.payments.slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(p => {
+    const proj = NB.projects.find(x => x.id === p.projectId);
+    const methodColor = p.method === 'cheque' ? '#6366f1' : p.method === 'cash' ? '#10b981' : p.method === 'bank' ? '#0ea5e9' : '#f59e0b';
+    return '<tr>' +
+      '<td>'+E(p.date||'-')+'</td>' +
+      '<td>'+E(proj ? proj.name : '-')+'</td>' +
+      '<td><span class="status-badge" style="background:'+methodColor+'22;color:'+methodColor+'">'+E(p.method)+'</span></td>' +
+      '<td style="font-weight:700;color:var(--success)">'+F(p.amount)+'</td>' +
+      '<td>'+E(p.notes||'-')+'</td>' +
+      '<td>' +
+        (p.method === 'cheque' && p.chequeCount ? '<span style="font-size:11px;color:var(--gray)">'+p.chequeCount+' chq</span> ' : '') +
+        '<button class="btn btn-sm btn-secondary" onclick="nbReinvest(\''+p.id+'\')" title="Reinvest into new project"><i class="fas fa-redo"></i></button> ' +
+        '<button class="btn btn-sm btn-secondary" onclick="nbDelPayment(\''+p.id+'\')"><i class="fas fa-trash"></i></button>' +
+      '</td></tr>';
+  }).join('');
+  el.innerHTML = '<div class="table-container"><table><thead><tr>' +
+    '<th>Date</th><th>Project</th><th>Method</th><th>Amount</th><th>Notes</th><th></th>' +
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+/* ─── RENDER: CASH LEDGER ─── */
+function renderCash() {
+  const el = $('nbCashBody'); if (!el) return;
+  const balance = NB.cash.reduce((s,c) => s + (c.type === 'in' ? N(c.amount) : -N(c.amount)), 0);
+  const rows = NB.cash.slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(c => {
+    const isIn = c.type === 'in';
+    return '<tr>' +
+      '<td>'+E(c.date||'-')+'</td>' +
+      '<td><span class="status-badge '+(isIn?'status-cleared':'status-returned')+'">'+E(c.type)+'</span></td>' +
+      '<td style="font-weight:700;color:'+(isIn?'var(--success)':'var(--danger)')+'">'+(isIn?'+':'−')+F(c.amount)+'</td>' +
+      '<td>'+E(c.source||'-')+'</td>' +
+      '<td>'+E(c.notes||'-')+'</td>' +
+      '<td><button class="btn btn-sm btn-secondary" onclick="nbDelCash(\''+c.id+'\')"><i class="fas fa-trash"></i></button></td>' +
+      '</tr>';
+  }).join('');
+
+  el.innerHTML =
+    '<div style="background:linear-gradient(135deg,var(--success),#059669);color:white;padding:16px;border-radius:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">' +
+      '<div><div style="font-size:11px;opacity:0.9">CASH IN HAND</div><div style="font-size:24px;font-weight:800">'+F(balance)+'</div></div>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbAddCash()"><i class="fas fa-plus"></i> Add Entry</button>' +
+    '</div>' +
+    (rows ? '<div class="table-container"><table><thead><tr>' +
+      '<th>Date</th><th>Type</th><th>Amount</th><th>Source</th><th>Notes</th><th></th>' +
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>' : '<div class="empty-state"><i class="fas fa-coins"></i><h3>No cash entries yet</h3></div>');
+}
+
+/* ─── NEW SHOP PAYMENT ─── */
+window.nbNewShopPayment = function() {
+  const projOpts = NB.projects.map(p => ({value:p.id, label:p.name}));
+  const srcOpts = [{value:'', label:'-- Auto-detect --'}].concat(
+    NB.deployments.map(d => {
+      const p = NB.projects.find(x => x.id === d.projectId);
+      return {value:d.id, label:(p?p.name:'?') + ' — ' + F(N(d.amount))};
+    })
+  );
+
+  modalB('Record Shop Payment', [
+    {id:'projectId', label:'Project', type:'select', required:true, options:projOpts, placeholder:'-- Select --'},
+    {id:'amount', label:'Total amount received', type:'number', required:true, step:'0.01', min:0.01},
+    {id:'date', label:'Date', type:'date', required:true, value:T()},
+    {id:'method', label:'Method', type:'select', required:true, options:[
+      {value:'cash', label:'Cash'},
+      {value:'cheque', label:'Cheque'},
+      {value:'bank', label:'Bank transfer'},
+      {value:'mixed', label:'Mixed (cheque + cash + bank)'}
+    ], value:'cash'},
+    {id:'notes', label:'Notes', type:'textarea'}
+  ], async d => {
+    const db = NB.db();
+    const docRef = await db.collection('ncShopPayments').add(Object.assign(d, {
+      createdAt: NB.TS(),
+      createdBy: NB.who(),
+      linkedDeploymentIds: []
+    }));
+
+    /* Route by method */
+    if (d.method === 'cash' || d.method === 'mixed') {
+      /* Auto-create cash-in entry */
+      await db.collection('ncCashLedger').add({
+        type:'in', amount: d.amount, date: d.date, source:'shop-payment',
+        projectId: d.projectId, shopPaymentId: docRef.id,
+        notes: 'From shop — ' + (d.notes || ''),
+        createdAt: NB.TS(), createdBy: NB.who()
+      });
+    }
+    if (d.method === 'cheque') {
+      NB.toast('Payment saved. Now add cheques in Bulk Cheque Intake.', 'info');
+    }
+    if (d.method === 'bank') {
+      NB.toast('Payment saved. Add matching bank transaction manually or wait for auto-tag.', 'info');
+    }
+    NB.toast('Shop payment recorded', 'success');
+    await loadB();
+  });
+};
+
+window.nbDelPayment = async function(id) {
+  if (!confirm('Delete this shop payment? Related cash entries will remain.')) return;
+  await NB.db().collection('ncShopPayments').doc(id).delete();
+  await loadB();
+};
+
+/* ─── CASH ENTRY ─── */
+window.nbAddCash = function() {
+  const projOpts = [{value:'', label:'-- None --'}].concat(NB.projects.map(p => ({value:p.id, label:p.name})));
+  modalB('Add Cash Entry', [
+    {id:'type', label:'Type', type:'select', required:true, options:[
+      {value:'in', label:'Cash IN (received)'},
+      {value:'out', label:'Cash OUT (spent)'}
+    ], value:'in'},
+    {id:'amount', label:'Amount', type:'number', required:true, step:'0.01', min:0.01},
+    {id:'date', label:'Date', type:'date', required:true, value:T()},
+    {id:'source', label:'Source / Reason', type:'text', placeholder:'e.g. personal, shop payment, expense'},
+    {id:'projectId', label:'Project (optional)', type:'select', options:projOpts},
+    {id:'notes', label:'Notes', type:'textarea'}
+  ], async d => {
+    await NB.db().collection('ncCashLedger').add(Object.assign(d, {
+      createdAt: NB.TS(),
+      createdBy: NB.who()
+    }));
+    NB.toast('Cash entry added', 'success');
+    await loadB();
+  });
+};
+
+window.nbDelCash = async function(id) {
+  if (!confirm('Delete this cash entry?')) return;
+  await NB.db().collection('ncCashLedger').doc(id).delete();
+  await loadB();
+};
+
+/* ─── VIEWS ─── */
+function injectViewsB() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('nbPaymentsView')) return;
+
+  const v1 = document.createElement('div');
+  v1.id = 'nbPaymentsView';
+  v1.className = 'view-content';
+  v1.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-store" style="color:var(--primary);margin-right:8px"></i>Shop Payments Received</h2>' +
+      '<div><button class="btn btn-secondary btn-sm" onclick="loadB()" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="nbNewShopPayment()"><i class="fas fa-plus"></i> Record Payment</button></div>' +
+    '</div>' +
+    '<div style="background:#d1fae5;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#065f46">' +
+      '<i class="fas fa-info-circle"></i> Every payment from the shop goes here — cash auto-logs to Cash Ledger; cheques link to All Cheques; bank transfers link to Bank Transactions.' +
+    '</div>' +
+    '<div id="nbPaymentsBody"></div></div>';
+  main.appendChild(v1);
+
+  const v2 = document.createElement('div');
+  v2.id = 'nbCashView';
+  v2.className = 'view-content';
+  v2.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-coins" style="color:var(--success);margin-right:8px"></i>Cash In Hand</h2>' +
+      '<button class="btn btn-secondary btn-sm" onclick="loadB()"><i class="fas fa-sync"></i> Refresh</button>' +
+    '</div><div id="nbCashBody"></div></div>';
+  main.appendChild(v2);
+}
+
+/* ─── SIDEBAR ─── */
+function injectSidebarB() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('nbSidebarSectionB')) return;
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'nbSidebarSectionB';
+  sect.dataset.nctab = 'payments';
+  sect.innerHTML =
+    '<div class="nav-title">Shop Receipts</div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbPaymentsView\',\'Shop Payments\',this)"><i class="fas fa-store"></i><span>Shop Payments</span></div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbCashView\',\'Cash In Hand\',this)"><i class="fas fa-coins"></i><span>Cash In Hand</span></div>';
+  const cont = $('ncSectionsContainer') || nav;
+  const paySec = $('ncSection-payments') || cont;
+  paySec.appendChild(sect);
+}
+
+window.loadB = loadB;
+
+async function boot() {
+  injectViewsB();
+  injectSidebarB();
+  await loadB();
+  setInterval(() => { if ($('nbPaymentsView')?.classList.contains('active') || $('nbCashView')?.classList.contains('active')) loadB(); }, 12000);
+  console.log('[Biz B] ✅ Shop Payments + Cash Ledger ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 5500));
+else setTimeout(boot, 5500);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART C
+     Bulk Cheque Intake — add many cheques from shop at once
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizC) return; window.__ncBizC = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* ─── BULK INTAKE VIEW ─── */
+window.nbOpenBulkIntake = function(shopPaymentId) {
+  const projOpts = NB.projects.map(p => ({value:p.id, label:p.name}));
+  const catOpts = NB.cats.map(c => ({value:c.name, label:c.name}));
+  const banks = (NB.banks || []).map(b => b.bankName || b.name || '');
+  const bankOpts = banks.map(b => ({value:b, label:b}));
+
+  let host = $('nbBulkModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'nbBulkModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:760px">' +
+        '<div class="modal-header"><h2 class="modal-title"><i class="fas fa-money-check-alt"></i> Bulk Cheque Intake</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'nbBulkModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button></div>' +
+        '<div class="modal-body" id="nbBulkBody"></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById(\'nbBulkModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="nbBulkSave"><i class="fas fa-upload"></i> Add All Cheques</button></div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  $('nbBulkBody').innerHTML =
+    '<div class="form-row">' +
+      '<div class="form-group"><label>Project *</label><select id="nbBulkProject"><option value="">-- Select --</option>' +
+        projOpts.map(o => '<option value="'+E(o.value)+'">'+E(o.label)+'</option>').join('') +
+      '</select></div>' +
+      '<div class="form-group"><label>Category *</label><select id="nbBulkCat"><option value="">-- Select --</option>' +
+        catOpts.map(o => '<option value="'+E(o.value)+'">'+E(o.label)+'</option>').join('') +
+      '</select></div>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label>Default Bank</label><select id="nbBulkBank"><option value="">-- Optional --</option>' +
+        bankOpts.map(o => '<option value="'+E(o.value)+'">'+E(o.label)+'</option>').join('') +
+      '</select></div>' +
+      '<div class="form-group"><label>Default Date</label><input type="date" id="nbBulkDate" value="'+T()+'"></div>' +
+    '</div>' +
+    '<div class="form-group"><label>Payee (payer) *</label><input type="text" id="nbBulkPayee" placeholder="e.g. Shop ABC"></div>' +
+    '<div class="form-group"><label>Cheques — one per line (number, amount, date, bank)</label>' +
+      '<textarea id="nbBulkText" rows="10" style="font-family:monospace;font-size:12px" placeholder="123456, 50000, 2026-01-15, HNB\n123457, 30000, 2026-01-20, HNB\n123458, 25000"></textarea>' +
+      '<small style="color:var(--gray);font-size:11px">Comma-separated. First line: number, amount. Optional: date, bank.</small>' +
+    '</div>' +
+    '<div id="nbBulkPreview" style="background:var(--light);padding:10px;border-radius:8px;font-size:12px"></div>';
+
+  /* Live preview */
+  const txt = $('nbBulkText');
+  txt.addEventListener('input', () => {
+    const lines = txt.value.split('\n').filter(l => l.trim());
+    const total = lines.reduce((s,l) => s + N(l.split(',')[1]), 0);
+    $('nbBulkPreview').innerHTML = '<strong>' + lines.length + '</strong> cheque(s), total <strong>' + F(total) + '</strong>';
+  });
+
+  const btn = $('nbBulkSave');
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  fresh.addEventListener('click', async () => {
+    const projectId = $('nbBulkProject').value;
+    const category = $('nbBulkCat').value;
+    const defBank = $('nbBulkBank').value;
+    const defDate = $('nbBulkDate').value;
+    const payee = $('nbBulkPayee').value.trim();
+    const raw = $('nbBulkText').value.trim();
+
+    if (!projectId || !category || !payee || !raw) { NB.toast('Fill project, category, payee, and cheques', 'error'); return; }
+
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
+    const cheques = [];
+    for (const line of lines) {
+      const parts = line.split(',').map(s => s.trim());
+      const number = parts[0];
+      const amount = N(parts[1]);
+      if (!number || amount <= 0) continue;
+      cheques.push({
+        number, amount,
+        date: parts[2] || defDate,
+        bank: parts[3] || defBank || ''
+      });
+    }
+    if (cheques.length === 0) { NB.toast('No valid cheques parsed', 'error'); return; }
+
+    fresh.disabled = true;
+    fresh.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding ' + cheques.length + '...';
+
+    const db = NB.db();
+    const totalAmount = cheques.reduce((s,c) => s + c.amount, 0);
+    const shopPaymentId_resolved = shopPaymentId || null;
+
+    /* Create or update shop payment record */
+    let spId = shopPaymentId_resolved;
+    if (!spId) {
+      const spRef = await db.collection('ncShopPayments').add({
+        projectId, amount: totalAmount, date: defDate,
+        method: 'cheque', chequeCount: cheques.length,
+        notes: 'Bulk intake from ' + payee,
+        createdAt: NB.TS(), createdBy: NB.who(),
+        linkedDeploymentIds: [], chequeIds: []
+      });
+      spId = spRef.id;
+    }
+
+    /* Add each cheque */
+    const chequeIds = [];
+    for (const c of cheques) {
+      const hist = [{ action:'Created via bulk intake', details:'From '+payee, timestamp: new Date().toISOString(), user: NB.who() }];
+      const ref = await db.collection('cheques').add({
+        number: c.number, payee, amount: c.amount, bank: c.bank, date: c.date,
+        status: 'in-hand', category, projectId,
+        shopPaymentId: spId,
+        history: hist, payments: [],
+        createdAt: NB.TS(), createdBy: NB.who()
+      });
+      chequeIds.push(ref.id);
+    }
+
+    /* Update shop payment with chequeIds */
+    try {
+      await db.collection('ncShopPayments').doc(spId).update({
+        chequeIds: firebase.firestore.FieldValue.arrayUnion.apply(null, chequeIds)
+      });
+    } catch (e) {
+      /* arrayUnion fallback if multiple */
+      const sp = await db.collection('ncShopPayments').doc(spId).get();
+      const existing = sp.data().chequeIds || [];
+      await db.collection('ncShopPayments').doc(spId).update({ chequeIds: existing.concat(chequeIds) });
+    }
+
+    NB.toast('Added ' + cheques.length + ' cheque(s) — ' + F(totalAmount), 'success');
+    host.classList.remove('active');
+
+    /* Refresh cheques in main app */
+    try { if (typeof loadAllChequesData === 'function') await loadAllChequesData(); } catch(e){}
+    if (typeof window.loadB === 'function') window.loadB();
+  });
+
+  host.classList.add('active');
+};
+
+/* ─── BUTTON IN SHOP PAYMENTS VIEW ─── */
+function addIntakeButton() {
+  const v = $('nbPaymentsView');
+  if (!v) return;
+  const header = v.querySelector('.card-header');
+  if (!header || header.querySelector('.nb-intake-btn')) return;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-secondary btn-sm nb-intake-btn';
+  btn.style.marginRight = '8px';
+  btn.innerHTML = '<i class="fas fa-money-check-alt"></i> Bulk Cheque Intake';
+  btn.onclick = () => window.nbOpenBulkIntake();
+  const actions = header.querySelector('div');
+  if (actions) actions.insertBefore(btn, actions.firstChild);
+  else header.appendChild(btn);
+}
+
+function periodic() { addIntakeButton(); }
+
+function boot() {
+  addIntakeButton();
+  setInterval(periodic, 2000);
+  console.log('[Biz C] ✅ Bulk Cheque Intake ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 6000));
+else setTimeout(boot, 6000);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART D
+     Reinvestment chain + Finance payment linkage
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizD) return; window.__ncBizD = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* ─── REINVEST: turn a shop payment into a new deployment ─── */
+window.nbReinvest = function(shopPaymentId) {
+  const sp = (NB.payments || []).find(p => p.id === shopPaymentId);
+  if (!sp) { NB.toast('Payment not found', 'error'); return; }
+
+  const projOpts = NB.projects.map(p => ({value:p.id, label:p.name}));
+  const catOpts = NB.cats.map(c => ({value:c.name, label:c.name}));
+
+  let host = $('nbReinvestModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'nbReinvestModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:560px">' +
+        '<div class="modal-header"><h2 class="modal-title"><i class="fas fa-redo"></i> Reinvest into New Project</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'nbReinvestModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button></div>' +
+        '<div class="modal-body" id="nbReinvestBody"></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById(\'nbReinvestModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="nbReinvestSave"><i class="fas fa-paper-plane"></i> Reinvest</button></div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  $('nbReinvestBody').innerHTML =
+    '<div style="background:#dbeafe;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#1e40af">' +
+      '<i class="fas fa-info-circle"></i> This creates a new deployment sourced from the payment of <strong>' + F(sp.amount) + '</strong> — chain preserved.' +
+    '</div>' +
+    '<div class="form-group"><label>New Project *</label><select id="nbReinvestProject"><option value="">-- Select --</option>' +
+      projOpts.map(o => '<option value="'+E(o.value)+'">'+E(o.label)+'</option>').join('') +
+    '</select></div>' +
+    '<div class="form-group"><label>Category *</label><select id="nbReinvestCat"><option value="">-- Select --</option>' +
+      catOpts.map(o => '<option value="'+E(o.value)+'">'+E(o.label)+'</option>').join('') +
+    '</select></div>' +
+    '<div class="form-group"><label>Amount to reinvest *</label><input type="number" id="nbReinvestAmount" value="'+N(sp.amount)+'" step="0.01" min="0.01"></div>' +
+    '<div class="form-group"><label>Date</label><input type="date" id="nbReinvestDate" value="'+T()+'"></div>' +
+    '<div class="form-group"><label>Purpose</label><input type="text" id="nbReinvestPurpose" placeholder="e.g. Purchased 300 shoes for new batch"></div>';
+
+  const btn = $('nbReinvestSave');
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  fresh.addEventListener('click', async () => {
+    const projectId = $('nbReinvestProject').value;
+    const category = $('nbReinvestCat').value;
+    const amount = N($('nbReinvestAmount').value);
+    const date = $('nbReinvestDate').value || T();
+    const purpose = $('nbReinvestPurpose').value || 'Reinvestment';
+
+    if (!projectId || !category || amount <= 0) { NB.toast('Fill all required fields', 'error'); return; }
+    if (amount > N(sp.amount)) { NB.toast('Exceeds payment amount ' + F(sp.amount), 'error'); return; }
+
+    try {
+      const db = NB.db();
+      /* Create a virtual source for this reinvestment */
+      const srcRef = await db.collection('ncMoneySources').add({
+        type:'reinvest',
+        party: 'Reinvested from project ' + (NB.projects.find(p => p.id === sp.projectId)?.name || ''),
+        amount, date,
+        parentShopPaymentId: shopPaymentId,
+        createdAt: NB.TS(), createdBy: NB.who()
+      });
+
+      /* Create deployment */
+      const depRef = await db.collection('ncDeployments').add({
+        sourceId: srcRef.id, projectId, category, amount, date, purpose,
+        fromShopPaymentId: shopPaymentId,
+        createdAt: NB.TS(), createdBy: NB.who()
+      });
+
+      /* Log chain */
+      await db.collection('ncReinvestments').add({
+        fromShopPaymentId: shopPaymentId,
+        newSourceId: srcRef.id,
+        newDeploymentId: depRef.id,
+        amount, date,
+        createdAt: NB.TS(), createdBy: NB.who()
+      });
+
+      /* Update shop payment as reinvested */
+      const spDoc = await db.collection('ncShopPayments').doc(shopPaymentId).get();
+      const spData = spDoc.data();
+      const existing = spData.reinvestedAmount || 0;
+      await db.collection('ncShopPayments').doc(shopPaymentId).update({
+        reinvestedAmount: existing + amount
+      });
+
+      NB.toast('Reinvested ' + F(amount) + ' → new project', 'success');
+      host.classList.remove('active');
+      if (typeof loadData === 'function') await loadData();
+      if (typeof window.loadB === 'function') await window.loadB();
+    } catch (e) { NB.toast('Error: ' + e.message, 'error'); }
+  });
+
+  host.classList.add('active');
+};
+
+/* ─── FINANCE PAYMENT LINKAGE ─── */
+/**
+ * When a cheque is issued to Finance (Change #5), optionally add
+ * a matching finance_payments entry. This runs when financeReason is set.
+ */
+async function tryLinkToFinancePayments(chequeId) {
+  const db = NB.db(); if (!db) return;
+  try {
+    const chqDoc = await db.collection('cheques').doc(chequeId).get();
+    if (!chqDoc.exists) return;
+    const c = chqDoc.data();
+    if (!c.financeReason) return;
+
+    /* Check if already linked */
+    const existing = await db.collection('finance_payments')
+      .where('chequeId', '==', chequeId).limit(1).get();
+    if (!existing.empty) return;
+
+    /* Create finance_payments entry */
+    await db.collection('finance_payments').add({
+      planId: c.projectId || 'unassigned',
+      chequeId: chequeId,
+      chequeNumber: c.number,
+      amount: N(c.amount),
+      method: 'cheque',
+      effectiveDate: c.date || T(),
+      reason: c.financeReason,
+      notes: c.financeNotes || '',
+      isPersonal: true,
+      createdAt: NB.TS(), createdBy: NB.who(),
+      source: 'cheque-to-finance'
+    });
+    console.log('[Biz D] Linked cheque', chequeId, 'to finance_payments');
+  } catch (e) { console.warn('[Biz D] link failed:', e.message); }
+}
+
+/* Watch for new finance-tagged cheques */
+function startFinanceWatcher() {
+  const db = NB.db(); if (!db) return setTimeout(startFinanceWatcher, 1000);
+  try {
+    db.collection('cheques').orderBy('createdAt', 'desc').limit(10)
+      .onSnapshot(snap => {
+        snap.docChanges().forEach(ch => {
+          if (ch.type === 'added' || ch.type === 'modified') {
+            const data = ch.doc.data();
+            if (data.financeReason) tryLinkToFinancePayments(ch.doc.id);
+          }
+        });
+      }, err => {});
+  } catch(e) {}
+}
+
+/* Manual link button — appears in cheque edit modal */
+function injectFinanceLinkBtn() {
+  /* Check for edit modal */
+  const modal = document.getElementById('editChequeModal');
+  if (!modal || !modal.classList.contains('active')) return;
+  const footer = modal.querySelector('.modal-footer');
+  if (!footer || footer.querySelector('.nb-fin-link-btn')) return;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-secondary nb-fin-link-btn';
+  btn.style.marginRight = '8px';
+  btn.innerHTML = '<i class="fas fa-link"></i> Link to Finance Payments';
+  btn.onclick = async () => {
+    const idEl = document.getElementById('editChequeId');
+    if (!idEl || !idEl.value) return;
+    if (!confirm('Create a finance_payments entry for this cheque?')) return;
+    await tryLinkToFinancePayments(idEl.value);
+    NB.toast('Finance payment link created', 'success');
+  };
+  footer.insertBefore(btn, footer.firstChild);
+}
+
+/* ─── BOOT ─── */
+function boot() {
+  startFinanceWatcher();
+  setInterval(injectFinanceLinkBtn, 2500);
+  console.log('[Biz D] ✅ Reinvestment + Finance linkage ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 6500));
+else setTimeout(boot, 6500);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART E
+     Project Balance Sheet — accurate per-project P&L view
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizE) return; window.__ncBizE = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* Calculate per-project financial position */
+function calcProject(projectId) {
+  const proj = NB.projects.find(p => p.id === projectId);
+
+  /* Money in = all deployments to this project */
+  const deployments = (NB.deployments || []).filter(d => d.projectId === projectId);
+  const moneyIn = deployments.reduce((s,d) => s + N(d.amount), 0);
+
+  /* Money received = shop payments for this project */
+  const payments = (NB.payments || []).filter(p => p.projectId === projectId);
+  const moneyReceived = payments.reduce((s,p) => s + N(p.amount), 0);
+
+  /* Cash + bank + cheque breakdown */
+  const cashReceived = payments.filter(p => p.method === 'cash' || p.method === 'mixed').reduce((s,p) => s + N(p.amount), 0);
+  const bankReceived = payments.filter(p => p.method === 'bank' || p.method === 'mixed').reduce((s,p) => s + N(p.amount), 0);
+  const chequeReceived = payments.filter(p => p.method === 'cheque').reduce((s,p) => s + N(p.amount), 0);
+
+  /* Cheques in All Cheques matching this project */
+  const projCheques = (NB.cheques || []).filter(c => c.projectId === projectId && !c.deletedAt);
+  const chequeTotal = projCheques.reduce((s,c) => s + N(c.amount), 0);
+
+  /* Reinvested out of this project */
+  const reinvested = payments.reduce((s,p) => s + N(p.reinvestedAmount || 0), 0);
+
+  /* Net position */
+  const netPosition = moneyReceived - moneyIn;
+  const roi = moneyIn > 0 ? (netPosition / moneyIn) * 100 : 0;
+
+  return {
+    project: proj,
+    moneyIn, moneyReceived, netPosition, roi,
+    cashReceived, bankReceived, chequeReceived, chequeTotal,
+    reinvested,
+    deploymentCount: deployments.length,
+    paymentCount: payments.length
+  };
+}
+
+function renderBalanceSheet() {
+  const el = $('nbBalanceBody'); if (!el) return;
+  if (NB.projects.length === 0) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-project-diagram"></i><h3>No projects yet</h3></div>';
+    return;
+  }
+
+  let grand = { in:0, received:0, reinvested:0 };
+  const rows = NB.projects.map(p => {
+    const s = calcProject(p.id);
+    grand.in += s.moneyIn;
+    grand.received += s.moneyReceived;
+    grand.reinvested += s.reinvested;
+    const profit = s.netPosition >= 0;
+    return '<tr>' +
+      '<td><strong>'+E(p.name)+'</strong>' + (p.defaultCategory ? '<br><small style="color:var(--primary)">'+E(p.defaultCategory)+'</small>' : '') + '</td>' +
+      '<td>'+F(s.moneyIn)+'</td>' +
+      '<td>'+F(s.moneyReceived)+'</td>' +
+      '<td style="color:'+(profit?'var(--success)':'var(--danger)')+';font-weight:700">'+(profit?'+':'')+F(s.netPosition)+'</td>' +
+      '<td style="color:'+(profit?'var(--success)':'var(--danger)')+'">'+Math.round(s.roi)+'%</td>' +
+      '<td><small>Cash: '+F(s.cashReceived)+'<br>Bank: '+F(s.bankReceived)+'<br>Chq: '+F(s.chequeTotal)+'</small></td>' +
+      '<td>'+F(s.reinvested)+'</td>' +
+      '</tr>';
+  }).join('');
+
+  const grandNet = grand.received - grand.in;
+
+  el.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px">' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Total Invested</div><div class="widget-value" style="color:var(--warning)">'+F(grand.in)+'</div></div><div class="widget-icon warning"><i class="fas fa-arrow-circle-up"></i></div></div></div>' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Total Received</div><div class="widget-value" style="color:var(--success)">'+F(grand.received)+'</div></div><div class="widget-icon success"><i class="fas fa-arrow-circle-down"></i></div></div></div>' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Net Position</div><div class="widget-value" style="color:'+(grandNet>=0?'var(--success)':'var(--danger)')+'">'+F(grandNet)+'</div></div><div class="widget-icon primary"><i class="fas fa-balance-scale"></i></div></div></div>' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Reinvested</div><div class="widget-value" style="color:var(--primary)">'+F(grand.reinvested)+'</div></div><div class="widget-icon primary"><i class="fas fa-redo"></i></div></div></div>' +
+    '</div>' +
+    '<div class="table-container"><table><thead><tr>' +
+      '<th>Project</th><th>Invested</th><th>Received</th><th>Net</th><th>ROI</th><th>Breakdown</th><th>Reinvested</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+/* ─── VIEW ─── */
+function injectView() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('nbBalanceView')) return;
+  const v = document.createElement('div');
+  v.id = 'nbBalanceView';
+  v.className = 'view-content';
+  v.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-chart-pie" style="color:var(--primary);margin-right:8px"></i>Project Balance Sheet</h2>' +
+      '<button class="btn btn-secondary btn-sm" onclick="window.nbRefreshBalance()"><i class="fas fa-sync"></i> Refresh</button>' +
+    '</div>' +
+    '<div id="nbBalanceBody"></div></div>';
+  main.appendChild(v);
+}
+
+window.nbRefreshBalance = async function() {
+  if (typeof loadData === 'function') await loadData();
+  if (typeof window.loadB === 'function') await window.loadB();
+  try { NB.cheques = (Array.isArray(allCheques)?allCheques:[]).filter(c => !c.deletedAt); } catch(e) { NB.cheques = []; }
+  renderBalanceSheet();
+  NB.toast('Balance sheet refreshed', 'success');
+};
+
+/* ─── SIDEBAR ─── */
+function injectSidebarE() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('nbSidebarSectionE')) return;
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'nbSidebarSectionE';
+  sect.dataset.nctab = 'finance';
+  sect.innerHTML =
+    '<div class="nav-title">Analytics</div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbBalanceView\',\'Project Balance Sheet\',this)"><i class="fas fa-chart-pie"></i><span>Project Balance Sheet</span></div>';
+  const cont = $('ncSectionsContainer') || nav;
+  const finSec = $('ncSection-finance') || cont;
+  finSec.appendChild(sect);
+}
+
+/* ─── PERIODIC REFRESH ─── */
+setInterval(() => {
+  if ($('nbBalanceView')?.classList.contains('active')) {
+    try { NB.cheques = (Array.isArray(allCheques)?allCheques:[]).filter(c => !c.deletedAt); } catch(e){}
+    renderBalanceSheet();
+  }
+}, 8000);
+
+async function boot() {
+  injectView();
+  injectSidebarE();
+  if (typeof loadData === 'function') await loadData();
+  if (typeof window.loadB === 'function') await window.loadB();
+  try { NB.cheques = (Array.isArray(allCheques)?allCheques:[]).filter(c => !c.deletedAt); } catch(e) {}
+  renderBalanceSheet();
+  console.log('[Biz E] ✅ Balance Sheet ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 7000));
+else setTimeout(boot, 7000);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART F
+     Source Repayment • Cash↔Bank Transfer • Bank Deep Dive • Master Timeline
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizF) return; window.__ncBizF = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* ═══════════════════════════════════════════════════════════════════
+   F1 — SOURCE REPAYMENT (pay loan back / withdraw own capital)
+   ═══════════════════════════════════════════════════════════════════ */
+
+NB.repayments = [];
+
+async function loadRepayments() {
+  NB.repayments = await NB.load('ncSourceRepayments');
+  renderRepayments();
+}
+
+window.nbRepaySource = function(sourceId) {
+  const src = NB.sources.find(s => s.id === sourceId);
+  if (!src) { NB.toast('Source not found', 'error'); return; }
+
+  /* What's available to repay? = total received - already repaid */
+  const repaid = NB.repayments.filter(r => r.sourceId === sourceId).reduce((s,r) => s + N(r.amount), 0);
+  const total = N(src.amount);
+  const available = total - repaid;
+
+  if (available <= 0) { NB.toast('Source already fully repaid', 'error'); return; }
+
+  const bankOpts = [{value:'', label:'-- None --'}].concat(
+    (NB.banks || []).map(b => ({value:b.id, label:b.bankName || b.name || 'Bank'}))
+  );
+
+  let host = $('nbRepayModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'nbRepayModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:520px">' +
+        '<div class="modal-header"><h2 class="modal-title"><i class="fas fa-hand-holding-usd"></i> Repay Source</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'nbRepayModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button></div>' +
+        '<div class="modal-body" id="nbRepayBody"></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById(\'nbRepayModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="nbRepaySave"><i class="fas fa-check"></i> Record Repayment</button></div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  $('nbRepayBody').innerHTML =
+    '<div style="background:#dbeafe;padding:12px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#1e40af">' +
+      '<strong>' + E(src.type === 'loan' ? 'Loan from ' : 'Capital from ') + E(src.party || '') + '</strong><br>' +
+      'Total: ' + F(total) + ' • Repaid so far: ' + F(repaid) + ' • <strong>Available: ' + F(available) + '</strong>' +
+    '</div>' +
+    '<div class="form-group"><label>Amount to repay *</label>' +
+      '<input type="number" id="nbRepayAmount" value="' + available + '" step="0.01" min="0.01" max="' + available + '">' +
+    '</div>' +
+    '<div class="form-group"><label>Date *</label><input type="date" id="nbRepayDate" value="' + T() + '"></div>' +
+    '<div class="form-group"><label>Payment method *</label>' +
+      '<select id="nbRepayMethod">' +
+        '<option value="cash">Cash</option>' +
+        '<option value="bank">Bank transfer</option>' +
+        '<option value="cheque">Cheque</option>' +
+      '</select>' +
+    '</div>' +
+    '<div class="form-group" id="nbRepayBankWrap" style="display:none"><label>Bank account</label>' +
+      '<select id="nbRepayBank"><option value="">-- Select --</option>' +
+        bankOpts.slice(1).map(o => '<option value="' + E(o.value) + '">' + E(o.label) + '</option>').join('') +
+      '</select>' +
+    '</div>' +
+    '<div class="form-group"><label>Include interest?</label>' +
+      '<input type="number" id="nbRepayInterest" value="0" step="0.01" min="0" placeholder="0.00">' +
+    '</div>' +
+    '<div class="form-group"><label>Notes</label><textarea id="nbRepayNotes" rows="2"></textarea></div>';
+
+  $('nbRepayMethod').addEventListener('change', (e) => {
+    $('nbRepayBankWrap').style.display = e.target.value === 'bank' ? '' : 'none';
+  });
+
+  const btn = $('nbRepaySave');
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  fresh.addEventListener('click', async () => {
+    const amount = N($('nbRepayAmount').value);
+    const date = $('nbRepayDate').value || T();
+    const method = $('nbRepayMethod').value;
+    const bankAccountId = $('nbRepayBank') ? $('nbRepayBank').value : '';
+    const interest = N($('nbRepayInterest').value);
+    const notes = $('nbRepayNotes').value || '';
+
+    if (amount <= 0 || amount > available) { NB.toast('Invalid amount', 'error'); return; }
+    if (method === 'bank' && !bankAccountId) { NB.toast('Select bank account', 'error'); return; }
+
+    try {
+      const db = NB.db();
+
+      /* 1. Create repayment record */
+      await db.collection('ncSourceRepayments').add({
+        sourceId, amount, interest, date, method, bankAccountId, notes,
+        createdAt: NB.TS(), createdBy: NB.who()
+      });
+
+      /* 2. Update source's repaid total */
+      const srcDoc = await db.collection('ncMoneySources').doc(sourceId).get();
+      const srcData = srcDoc.data();
+      await db.collection('ncMoneySources').doc(sourceId).update({
+        repaidTotal: N(srcData.repaidTotal) + amount,
+        lastRepaidAt: new Date().toISOString()
+      });
+
+      /* 3. If bank method: deduct from bank balance + create bank txn */
+      if (method === 'bank' && bankAccountId) {
+        await db.collection('bankAccounts').doc(bankAccountId).update({
+          currentBalance: firebase.firestore.FieldValue.increment(-(amount + interest))
+        });
+        await db.collection('bankTransactions').add({
+          bankAccountId, date, type:'debit', amount: amount + interest,
+          description: 'Repayment to ' + (src.party || src.type),
+          category: 'Finance', reference: 'repayment:' + sourceId,
+          createdAt: NB.TS(), createdBy: NB.who()
+        });
+      }
+
+      /* 4. If cash method: log cash-out */
+      if (method === 'cash') {
+        await db.collection('ncCashLedger').add({
+          type:'out', amount: amount + interest, date,
+          source:'source-repayment',
+          notes: 'Repayment to ' + (src.party || src.type),
+          sourceRepaymentId: sourceId,
+          createdAt: NB.TS(), createdBy: NB.who()
+        });
+      }
+
+      NB.toast('Repaid ' + F(amount) + ' to ' + (src.party || src.type), 'success');
+      host.classList.remove('active');
+
+      /* Refresh everything */
+      await loadRepayments();
+      if (typeof loadData === 'function') await loadData();
+      if (typeof window.loadB === 'function') await window.loadB();
+      if (typeof window.nbRefreshBalance === 'function') window.nbRefreshBalance();
+    } catch (e) { NB.toast('Error: ' + e.message, 'error'); }
+  });
+
+  host.classList.add('active');
+};
+
+function renderRepayments() {
+  const el = $('nbRepayBody_List'); /* separate element for the list view */
+  if (!el) return;
+  if (NB.repayments.length === 0) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-check-double"></i><h3>No repayments yet</h3><p>Repay loans or withdraw capital from the Money Sources page</p></div>';
+    return;
+  }
+  const rows = NB.repayments.slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(r => {
+    const src = NB.sources.find(s => s.id === r.sourceId);
+    const methodColor = r.method === 'cash' ? '#10b981' : r.method === 'bank' ? '#0ea5e9' : '#6366f1';
+    return '<tr>' +
+      '<td>' + E(r.date || '-') + '</td>' +
+      '<td>' + E(src ? (src.party || src.type) : '(deleted)') + '</td>' +
+      '<td><span class="status-badge" style="background:' + methodColor + '22;color:' + methodColor + '">' + E(r.method) + '</span></td>' +
+      '<td style="font-weight:700;color:var(--danger)">' + F(r.amount) + '</td>' +
+      '<td>' + (N(r.interest) > 0 ? F(r.interest) : '-') + '</td>' +
+      '<td>' + E(r.notes || '-') + '</td>' +
+      '<td><button class="btn btn-sm btn-secondary" onclick="nbDelRepayment(\'' + r.id + '\')"><i class="fas fa-trash"></i></button></td>' +
+    '</tr>';
+  }).join('');
+  el.innerHTML = '<div class="table-container"><table><thead><tr>' +
+    '<th>Date</th><th>Source</th><th>Method</th><th>Amount</th><th>Interest</th><th>Notes</th><th></th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+window.nbDelRepayment = async function(id) {
+  if (!confirm('Delete this repayment record? Bank/cash entries will NOT be reversed automatically.')) return;
+  await NB.db().collection('ncSourceRepayments').doc(id).delete();
+  await loadRepayments();
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   F2 — CASH ↔ BANK TRANSFER
+   ═══════════════════════════════════════════════════════════════════ */
+
+NB.transfers = [];
+
+async function loadTransfers() {
+  NB.transfers = await NB.load('ncCashTransfers');
+}
+
+window.nbCashToBank = function() {
+  const bankOpts = (NB.banks || []).map(b => ({value:b.id, label:b.bankName || b.name || 'Bank'}));
+  if (bankOpts.length === 0) { NB.toast('Add a bank account first', 'error'); return; }
+
+  const cashBalance = (NB.cash || []).reduce((s,c) => s + (c.type === 'in' ? N(c.amount) : -N(c.amount)), 0);
+
+  let host = $('nbTransferModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'nbTransferModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:520px">' +
+        '<div class="modal-header"><h2 class="modal-title"><i class="fas fa-exchange-alt"></i> Cash ↔ Bank Transfer</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'nbTransferModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button></div>' +
+        '<div class="modal-body" id="nbTransferBody"></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById(\'nbTransferModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="nbTransferSave"><i class="fas fa-exchange-alt"></i> Transfer</button></div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  $('nbTransferBody').innerHTML =
+    '<div style="background:#dbeafe;padding:12px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#1e40af">' +
+      'Current Cash In Hand: <strong>' + F(cashBalance) + '</strong>' +
+    '</div>' +
+    '<div class="form-group"><label>Direction *</label>' +
+      '<select id="nbTransferDir">' +
+        '<option value="c2b">Cash → Bank (deposit)</option>' +
+        '<option value="b2c">Bank → Cash (withdraw)</option>' +
+      '</select>' +
+    '</div>' +
+    '<div class="form-group"><label>Bank account *</label>' +
+      '<select id="nbTransferBank">' + bankOpts.map(o => '<option value="' + E(o.value) + '">' + E(o.label) + '</option>').join('') + '</select>' +
+    '</div>' +
+    '<div class="form-group"><label>Amount *</label>' +
+      '<input type="number" id="nbTransferAmount" step="0.01" min="0.01" placeholder="0.00">' +
+    '</div>' +
+    '<div class="form-group"><label>Date *</label><input type="date" id="nbTransferDate" value="' + T() + '"></div>' +
+    '<div class="form-group"><label>Notes</label><textarea id="nbTransferNotes" rows="2"></textarea></div>';
+
+  const btn = $('nbTransferSave');
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  fresh.addEventListener('click', async () => {
+    const dir = $('nbTransferDir').value;
+    const bankAccountId = $('nbTransferBank').value;
+    const amount = N($('nbTransferAmount').value);
+    const date = $('nbTransferDate').value || T();
+    const notes = $('nbTransferNotes').value || '';
+
+    if (amount <= 0) { NB.toast('Amount must be positive', 'error'); return; }
+
+    if (dir === 'c2b' && amount > cashBalance) {
+      NB.toast('Cash in hand is only ' + F(cashBalance), 'error');
+      return;
+    }
+
+    try {
+      const db = NB.db();
+
+      /* Create transfer record */
+      await db.collection('ncCashTransfers').add({
+        direction: dir, bankAccountId, amount, date, notes,
+        createdAt: NB.TS(), createdBy: NB.who()
+      });
+
+      if (dir === 'c2b') {
+        /* Cash → Bank: cash out, bank credit */
+        await db.collection('ncCashLedger').add({
+          type:'out', amount, date,
+          source:'transfer-to-bank',
+          notes: notes || 'Deposited to bank',
+          createdAt: NB.TS(), createdBy: NB.who()
+        });
+        await db.collection('bankAccounts').doc(bankAccountId).update({
+          currentBalance: firebase.firestore.FieldValue.increment(amount)
+        });
+        await db.collection('bankTransactions').add({
+          bankAccountId, date, type:'credit', amount,
+          description: 'Cash deposit — ' + (notes || ''),
+          category: 'Transfer', reference: 'cash-to-bank',
+          createdAt: NB.TS(), createdBy: NB.who()
+        });
+      } else {
+        /* Bank → Cash: bank debit, cash in */
+        await db.collection('bankAccounts').doc(bankAccountId).update({
+          currentBalance: firebase.firestore.FieldValue.increment(-amount)
+        });
+        await db.collection('bankTransactions').add({
+          bankAccountId, date, type:'debit', amount,
+          description: 'Cash withdrawal — ' + (notes || ''),
+          category: 'Transfer', reference: 'bank-to-cash',
+          createdAt: NB.TS(), createdBy: NB.who()
+        });
+        await db.collection('ncCashLedger').add({
+          type:'in', amount, date,
+          source:'transfer-from-bank',
+          notes: notes || 'Withdrawn from bank',
+          createdAt: NB.TS(), createdBy: NB.who()
+        });
+      }
+
+      NB.toast('Transfer completed', 'success');
+      host.classList.remove('active');
+
+      await loadTransfers();
+      if (typeof loadData === 'function') await loadData();
+      if (typeof window.loadB === 'function') await window.loadB();
+    } catch (e) { NB.toast('Error: ' + e.message, 'error'); }
+  });
+
+  host.classList.add('active');
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   F3 — BANK DEEP DIVE (per-bank per-category drill-down)
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function renderBankDeepDive() {
+  const el = $('nbBankDeepBody'); if (!el) return;
+
+  const txns = await NB.load('bankTransactions');
+  const banks = NB.banks && NB.banks.length > 0 ? NB.banks : await NB.load('bankAccounts');
+  NB.banks = banks;
+
+  if (banks.length === 0) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-university"></i><h3>No bank accounts yet</h3></div>';
+    return;
+  }
+
+  let grandTotal = 0;
+  const byBank = {};
+  banks.forEach(b => { byBank[b.id] = { name: b.bankName || b.name || 'Bank', balance: N(b.currentBalance), cats: {} }; });
+
+  txns.forEach(t => {
+    if (!t.category || !byBank[t.bankAccountId]) return;
+    const isC = t.type === 'credit' || t.type === 'deposit';
+    const delta = isC ? N(t.amount) : -N(t.amount);
+    if (!byBank[t.bankAccountId].cats[t.category]) byBank[t.bankAccountId].cats[t.category] = 0;
+    byBank[t.bankAccountId].cats[t.category] += delta;
+  });
+
+  let html = '';
+
+  Object.values(byBank).forEach(b => {
+    grandTotal += b.balance;
+    const catKeys = Object.keys(b.cats);
+    const catSum = catKeys.reduce((s,k) => s + b.cats[k], 0);
+
+    html += '<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+      '<div><div style="font-weight:700;font-size:15px">' + E(b.name) + '</div>' +
+      '<div style="font-size:12px;color:var(--gray)">' + catKeys.length + ' categor' + (catKeys.length === 1 ? 'y' : 'ies') + '</div></div>' +
+      '<div style="font-weight:800;font-size:20px;color:' + (b.balance >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + F(b.balance) + '</div>' +
+    '</div>';
+
+    if (catKeys.length === 0) {
+      html += '<div style="text-align:center;padding:12px;color:var(--gray);font-size:12px">No categorized transactions yet</div>';
+    } else {
+      const sorted = catKeys.sort((a,b2) => Math.abs(b.cats[b2]) - Math.abs(b.cats[a]));
+      sorted.forEach(k => {
+        const cobj = (NB.cats || []).find(c => c.name === k) || {};
+        const color = cobj.color || '#6366f1';
+        const amt = b.cats[k];
+        const pct = catSum !== 0 ? Math.abs(amt / catSum) * 100 : 0;
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">' +
+          '<span style="width:10px;height:10px;border-radius:50%;background:' + color + '"></span>' +
+          '<span style="flex:0 0 130px;font-size:13px;font-weight:600">' + E(k) + '</span>' +
+          '<div style="flex:1;background:var(--border);height:6px;border-radius:3px;overflow:hidden">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + color + '"></div>' +
+          '</div>' +
+          '<span style="font-weight:700;font-size:13px;min-width:110px;text-align:right;color:' + (amt >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + F(amt) + '</span>' +
+        '</div>';
+      });
+      /* Sub-total line */
+      const diff = b.balance - catSum;
+      if (Math.abs(diff) > 1) {
+        html += '<div style="display:flex;justify-content:space-between;padding-top:8px;margin-top:8px;border-top:2px dashed var(--border);font-size:12px;color:var(--gray)">' +
+          '<span>Uncategorized / adjustments</span>' +
+          '<span style="font-weight:700">' + F(diff) + '</span>' +
+        '</div>';
+      }
+    }
+    html += '</div>';
+  });
+
+  html = '<div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:white;padding:18px;border-radius:12px;margin-bottom:18px">' +
+    '<div style="font-size:11px;opacity:0.85;text-transform:uppercase">Total Across All Banks</div>' +
+    '<div style="font-size:28px;font-weight:800">' + F(grandTotal) + '</div>' +
+  '</div>' + html;
+
+  el.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   F4 — MASTER TRANSACTION TIMELINE
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function renderMasterTimeline() {
+  const el = $('nbTimelineBody'); if (!el) return;
+
+  /* Aggregate all events */
+  const events = [];
+
+  (NB.sources || []).forEach(s => events.push({
+    date: s.date, type: 'money-in', icon:'fa-arrow-circle-down', color:'#10b981',
+    title: (s.type === 'loan' ? 'Loan received' : s.type === 'own' ? 'Capital added' : 'Reinvestment') +
+           (s.party ? ' — ' + s.party : ''),
+    amount: N(s.amount), ref: s
+  }));
+
+  (NB.deployments || []).forEach(d => events.push({
+    date: d.date, type: 'deploy', icon:'fa-arrow-right', color:'#f59e0b',
+    title: 'Deployed to ' + (NB.projects.find(p => p.id === d.projectId)?.name || '?') +
+           (d.category ? ' · ' + d.category : '') +
+           (d.purpose ? ' — ' + d.purpose : ''),
+    amount: -N(d.amount), ref: d
+  }));
+
+  (NB.payments || []).forEach(p => events.push({
+    date: p.date, type: 'shop-payment', icon:'fa-store', color:'#0ea5e9',
+    title: 'Shop payment via ' + p.method + ' from ' + (NB.projects.find(x => x.id === p.projectId)?.name || '?'),
+    amount: N(p.amount), ref: p
+  }));
+
+  (NB.cash || []).forEach(c => events.push({
+    date: c.date, type: c.type === 'in' ? 'cash-in' : 'cash-out',
+    icon: c.type === 'in' ? 'fa-coins' : 'fa-money-bill-wave',
+    color: c.type === 'in' ? '#10b981' : '#ef4444',
+    title: 'Cash ' + (c.type === 'in' ? 'IN' : 'OUT') + (c.source ? ' — ' + c.source : ''),
+    amount: c.type === 'in' ? N(c.amount) : -N(c.amount), ref: c
+  }));
+
+  (NB.repayments || []).forEach(r => events.push({
+    date: r.date, type: 'repayment', icon:'fa-undo', color:'#dc2626',
+    title: 'Repaid ' + (NB.sources.find(s => s.id === r.sourceId)?.party || 'source') + ' via ' + r.method,
+    amount: -(N(r.amount) + N(r.interest)), ref: r
+  }));
+
+  (NB.transfers || []).forEach(t => events.push({
+    date: t.date, type: 'transfer', icon:'fa-exchange-alt', color:'#8b5cf6',
+    title: t.direction === 'c2b' ? 'Cash → Bank' : 'Bank → Cash',
+    amount: 0, ref: t
+  }));
+
+  /* Add existing cheques */
+  try {
+    const cheques = (Array.isArray(allCheques) ? allCheques : []).filter(c => !c.deletedAt);
+    cheques.slice(0, 300).forEach(c => {
+      if (!c.createdAt) return;
+      const d = c.createdAt.toDate ? c.createdAt.toDate().toISOString().slice(0,10) :
+                (typeof c.createdAt === 'string' ? c.createdAt.slice(0,10) : null);
+      if (!d) return;
+      events.push({
+        date: d, type:'cheque', icon:'fa-money-check-alt', color:'#6366f1',
+        title: 'Cheque #' + c.number + ' — ' + (c.payee || '') + (c.category ? ' · ' + c.category : ''),
+        amount: -N(c.amount), ref: c
+      });
+    });
+  } catch(e) {}
+
+  /* Sort descending by date */
+  events.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+
+  if (events.length === 0) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-history"></i><h3>No activity yet</h3></div>';
+    return;
+  }
+
+  /* Filter row */
+  let html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">';
+  const filters = [
+    { key:'all', label:'All' },
+    { key:'money-in', label:'Money In' },
+    { key:'deploy', label:'Deployed' },
+    { key:'shop-payment', label:'Shop Paid' },
+    { key:'cash-in', label:'Cash In' },
+    { key:'cash-out', label:'Cash Out' },
+    { key:'repayment', label:'Repaid' },
+    { key:'cheque', label:'Cheques' }
+  ];
+  filters.forEach(f => {
+    html += '<button onclick="nbFilterTimeline(\'' + f.key + '\')" ' +
+      'id="nbTlFilter_' + f.key + '" ' +
+      'style="padding:5px 12px;border-radius:16px;border:1px solid var(--border);background:white;font-size:11px;cursor:pointer;font-weight:600">' +
+      E(f.label) + '</button>';
+  });
+  html += '</div>';
+
+  html += '<div id="nbTimelineList" style="display:flex;flex-direction:column;gap:8px">';
+
+  events.slice(0, 200).forEach(ev => {
+    const amountClass = ev.amount > 0 ? 'var(--success)' : ev.amount < 0 ? 'var(--danger)' : 'var(--gray)';
+    const amountText = ev.amount === 0 ? '—' : (ev.amount > 0 ? '+' : '') + F(ev.amount);
+    html += '<div class="nb-tl-item" data-type="' + E(ev.type) + '" ' +
+      'style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:white;border:1px solid var(--border);border-left:4px solid ' + ev.color + ';border-radius:10px">' +
+      '<i class="fas ' + ev.icon + '" style="color:' + ev.color + ';font-size:16px;flex:0 0 auto"></i>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:600">' + E(ev.title) + '</div>' +
+        '<div style="font-size:11px;color:var(--gray);margin-top:2px">' + E(ev.date || '-') + '</div>' +
+      '</div>' +
+      '<div style="font-weight:700;font-size:14px;color:' + amountClass + ';white-space:nowrap">' + amountText + '</div>' +
+    '</div>';
+  });
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+window.nbFilterTimeline = function(key) {
+  document.querySelectorAll('#nbTimelineList .nb-tl-item').forEach(el => {
+    if (key === 'all' || el.dataset.type === key) el.style.display = '';
+    else el.style.display = 'none';
+  });
+  document.querySelectorAll('[id^="nbTlFilter_"]').forEach(b => {
+    b.style.background = 'white';
+    b.style.color = 'var(--dark)';
+  });
+  const active = $('nbTlFilter_' + key);
+  if (active) { active.style.background = 'var(--primary)'; active.style.color = 'white'; }
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   F5 — VIEWS
+   ═══════════════════════════════════════════════════════════════════ */
+
+function injectViewsF() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('nbRepaymentsView')) return;
+
+  /* Repayments */
+  const v1 = document.createElement('div');
+  v1.id = 'nbRepaymentsView';
+  v1.className = 'view-content';
+  v1.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-check-double" style="color:var(--success);margin-right:8px"></i>Source Repayments</h2>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbRefreshAll()"><i class="fas fa-sync"></i> Refresh</button>' +
+    '</div>' +
+    '<div style="background:#d1fae5;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#065f46">' +
+      '<i class="fas fa-info-circle"></i> Log every loan repayment or capital withdrawal here. Bank/cash balances update automatically.' +
+    '</div>' +
+    '<div id="nbRepayBody_List"></div></div>';
+  main.appendChild(v1);
+
+  /* Bank Deep Dive */
+  const v2 = document.createElement('div');
+  v2.id = 'nbBankDeepView';
+  v2.className = 'view-content';
+  v2.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-university" style="color:var(--primary);margin-right:8px"></i>Bank Accounts — Category Breakdown</h2>' +
+      '<div>' +
+        '<button class="btn btn-secondary btn-sm" onclick="nbRefreshAll()" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
+        '<button class="btn btn-primary btn-sm" onclick="nbCashToBank()"><i class="fas fa-exchange-alt"></i> Cash ↔ Bank</button>' +
+      '</div>' +
+    '</div><div id="nbBankDeepBody"></div></div>';
+  main.appendChild(v2);
+
+  /* Master Timeline */
+  const v3 = document.createElement('div');
+  v3.id = 'nbTimelineView';
+  v3.className = 'view-content';
+  v3.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-stream" style="color:var(--primary);margin-right:8px"></i>Master Transaction Timeline</h2>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbRefreshAll()"><i class="fas fa-sync"></i> Refresh</button>' +
+    '</div>' +
+    '<div style="background:#e0e7ff;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#4338ca">' +
+      '<i class="fas fa-info-circle"></i> Every rupee\'s journey — from money in to shop payment to reinvestment, chronologically.' +
+    '</div>' +
+    '<div id="nbTimelineBody"></div></div>';
+  main.appendChild(v3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   F6 — SIDEBAR
+   ═══════════════════════════════════════════════════════════════════ */
+
+function injectSidebarF() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('nbSidebarSectionF')) return;
+
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'nbSidebarSectionF';
+  sect.dataset.nctab = 'finance';
+  sect.innerHTML =
+    '<div class="nav-title">Money Cycle</div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbRepaymentsView\',\'Source Repayments\',this)"><i class="fas fa-check-double"></i><span>Source Repayments</span></div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbBankDeepView\',\'Bank Category Breakdown\',this)"><i class="fas fa-university"></i><span>Bank Breakdown</span></div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbTimelineView\',\'Master Timeline\',this)"><i class="fas fa-stream"></i><span>Master Timeline</span></div>';
+
+  const cont = $('ncSectionsContainer') || nav;
+  const finSec = $('ncSection-finance') || cont;
+  finSec.appendChild(sect);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   F7 — GLOBAL REFRESH + REPAY BUTTON INJECTION
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbRefreshAll = async function() {
+  if (typeof loadData === 'function') await loadData();
+  if (typeof window.loadB === 'function') await window.loadB();
+  await loadRepayments();
+  await loadTransfers();
+  try { NB.cheques = (Array.isArray(allCheques)?allCheques:[]).filter(c => !c.deletedAt); } catch(e){}
+  renderRepayments();
+  renderBankDeepDive();
+  renderMasterTimeline();
+  NB.toast('All data refreshed', 'success');
+};
+
+/* Inject "Repay" button on Money Sources rows */
+function injectRepayButton() {
+  const el = $('nbSourcesBody');
+  if (!el) return;
+  const rows = el.querySelectorAll('table tbody tr');
+  rows.forEach((row, idx) => {
+    if (row.dataset.nbRepayInjected) return;
+    row.dataset.nbRepayInjected = '1';
+
+    const actionsCell = row.lastElementChild;
+    if (!actionsCell) return;
+
+    /* Get source ID from existing delete button's onclick */
+    const delBtn = actionsCell.querySelector('button[onclick*="nbDeleteSource"]');
+    if (!delBtn) return;
+    const m = delBtn.getAttribute('onclick').match(/nbDeleteSource\('([^']+)'\)/);
+    if (!m) return;
+
+    const srcId = m[1];
+    const src = NB.sources.find(s => s.id === srcId);
+    if (!src) return;
+
+    const repaid = NB.repayments.filter(r => r.sourceId === srcId).reduce((s,r) => s + N(r.amount), 0);
+    const remaining = N(src.amount) - repaid;
+    if (remaining <= 0) return; /* fully repaid */
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-secondary';
+    btn.title = 'Repay / Withdraw';
+    btn.style.marginRight = '4px';
+    btn.innerHTML = '<i class="fas fa-undo"></i>';
+    btn.onclick = () => window.nbRepaySource(srcId);
+    actionsCell.insertBefore(btn, actionsCell.firstChild);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   F8 — BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function bootF() {
+  /* Load banks for repayment dropdown */
+  NB.banks = await NB.load('bankAccounts');
+
+  injectViewsF();
+  injectSidebarF();
+
+  await loadRepayments();
+  await loadTransfers();
+
+  /* Render all */
+  try { NB.cheques = (Array.isArray(allCheques)?allCheques:[]).filter(c => !c.deletedAt); } catch(e){}
+  renderRepayments();
+  renderBankDeepDive();
+  renderMasterTimeline();
+
+  /* Periodic refresh */
+  setInterval(() => {
+    if ($('nbSourcesView')?.classList.contains('active')) injectRepayButton();
+    if ($('nbRepaymentsView')?.classList.contains('active')) renderRepayments();
+    if ($('nbBankDeepView')?.classList.contains('active')) renderBankDeepDive();
+    if ($('nbTimelineView')?.classList.contains('active')) renderMasterTimeline();
+  }, 6000);
+
+  console.log('[Biz F] ✅ Repayment + Transfer + Bank Deep + Timeline ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(bootF, 7800));
+else setTimeout(bootF, 7800);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART G
+     Automated Reminders • Interest Tracking • Balance Enforcement • Digest
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizG) return; window.__ncBizG = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* ═══════════════════════════════════════════════════════════════════
+   G1 — INTEREST / EMI TRACKING
+   ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * Interest model — simple interest per month:
+ *   monthlyInterest = principal × (rate% / 100) / 12
+ *   For each loan, we compute:
+ *     - total days since startDate
+ *     - interest accrued so far
+ *     - interest paid (from ncSourceRepayments.interest field)
+ *     - interest due (accrued - paid)
+ */
+function computeInterest(sourceId) {
+  const src = (NB.sources || []).find(s => s.id === sourceId);
+  if (!src || src.type !== 'loan') return null;
+  if (!src.interestRate || N(src.interestRate) <= 0) return null;
+  if (!src.date) return null;
+
+  const start = new Date(src.date).getTime();
+  const now = Date.now();
+  const days = Math.max(0, Math.floor((now - start) / 86400000));
+  const monthlyRate = N(src.interestRate) / 100;
+  const dailyRate = monthlyRate / 30;
+
+  const accrued = N(src.amount) * dailyRate * days;
+
+  /* Interest paid so far */
+  const paid = (NB.repayments || [])
+    .filter(r => r.sourceId === sourceId)
+    .reduce((s,r) => s + N(r.interest), 0);
+
+  const due = Math.max(0, accrued - paid);
+
+  /* Next interest due date — monthly cadence from startDate */
+  const nextDue = new Date(start);
+  const today = new Date();
+  nextDue.setMonth(nextDue.getMonth() + Math.ceil(
+    (today.getFullYear() - nextDue.getFullYear()) * 12 +
+    (today.getMonth() - nextDue.getMonth()) + 1
+  ));
+  nextDue.setDate(nextDue.getDate() - 1); /* end of cycle */
+
+  const daysToNext = Math.max(0, Math.floor((nextDue.getTime() - now) / 86400000));
+
+  return {
+    days, accrued, paid, due, nextDue: nextDue.toISOString().slice(0,10), daysToNext,
+    dailyRate: N(src.amount) * dailyRate,
+    monthlyInterest: N(src.amount) * monthlyRate
+  };
+}
+
+/**
+ * EMI-style amortisation for loans with endDate + fixed interest.
+ * Uses standard annuity formula: EMI = P * r * (1+r)^n / ((1+r)^n - 1)
+ */
+function computeEMI(sourceId) {
+  const src = (NB.sources || []).find(s => s.id === sourceId);
+  if (!src || !src.endDate || !src.interestRate) return null;
+  const P = N(src.amount);
+  const r = N(src.interestRate) / 100 / 12; /* monthly rate */
+  const start = new Date(src.date || T());
+  const end = new Date(src.endDate);
+  const n = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()));
+  if (r <= 0) return { emi: P / n, n, totalPayment: P, totalInterest: 0 };
+  const factor = Math.pow(1 + r, n);
+  const emi = P * r * factor / (factor - 1);
+  return {
+    emi, n,
+    totalPayment: emi * n,
+    totalInterest: emi * n - P
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   G2 — BALANCE ENFORCEMENT
+   Wrap nbDeployFrom to hard-block over-deployment
+   ═══════════════════════════════════════════════════════════════════ */
+
+function enforceDeployBalance() {
+  if (window.__ncGDeployHooked) return;
+  window.__ncGDeployHooked = true;
+
+  /* The deployment modal already has a max check — but let's harden
+     by also patching the save path via MutationObserver on the save button. */
+  const obs = new MutationObserver(() => {
+    const host = $('nbModal');
+    if (!host || !host.classList.contains('active')) return;
+    const title = $('nbModalTitle');
+    if (!title || !title.textContent.startsWith('Deploy')) return;
+    if (host.dataset.ncGGuard) return;
+    host.dataset.ncGGuard = '1';
+
+    /* Find sourceId from title/context — we stored it in a global */
+    const srcId = window.__nbLastDeploySource;
+    if (!srcId) return;
+
+    const src = NB.sources.find(s => s.id === srcId);
+    if (!src) return;
+
+    const deployed = NB.deployments.filter(d => d.sourceId === srcId).reduce((s,d) => s + N(d.amount), 0);
+    const available = N(src.amount) - deployed;
+
+    /* Live-update the max on the amount input as user types */
+    const amtInput = $('nbF_amount');
+    if (amtInput) {
+      amtInput.max = available;
+      const handler = () => {
+        const v = N(amtInput.value);
+        if (v > available) {
+          amtInput.style.borderColor = 'var(--danger)';
+          amtInput.style.background = '#fee2e2';
+          let warn = amtInput.parentNode.querySelector('.nc-over-warn');
+          if (!warn) {
+            warn = document.createElement('small');
+            warn.className = 'nc-over-warn';
+            warn.style.cssText = 'display:block;color:var(--danger);font-weight:700;font-size:11px;margin-top:4px';
+            amtInput.parentNode.appendChild(warn);
+          }
+          warn.textContent = '⚠ Exceeds available balance (' + F(available) + ')';
+        } else {
+          amtInput.style.borderColor = '';
+          amtInput.style.background = '';
+          const warn = amtInput.parentNode.querySelector('.nc-over-warn');
+          if (warn) warn.remove();
+        }
+      };
+      amtInput.addEventListener('input', handler);
+      handler();
+    }
+  });
+  obs.observe(document.body, { childList: true, subtree: true });
+}
+
+/* Store sourceId when deployment modal opens — hook the original */
+function hookDeployOpen() {
+  if (typeof window.nbDeployFrom !== 'function') return setTimeout(hookDeployOpen, 500);
+  if (window.nbDeployFrom.__ncGHooked) return;
+  const orig = window.nbDeployFrom;
+  const wrapped = function(sourceId) {
+    window.__nbLastDeploySource = sourceId;
+    return orig.apply(this, arguments);
+  };
+  wrapped.__ncGHooked = true;
+  window.nbDeployFrom = wrapped;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   G3 — ALERT ENGINE
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Thresholds — tweak to taste */
+const THRESHOLDS = {
+  cashLowWarn: 50000,      /* Rs. cash-in-hand low warn */
+  bankLowWarn: 25000,      /* Rs. bank balance low warn */
+  idleSourceDays: 14,      /* Days before idle source nudge */
+  overdueGraceDays: 7,     /* Days past due before hard overdue */
+  shopPaymentOverdue: 30   /* Days a deployment can sit without shop payment */
+};
+
+async function computeAlerts() {
+  const alerts = [];
+  const now = Date.now();
+  const today = new Date();
+
+  /* Ensure caches loaded */
+  if (!NB.sources || NB.sources.length === 0) {
+    NB.sources = await NB.load('ncMoneySources');
+    NB.deployments = await NB.load('ncDeployments');
+    NB.payments = await NB.load('ncShopPayments');
+    NB.cash = await NB.load('ncCashLedger');
+    NB.banks = await NB.load('bankAccounts');
+    NB.repayments = await NB.load('ncSourceRepayments');
+    NB.projects = await NB.load('projects');
+  }
+
+  /* 1. Loan interest due */
+  NB.sources.filter(s => s.type === 'loan').forEach(s => {
+    const int = computeInterest(s.id);
+    if (int && int.due > 100) {
+      const sev = int.due > 5000 ? 'danger' : 'warning';
+      alerts.push({
+        sev, cat:'loan-interest', icon:'fa-percent',
+        title: 'Interest due — ' + (s.party || 'Loan'),
+        msg: F(int.due) + ' accrued over ' + int.days + 'd. Next cycle ' + int.nextDue,
+        sourceId: s.id
+      });
+    }
+  });
+
+  /* 2. Loans nearing endDate */
+  NB.sources.filter(s => s.type === 'loan' && s.endDate).forEach(s => {
+    const days = Math.floor((new Date(s.endDate).getTime() - now) / 86400000);
+    const repaid = (NB.repayments || []).filter(r => r.sourceId === s.id).reduce((x,r) => x + N(r.amount), 0);
+    const bal = N(s.amount) - repaid;
+    if (bal <= 0) return;
+    if (days < 0) {
+      alerts.push({ sev:'danger', cat:'loan-overdue', icon:'fa-exclamation-triangle',
+        title: 'Loan OVERDUE — ' + (s.party || ''),
+        msg: 'Balance ' + F(bal) + ' was due ' + s.endDate, sourceId: s.id });
+    } else if (days <= 7) {
+      alerts.push({ sev:'warning', cat:'loan-due-soon', icon:'fa-clock',
+        title: 'Loan due in ' + days + 'd — ' + (s.party || ''),
+        msg: 'Outstanding ' + F(bal), sourceId: s.id });
+    }
+  });
+
+  /* 3. Idle sources — money sitting unused */
+  NB.sources.forEach(s => {
+    const deployed = NB.deployments.filter(d => d.sourceId === s.id).reduce((x,d) => x + N(d.amount), 0);
+    const idle = N(s.amount) - deployed;
+    if (idle <= 100) return;
+    if (!s.date) return;
+    const ageDays = Math.floor((now - new Date(s.date).getTime()) / 86400000);
+    if (ageDays >= THRESHOLDS.idleSourceDays) {
+      alerts.push({ sev:'info', cat:'idle-source', icon:'fa-hourglass-half',
+        title: 'Idle capital — ' + (s.party || s.type),
+        msg: F(idle) + ' undeployed for ' + ageDays + ' days', sourceId: s.id });
+    }
+  });
+
+  /* 4. Cash low */
+  const cashBal = (NB.cash || []).reduce((s,c) => s + (c.type === 'in' ? N(c.amount) : -N(c.amount)), 0);
+  if (cashBal < 0) {
+    alerts.push({ sev:'danger', cat:'cash-negative', icon:'fa-money-bill-wave',
+      title:'Cash in hand NEGATIVE', msg: F(cashBal) + ' — reconcile immediately' });
+  } else if (cashBal < THRESHOLDS.cashLowWarn) {
+    alerts.push({ sev:'warning', cat:'cash-low', icon:'fa-money-bill-wave',
+      title:'Cash in hand low', msg: F(cashBal) + ' (threshold ' + F(THRESHOLDS.cashLowWarn) + ')' });
+  }
+
+  /* 5. Bank balances low / negative */
+  (NB.banks || []).forEach(b => {
+    const bal = N(b.currentBalance);
+    if (bal < 0) {
+      alerts.push({ sev:'danger', cat:'bank-negative', icon:'fa-university',
+        title:'Bank negative — ' + (b.bankName || b.name || ''),
+        msg: F(bal) });
+    } else if (bal < THRESHOLDS.bankLowWarn) {
+      alerts.push({ sev:'warning', cat:'bank-low', icon:'fa-university',
+        title:'Bank balance low — ' + (b.bankName || b.name || ''),
+        msg: F(bal) });
+    }
+  });
+
+  /* 6. Deployments without matching shop payment after X days */
+  NB.deployments.forEach(d => {
+    if (!d.date) return;
+    const age = Math.floor((now - new Date(d.date).getTime()) / 86400000);
+    if (age < THRESHOLDS.shopPaymentOverdue) return;
+    /* Find payments for same project */
+    const payTotal = (NB.payments || [])
+      .filter(p => p.projectId === d.projectId)
+      .reduce((s,p) => s + N(p.amount), 0);
+    const projDeploy = NB.deployments.filter(x => x.projectId === d.projectId).reduce((s,x) => s + N(x.amount), 0);
+    if (payTotal >= projDeploy * 0.8) return; /* project recovered 80%+ — no nag */
+
+    const proj = NB.projects.find(p => p.id === d.projectId);
+    alerts.push({
+      sev: age > 60 ? 'danger' : 'warning', cat:'shop-payment-late', icon:'fa-store',
+      title: 'Shop payment late — ' + (proj ? proj.name : 'project'),
+      msg: 'Deployed ' + F(projDeploy) + ' · received ' + F(payTotal) + ' · ' + age + 'd ago',
+      projectId: d.projectId
+    });
+  });
+
+  /* 7. Reinvestments due for recoup */
+  const reinvested = (NB.payments || []).reduce((s,p) => s + N(p.reinvestedAmount || 0), 0);
+  if (reinvested > 0) {
+    alerts.push({ sev:'info', cat:'reinvested', icon:'fa-redo',
+      title:'Reinvestment chain active',
+      msg: F(reinvested) + ' rolled into new projects' });
+  }
+
+  /* Sort by severity */
+  const order = { danger:0, warning:1, info:2 };
+  alerts.sort((a,b) => order[a.sev] - order[b.sev]);
+  return alerts;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   G4 — ALERTS VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function renderAlerts() {
+  const el = $('nbAlertsBody'); if (!el) return;
+  const alerts = await computeAlerts();
+  NB.alerts = alerts;
+
+  /* Update sidebar badge */
+  updateSidebarBadge(alerts.length);
+
+  if (alerts.length === 0) {
+    el.innerHTML =
+      '<div style="text-align:center;padding:60px 20px">' +
+        '<i class="fas fa-check-circle" style="font-size:64px;color:var(--success);opacity:0.5"></i>' +
+        '<h3 style="margin-top:14px">All clear</h3>' +
+        '<p style="color:var(--gray);font-size:13px;margin-top:6px">No pending reminders or alerts</p>' +
+      '</div>';
+    return;
+  }
+
+  /* Group by category */
+  const groups = { danger:[], warning:[], info:[] };
+  alerts.forEach(a => { (groups[a.sev] || groups.info).push(a); });
+
+  let html = '';
+
+  /* Summary banner */
+  html +=
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">' +
+      '<div class="widget" style="border-top:3px solid var(--danger)">' +
+        '<div class="widget-header"><div><div class="widget-title">Critical</div>' +
+        '<div class="widget-value" style="color:var(--danger)">' + groups.danger.length + '</div></div>' +
+        '<div class="widget-icon danger"><i class="fas fa-exclamation-triangle"></i></div></div></div>' +
+      '<div class="widget" style="border-top:3px solid var(--warning)">' +
+        '<div class="widget-header"><div><div class="widget-title">Warnings</div>' +
+        '<div class="widget-value" style="color:var(--warning)">' + groups.warning.length + '</div></div>' +
+        '<div class="widget-icon warning"><i class="fas fa-clock"></i></div></div></div>' +
+      '<div class="widget" style="border-top:3px solid var(--info)">' +
+        '<div class="widget-header"><div><div class="widget-title">Info</div>' +
+        '<div class="widget-value" style="color:var(--info)">' + groups.info.length + '</div></div>' +
+        '<div class="widget-icon primary"><i class="fas fa-info-circle"></i></div></div></div>' +
+    '</div>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:10px">';
+  alerts.forEach(a => {
+    const color = a.sev === 'danger' ? 'var(--danger)' : a.sev === 'warning' ? 'var(--warning)' : 'var(--info)';
+    const bg = a.sev === 'danger' ? '#fee2e2' : a.sev === 'warning' ? '#fef3c7' : '#dbeafe';
+    html +=
+      '<div style="display:flex;align-items:flex-start;gap:14px;padding:14px 18px;background:' + bg + ';border-left:5px solid ' + color + ';border-radius:10px">' +
+        '<i class="fas ' + a.icon + '" style="color:' + color + ';font-size:20px;margin-top:2px"></i>' +
+        '<div style="flex:1">' +
+          '<div style="font-weight:700;font-size:14px;color:' + color + '">' + E(a.title) + '</div>' +
+          '<div style="font-size:12px;color:var(--dark);margin-top:4px">' + E(a.msg) + '</div>' +
+        '</div>' +
+        (a.sourceId ? '<button class="btn btn-sm btn-secondary" onclick="nbRepaySource(\'' + a.sourceId + '\')">Repay</button>' : '') +
+        (a.projectId ? '<button class="btn btn-sm btn-secondary" onclick="nbViewProject(\'' + a.projectId + '\')">View</button>' : '') +
+      '</div>';
+  });
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+window.nbViewProject = function(pid) {
+  /* Jump to Project Balance Sheet and scroll to that project */
+  if (typeof nbGo === 'function') nbGo('nbBalanceView', 'Project Balance Sheet');
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   G5 — DASHBOARD DIGEST WIDGET
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function renderDigestWidget() {
+  const dash = $('dashboardView');
+  if (!dash) return;
+
+  let widget = $('nbDigestWidget');
+  if (!widget) {
+    widget = document.createElement('div');
+    widget.id = 'nbDigestWidget';
+    widget.className = 'widgets-grid';
+    widget.style.marginTop = '20px';
+    const anchor = dash.querySelector('.widgets-grid:last-of-type') || dash.querySelector('.widgets-grid');
+    if (anchor) anchor.parentNode.insertBefore(widget, anchor.nextSibling);
+    else dash.appendChild(widget);
+  }
+
+  const alerts = await computeAlerts();
+  const cashBal = (NB.cash || []).reduce((s,c) => s + (c.type === 'in' ? N(c.amount) : -N(c.amount)), 0);
+  const totalBank = (NB.banks || []).reduce((s,b) => s + N(b.currentBalance), 0);
+  const activeLoans = (NB.sources || []).filter(s => s.type === 'loan' && N(s.amount) > (NB.repayments || []).filter(r => r.sourceId === s.id).reduce((x,r) => x + N(r.amount), 0)).length;
+  const interestDue = (NB.sources || []).filter(s => s.type === 'loan').reduce((sum, s) => {
+    const int = computeInterest(s.id);
+    return sum + (int ? int.due : 0);
+  }, 0);
+  const deployedTotal = (NB.deployments || []).reduce((s,d) => s + N(d.amount), 0);
+  const receivedTotal = (NB.payments || []).reduce((s,p) => s + N(p.amount), 0);
+  const netCycle = receivedTotal - deployedTotal;
+
+  widget.innerHTML =
+    '<div class="widget" onclick="nbGo(\'nbAlertsView\',\'Alerts & Reminders\')" style="cursor:pointer;border-left:4px solid ' + (alerts.length > 0 ? 'var(--danger)' : 'var(--success)') + '">' +
+      '<div class="widget-header"><div>' +
+        '<div class="widget-title">Active Alerts</div>' +
+        '<div class="widget-value" style="color:' + (alerts.length > 0 ? 'var(--danger)' : 'var(--success)') + '">' + alerts.length + '</div>' +
+      '</div><div class="widget-icon ' + (alerts.length > 0 ? 'danger' : 'success') + '"><i class="fas fa-bell"></i></div></div>' +
+    '</div>' +
+    '<div class="widget"><div class="widget-header"><div>' +
+      '<div class="widget-title">Cash In Hand</div>' +
+      '<div class="widget-value" style="color:' + (cashBal < 0 ? 'var(--danger)' : 'var(--success)') + '">' + F(cashBal) + '</div>' +
+    '</div><div class="widget-icon ' + (cashBal < 0 ? 'danger' : 'success') + '"><i class="fas fa-coins"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div>' +
+      '<div class="widget-title">Bank Total</div>' +
+      '<div class="widget-value" style="color:' + (totalBank < 0 ? 'var(--danger)' : 'var(--primary)') + '">' + F(totalBank) + '</div>' +
+    '</div><div class="widget-icon primary"><i class="fas fa-university"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div>' +
+      '<div class="widget-title">Active Loans</div>' +
+      '<div class="widget-value">' + activeLoans + '</div>' +
+    '</div><div class="widget-icon warning"><i class="fas fa-hand-holding-usd"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div>' +
+      '<div class="widget-title">Interest Due</div>' +
+      '<div class="widget-value" style="color:' + (interestDue > 0 ? 'var(--warning)' : 'var(--success)') + '">' + F(interestDue) + '</div>' +
+    '</div><div class="widget-icon warning"><i class="fas fa-percent"></i></div></div></div>' +
+    '<div class="widget"><div class="widget-header"><div>' +
+      '<div class="widget-title">Net Cycle</div>' +
+      '<div class="widget-value" style="color:' + (netCycle >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + F(netCycle) + '</div>' +
+    '</div><div class="widget-icon primary"><i class="fas fa-sync-alt"></i></div></div></div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   G6 — SIDEBAR BADGE
+   ═══════════════════════════════════════════════════════════════════ */
+
+function updateSidebarBadge(count) {
+  const nav = $('nbSidebarSectionG');
+  if (!nav) return;
+  let badge = nav.querySelector('.nc-alert-badge');
+  if (count === 0) { if (badge) badge.remove(); return; }
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'nc-alert-badge';
+    badge.style.cssText = 'position:absolute;right:12px;top:50%;transform:translateY(-50%);background:var(--danger);color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px';
+    const item = nav.querySelector('.nav-item[data-alerts]');
+    if (item) { item.style.position = 'relative'; item.appendChild(badge); }
+  }
+  badge.textContent = count > 99 ? '99+' : count;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   G7 — DAILY DIGEST (via EmailJS if configured, else console)
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function sendDigest(mode) {
+  const alerts = await computeAlerts();
+  const cashBal = (NB.cash || []).reduce((s,c) => s + (c.type === 'in' ? N(c.amount) : -N(c.amount)), 0);
+  const bankTotal = (NB.banks || []).reduce((s,b) => s + N(b.currentBalance), 0);
+  const deployed = (NB.deployments || []).reduce((s,d) => s + N(d.amount), 0);
+  const received = (NB.payments || []).reduce((s,p) => s + N(p.amount), 0);
+
+  const digest = {
+    date: T(),
+    mode,
+    alerts: alerts.length,
+    critical: alerts.filter(a => a.sev === 'danger').length,
+    warning: alerts.filter(a => a.sev === 'warning').length,
+    cashBalance: cashBal,
+    bankTotal,
+    deployed,
+    received,
+    netCycle: received - deployed,
+    topAlerts: alerts.slice(0, 5).map(a => a.title + ': ' + a.msg)
+  };
+
+  /* Save to Firestore */
+  try {
+    await NB.db().collection('ncDigest').add(Object.assign({}, digest, {
+      createdAt: NB.TS(),
+      createdBy: NB.who()
+    }));
+  } catch(e) {}
+
+  /* Try EmailJS if available */
+  try {
+    if (window.emailjs && typeof window.emailjs.send === 'function') {
+      const serviceId = localStorage.getItem('emailjs_service') || '';
+      const templateId = localStorage.getItem('emailjs_template') || '';
+      const publicKey = localStorage.getItem('emailjs_public') || '';
+      if (serviceId && templateId && publicKey) {
+        await window.emailjs.send(serviceId, templateId, {
+          subject: 'NeonCheque ' + (mode === 'weekly' ? 'Weekly' : 'Daily') + ' Digest — ' + T(),
+          date: digest.date,
+          summary: 'Alerts: ' + digest.alerts + ' | Cash: ' + F(cashBal) + ' | Bank: ' + F(bankTotal) + ' | Net Cycle: ' + F(digest.netCycle),
+          alerts: digest.topAlerts.join('\n')
+        });
+        NB.toast('Digest emailed', 'success');
+        return;
+      }
+    }
+  } catch(e) {}
+
+  /* Fallback: console + toast */
+  console.log('[Digest]', digest);
+  NB.toast('Digest saved (EmailJS not configured — logged to console)', 'info');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   G8 — VIEWS
+   ═══════════════════════════════════════════════════════════════════ */
+
+function injectViewsG() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('nbAlertsView')) return;
+
+  const v = document.createElement('div');
+  v.id = 'nbAlertsView';
+  v.className = 'view-content';
+  v.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-bell" style="color:var(--danger);margin-right:8px"></i>Alerts & Reminders</h2>' +
+      '<div>' +
+        '<button class="btn btn-secondary btn-sm" onclick="nbRenderAlerts()" style="margin-right:8px"><i class="fas fa-sync"></i> Refresh</button>' +
+        '<button class="btn btn-primary btn-sm" onclick="nbSendDigest(\'daily\')"><i class="fas fa-envelope"></i> Send Digest</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="background:#fef3c7;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#92400e">' +
+      '<i class="fas fa-info-circle"></i> Auto-scans every 30 seconds — overdue loans, interest due, idle capital, low cash, late shop payments.' +
+    '</div>' +
+    '<div id="nbAlertsBody"></div></div>';
+  main.appendChild(v);
+}
+
+window.nbRenderAlerts = async function() {
+  await renderAlerts();
+  NB.toast('Alerts refreshed', 'success');
+};
+
+window.nbSendDigest = sendDigest;
+
+/* ═══════════════════════════════════════════════════════════════════
+   G9 — SIDEBAR
+   ═══════════════════════════════════════════════════════════════════ */
+
+function injectSidebarG() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('nbSidebarSectionG')) return;
+
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'nbSidebarSectionG';
+  sect.dataset.nctab = 'finance';
+  sect.innerHTML =
+    '<div class="nav-title">Watch</div>' +
+    '<div class="nav-item" data-alerts="1" onclick="nbGo(\'nbAlertsView\',\'Alerts & Reminders\',this)">' +
+      '<i class="fas fa-bell"></i><span>Alerts & Reminders</span>' +
+    '</div>';
+
+  const cont = $('ncSectionsContainer') || nav;
+  const finSec = $('ncSection-finance') || cont;
+  finSec.appendChild(sect);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   G10 — INTEREST DETAIL IN SOURCES VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+
+function enhanceSourcesWithInterest() {
+  const el = $('nbSourcesBody');
+  if (!el) return;
+  const rows = el.querySelectorAll('table tbody tr');
+  rows.forEach(row => {
+    if (row.dataset.ncGInterest) return;
+    const delBtn = row.querySelector('button[onclick*="nbDeleteSource"]');
+    if (!delBtn) return;
+    const m = delBtn.getAttribute('onclick').match(/nbDeleteSource\('([^']+)'\)/);
+    if (!m) return;
+    const srcId = m[1];
+    const src = NB.sources.find(s => s.id === srcId);
+    if (!src || src.type !== 'loan') return;
+
+    const int = computeInterest(srcId);
+    if (!int) return;
+
+    row.dataset.ncGInterest = '1';
+
+    /* Append interest info under the "Total" cell (cell index 2) */
+    const cells = row.querySelectorAll('td');
+    if (cells[2] && !cells[2].querySelector('.nc-interest')) {
+      const div = document.createElement('div');
+      div.className = 'nc-interest';
+      div.style.cssText = 'font-size:10px;color:var(--gray);margin-top:3px';
+      div.innerHTML = 'Interest: ' + F(int.due) +
+        ' due<br><span style="opacity:0.7">' + F(int.monthlyInterest) + '/mo</span>';
+      cells[2].appendChild(div);
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   G11 — BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function bootG() {
+  /* Ensure caches loaded */
+  if (!NB.banks || NB.banks.length === 0) NB.banks = await NB.load('bankAccounts');
+  if (!NB.sources || NB.sources.length === 0) NB.sources = await NB.load('ncMoneySources');
+  if (!NB.deployments || NB.deployments.length === 0) NB.deployments = await NB.load('ncDeployments');
+  if (!NB.payments || NB.payments.length === 0) NB.payments = await NB.load('ncShopPayments');
+  if (!NB.cash || NB.cash.length === 0) NB.cash = await NB.load('ncCashLedger');
+  if (!NB.repayments || NB.repayments.length === 0) NB.repayments = await NB.load('ncSourceRepayments');
+
+  injectViewsG();
+  injectSidebarG();
+
+  hookDeployOpen();
+  enforceDeployBalance();
+
+  /* Initial render */
+  await renderAlerts();
+  await renderDigestWidget();
+
+  /* Periodic scan every 30s */
+  setInterval(async () => {
+    /* Reload data silently */
+    NB.sources = await NB.load('ncMoneySources');
+    NB.deployments = await NB.load('ncDeployments');
+    NB.payments = await NB.load('ncShopPayments');
+    NB.cash = await NB.load('ncCashLedger');
+    NB.banks = await NB.load('bankAccounts');
+    NB.repayments = await NB.load('ncSourceRepayments');
+
+    const alerts = await computeAlerts();
+    updateSidebarBadge(alerts.length);
+
+    /* If alerts view is active, refresh it */
+    if ($('nbAlertsView')?.classList.contains('active')) await renderAlerts();
+    /* Refresh dashboard widget */
+    if ($('dashboardView')?.classList.contains('active')) await renderDigestWidget();
+    /* Enhance sources with interest */
+    if ($('nbSourcesView')?.classList.contains('active')) enhanceSourcesWithInterest();
+  }, 30000);
+
+  /* Enhance sources on view */
+  setInterval(() => {
+    if ($('nbSourcesView')?.classList.contains('active')) enhanceSourcesWithInterest();
+  }, 4000);
+
+  console.log('[Biz G] ✅ Alerts + Interest + Enforcement + Digest ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(bootG, 8600));
+else setTimeout(bootG, 8600);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART H
+     Settings • EmailJS Config • Thresholds • Digest Schedule • Backup/Restore
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizH) return; window.__ncBizH = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* ═══════════════════════════════════════════════════════════════════
+   H1 — CONFIG STORE (persisted to ncConfig/ledger)
+   ═══════════════════════════════════════════════════════════════════ */
+
+const DEFAULT_CONFIG = {
+  /* EmailJS */
+  emailjs: {
+    serviceId: '',
+    templateId: '',
+    publicKey: '',
+    toEmail: ''
+  },
+  /* Alert thresholds */
+  thresholds: {
+    cashLowWarn: 50000,
+    bankLowWarn: 25000,
+    idleSourceDays: 14,
+    overdueGraceDays: 7,
+    shopPaymentOverdue: 30
+  },
+  /* Digest schedule */
+  digest: {
+    enabled: false,
+    frequency: 'daily',        /* daily | weekly */
+    hour: 9,                    /* 0-23 local */
+    weekday: 1,                 /* 0-6 for weekly */
+    lastSent: null
+  },
+  /* Notification preferences */
+  notify: {
+    onAlertCritical: true,
+    onAlertWarning: true,
+    onNewSource: false,
+    onRepayment: false
+  }
+};
+
+const CFG = { data: JSON.parse(JSON.stringify(DEFAULT_CONFIG)), loaded: false };
+
+async function loadConfig() {
+  const db = NB.db(); if (!db) return;
+  try {
+    const doc = await db.collection('ncConfig').doc('ledger').get();
+    if (doc.exists) {
+      const stored = doc.data();
+      /* Merge stored into defaults (so new keys auto-appear) */
+      CFG.data = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), stored);
+    }
+    CFG.loaded = true;
+    /* Apply to NB.THRESHOLDS if the alerts engine is present */
+    if (window.NB && !window.NB.THRESHOLDS) window.NB.THRESHOLDS = {};
+    Object.assign(window.NB.THRESHOLDS || {}, CFG.data.thresholds);
+    /* Also push to global window for Part G to read */
+    window.NC_THRESHOLDS = CFG.data.thresholds;
+    /* Apply EmailJS creds to localStorage so digest can use them */
+    try {
+      localStorage.setItem('emailjs_service', CFG.data.emailjs.serviceId || '');
+      localStorage.setItem('emailjs_template', CFG.data.emailjs.templateId || '');
+      localStorage.setItem('emailjs_public', CFG.data.emailjs.publicKey || '');
+      localStorage.setItem('emailjs_to', CFG.data.emailjs.toEmail || '');
+    } catch(e) {}
+  } catch (e) {
+    console.warn('[Biz H] config load failed:', e.message);
+  }
+}
+
+async function saveConfig() {
+  const db = NB.db(); if (!db) return;
+  try {
+    await db.collection('ncConfig').doc('ledger').set(CFG.data, { merge: true });
+    /* Re-apply thresholds */
+    if (window.NB) {
+      window.NB.THRESHOLDS = Object.assign(window.NB.THRESHOLDS || {}, CFG.data.thresholds);
+    }
+    window.NC_THRESHOLDS = CFG.data.thresholds;
+    try {
+      localStorage.setItem('emailjs_service', CFG.data.emailjs.serviceId || '');
+      localStorage.setItem('emailjs_template', CFG.data.emailjs.templateId || '');
+      localStorage.setItem('emailjs_public', CFG.data.emailjs.publicKey || '');
+      localStorage.setItem('emailjs_to', CFG.data.emailjs.toEmail || '');
+    } catch(e) {}
+    NB.toast('Settings saved', 'success');
+  } catch (e) { NB.toast('Error: ' + e.message, 'error'); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   H2 — SETTINGS VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+
+function injectSettingsTab() {
+  const settings = $('settingsView');
+  if (!settings || $('tab-bizledger')) return;
+
+  const tabsRow = settings.querySelector('.admin-tabs');
+  if (!tabsRow) return;
+
+  /* Add tab button */
+  if (!tabsRow.querySelector('[data-nc-tab="bizledger"]')) {
+    const btn = document.createElement('button');
+    btn.className = 'admin-tab';
+    btn.dataset.ncTab = 'bizledger';
+    btn.textContent = 'Business Ledger';
+    btn.onclick = () => {
+      tabsRow.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      settings.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+      const panel = $('tab-bizledger');
+      if (panel) panel.classList.add('active');
+      renderSettingsPanel();
+    };
+    tabsRow.appendChild(btn);
+  }
+
+  /* Add panel */
+  if (!$('tab-bizledger')) {
+    const panel = document.createElement('div');
+    panel.id = 'tab-bizledger';
+    panel.className = 'admin-panel';
+    panel.innerHTML = '<div id="nbSettingsBody">Loading…</div>';
+    const lastPanel = settings.querySelector('.admin-panel:last-of-type');
+    if (lastPanel && lastPanel.parentNode) lastPanel.parentNode.appendChild(panel);
+    else settings.appendChild(panel);
+  }
+}
+
+async function renderSettingsPanel() {
+  const el = $('nbSettingsBody');
+  if (!el) return;
+  if (!CFG.loaded) await loadConfig();
+
+  const c = CFG.data;
+
+  let html = '';
+
+  /* Quick nav */
+  html +=
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)">' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbSettingsGo(\'general\')"><i class="fas fa-sliders-h"></i> General</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbSettingsGo(\'emailjs\')"><i class="fas fa-envelope"></i> EmailJS</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbSettingsGo(\'thresholds\')"><i class="fas fa-bell"></i> Thresholds</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbSettingsGo(\'digest\')"><i class="fas fa-calendar-alt"></i> Digest</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbSettingsGo(\'backup\')"><i class="fas fa-database"></i> Backup / Restore</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbSettingsGo(\'health\')"><i class="fas fa-stethoscope"></i> Health Check</button>' +
+    '</div>';
+
+  /* General */
+  html +=
+    '<div id="nbSec-general" class="nb-settings-section">' +
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-sliders-h"></i> General Preferences</h4>' +
+        '<div class="form-group"><label>Default Project for new sources</label>' +
+          '<select id="cfgDefaultProject"><option value="">-- None --</option>' +
+            '<option value="__last__"' + (c.general?.defaultProject === '__last__' ? ' selected' : '') + '>Use last selected</option>' +
+          '</select></div>' +
+        '<div class="form-group"><label><input type="checkbox" id="cfgShowNumbers"' + (c.general?.showNumbers !== false ? ' checked' : '') + ' style="width:auto;height:16px"> Show unrounded amounts</label></div>' +
+        '<div class="form-group"><label><input type="checkbox" id="cfgAutoRefresh"' + (c.general?.autoRefresh !== false ? ' checked' : '') + ' style="width:auto;height:16px"> Auto-refresh views every 15s</label></div>' +
+        '<button class="btn btn-primary btn-sm" onclick="nbSaveGeneral()"><i class="fas fa-save"></i> Save</button>' +
+      '</div>' +
+    '</div>';
+
+  /* EmailJS */
+  html +=
+    '<div id="nbSec-emailjs" class="nb-settings-section" style="display:none">' +
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-envelope"></i> EmailJS Configuration</h4>' +
+        '<div style="background:#dbeafe;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#1e40af">' +
+          '<i class="fas fa-info-circle"></i> Sign up at <a href="https://www.emailjs.com" target="_blank" style="color:#1e40af;text-decoration:underline">emailjs.com</a>, create a service + template, then paste the IDs here.' +
+        '</div>' +
+        '<div class="form-group"><label>Service ID *</label><input type="text" id="cfgEjsService" value="' + E(c.emailjs.serviceId) + '" placeholder="service_xxxxxxx"></div>' +
+        '<div class="form-group"><label>Template ID *</label><input type="text" id="cfgEjsTemplate" value="' + E(c.emailjs.templateId) + '" placeholder="template_xxxxxxx"></div>' +
+        '<div class="form-group"><label>Public Key *</label><input type="text" id="cfgEjsPublic" value="' + E(c.emailjs.publicKey) + '" placeholder="YOUR_PUBLIC_KEY"></div>' +
+        '<div class="form-group"><label>Send digest to (email)</label><input type="email" id="cfgEjsTo" value="' + E(c.emailjs.toEmail) + '" placeholder="you@example.com"></div>' +
+        '<div class="form-group"><label>Template must accept these variables:</label>' +
+          '<code style="display:block;background:var(--light);padding:8px;border-radius:6px;font-size:11px;margin-top:4px">subject, date, summary, alerts</code>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn btn-primary btn-sm" onclick="nbSaveEmailJS()"><i class="fas fa-save"></i> Save</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="nbTestEmailJS()"><i class="fas fa-paper-plane"></i> Send Test Email</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  /* Thresholds */
+  html +=
+    '<div id="nbSec-thresholds" class="nb-settings-section" style="display:none">' +
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-bell"></i> Alert Thresholds</h4>' +
+        '<div class="form-group"><label>Cash-in-hand low warning (Rs.)</label>' +
+          '<input type="number" id="cfgThCash" value="' + N(c.thresholds.cashLowWarn) + '" step="1000"></div>' +
+        '<div class="form-group"><label>Bank balance low warning (Rs.)</label>' +
+          '<input type="number" id="cfgThBank" value="' + N(c.thresholds.bankLowWarn) + '" step="1000"></div>' +
+        '<div class="form-group"><label>Idle source nudge — days without deployment</label>' +
+          '<input type="number" id="cfgThIdle" value="' + N(c.thresholds.idleSourceDays) + '" min="1"></div>' +
+        '<div class="form-group"><label>Loan overdue grace period (days)</label>' +
+          '<input type="number" id="cfgThGrace" value="' + N(c.thresholds.overdueGraceDays) + '" min="0"></div>' +
+        '<div class="form-group"><label>Shop payment overdue reminder (days since deployment)</label>' +
+          '<input type="number" id="cfgThShop" value="' + N(c.thresholds.shopPaymentOverdue) + '" min="1"></div>' +
+        '<button class="btn btn-primary btn-sm" onclick="nbSaveThresholds()"><i class="fas fa-save"></i> Save Thresholds</button>' +
+      '</div>' +
+    '</div>';
+
+  /* Digest */
+  html +=
+    '<div id="nbSec-digest" class="nb-settings-section" style="display:none">' +
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-calendar-alt"></i> Digest Schedule</h4>' +
+        '<div class="form-group"><label><input type="checkbox" id="cfgDigestEnabled"' + (c.digest.enabled ? ' checked' : '') + ' style="width:auto;height:16px"> Enable automatic digest</label></div>' +
+        '<div class="form-group"><label>Frequency</label>' +
+          '<select id="cfgDigestFreq">' +
+            '<option value="daily"' + (c.digest.frequency === 'daily' ? ' selected' : '') + '>Daily</option>' +
+            '<option value="weekly"' + (c.digest.frequency === 'weekly' ? ' selected' : '') + '>Weekly</option>' +
+          '</select></div>' +
+        '<div class="form-group"><label>Send at hour (0-23 local)</label>' +
+          '<input type="number" id="cfgDigestHour" value="' + N(c.digest.hour) + '" min="0" max="23"></div>' +
+        '<div class="form-group" id="cfgWeekdayWrap" style="' + (c.digest.frequency === 'weekly' ? '' : 'display:none') + '">' +
+          '<label>Day of week (weekly only)</label>' +
+          '<select id="cfgDigestWeekday">' +
+            ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i) =>
+              '<option value="' + i + '"' + (N(c.digest.weekday) === i ? ' selected' : '') + '>' + d + '</option>'
+            ).join('') +
+          '</select></div>' +
+        '<div style="background:#f0f9ff;padding:10px;border-radius:8px;font-size:12px;color:#075985;margin-bottom:12px">' +
+          'Last sent: <strong>' + (c.digest.lastSent ? new Date(c.digest.lastSent).toLocaleString() : 'Never') + '</strong>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn btn-primary btn-sm" onclick="nbSaveDigest()"><i class="fas fa-save"></i> Save Schedule</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="nbTestDigest()"><i class="fas fa-bolt"></i> Send Now (test)</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  /* Backup */
+  html +=
+    '<div id="nbSec-backup" class="nb-settings-section" style="display:none">' +
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-database"></i> Backup & Restore</h4>' +
+        '<div style="background:#fef3c7;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#92400e">' +
+          '<i class="fas fa-exclamation-triangle"></i> Backups include every Business Ledger collection. Restores merge (do not delete existing data).' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
+          '<button class="btn btn-primary btn-sm" onclick="nbFullBackup()"><i class="fas fa-download"></i> Export All (JSON)</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'nbRestoreFile\').click()"><i class="fas fa-upload"></i> Restore from File</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="nbExportProjectCSV()"><i class="fas fa-file-csv"></i> Export Project P&L CSV</button>' +
+          '<input type="file" id="nbRestoreFile" accept=".json" style="display:none" onchange="nbRestoreFromFile(event)">' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--gray);margin-bottom:8px">Backup history:</div>' +
+        '<div id="nbBackupHistory">Loading…</div>' +
+      '</div>' +
+    '</div>';
+
+  /* Health */
+  html +=
+    '<div id="nbSec-health" class="nb-settings-section" style="display:none">' +
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-stethoscope"></i> Data Health Check</h4>' +
+        '<div id="nbHealthBody">Click below to scan for orphaned records or missing links.</div>' +
+        '<button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="nbRunHealthCheck()"><i class="fas fa-play"></i> Run Check</button>' +
+      '</div>' +
+    '</div>';
+
+  el.innerHTML = html;
+
+  /* Reactive weekday toggle */
+  const freqSel = $('cfgDigestFreq');
+  if (freqSel) freqSel.addEventListener('change', () => {
+    $('cfgWeekdayWrap').style.display = freqSel.value === 'weekly' ? '' : 'none';
+  });
+
+  /* Load backup history */
+  loadBackupHistory();
+}
+
+window.nbSettingsGo = function(section) {
+  document.querySelectorAll('.nb-settings-section').forEach(s => s.style.display = 'none');
+  const el = $('nbSec-' + section);
+  if (el) el.style.display = '';
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   H3 — SAVE HANDLERS
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbSaveGeneral = async function() {
+  CFG.data.general = CFG.data.general || {};
+  CFG.data.general.showNumbers = $('cfgShowNumbers').checked;
+  CFG.data.general.autoRefresh = $('cfgAutoRefresh').checked;
+  CFG.data.general.defaultProject = $('cfgDefaultProject').value;
+  await saveConfig();
+};
+
+window.nbSaveEmailJS = async function() {
+  CFG.data.emailjs.serviceId = ($('cfgEjsService') || {}).value || '';
+  CFG.data.emailjs.templateId = ($('cfgEjsTemplate') || {}).value || '';
+  CFG.data.emailjs.publicKey = ($('cfgEjsPublic') || {}).value || '';
+  CFG.data.emailjs.toEmail = ($('cfgEjsTo') || {}).value || '';
+  await saveConfig();
+};
+
+window.nbSaveThresholds = async function() {
+  CFG.data.thresholds.cashLowWarn = N($('cfgThCash').value);
+  CFG.data.thresholds.bankLowWarn = N($('cfgThBank').value);
+  CFG.data.thresholds.idleSourceDays = N($('cfgThIdle').value);
+  CFG.data.thresholds.overdueGraceDays = N($('cfgThGrace').value);
+  CFG.data.thresholds.shopPaymentOverdue = N($('cfgThShop').value);
+  await saveConfig();
+};
+
+window.nbSaveDigest = async function() {
+  CFG.data.digest.enabled = $('cfgDigestEnabled').checked;
+  CFG.data.digest.frequency = $('cfgDigestFreq').value;
+  CFG.data.digest.hour = N($('cfgDigestHour').value);
+  CFG.data.digest.weekday = N($('cfgDigestWeekday').value);
+  await saveConfig();
+  startDigestScheduler();
+  NB.toast('Digest schedule saved', 'success');
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   H4 — EMAILJS TEST
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbTestEmailJS = async function() {
+  const svc = ($('cfgEjsService') || {}).value;
+  const tpl = ($('cfgEjsTemplate') || {}).value;
+  const pub = ($('cfgEjsPublic') || {}).value;
+  const to = ($('cfgEjsTo') || {}).value;
+
+  if (!svc || !tpl || !pub) { NB.toast('Fill Service, Template and Public Key first', 'error'); return; }
+  if (typeof window.emailjs === 'undefined') {
+    NB.toast('EmailJS library not loaded — add the CDN script tag', 'error');
+    return;
+  }
+
+  try {
+    window.emailjs.init(pub);
+    await window.emailjs.send(svc, tpl, {
+      subject: 'NeonCheque Test Email',
+      date: T(),
+      summary: 'This is a test from your Business Ledger Settings panel.',
+      alerts: 'If you can read this, EmailJS is configured correctly.',
+      to_email: to
+    });
+    NB.toast('Test email sent to ' + (to || 'configured recipient'), 'success');
+  } catch (e) {
+    NB.toast('Email failed: ' + e.message, 'error');
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   H5 — DIGEST SCHEDULER
+   ═══════════════════════════════════════════════════════════════════ */
+
+let __digestTimer = null;
+
+function startDigestScheduler() {
+  if (__digestTimer) clearInterval(__digestTimer);
+  /* Check every 5 minutes */
+  __digestTimer = setInterval(() => {
+    try {
+      if (!CFG.data.digest.enabled) return;
+      const now = new Date();
+      const cfg = CFG.data.digest;
+
+      /* Time match? */
+      if (now.getHours() !== N(cfg.hour)) return;
+
+      /* Frequency match? */
+      const lastSent = cfg.lastSent ? new Date(cfg.lastSent) : null;
+      if (cfg.frequency === 'daily') {
+        if (lastSent && lastSent.toDateString() === now.toDateString()) return;
+      } else if (cfg.frequency === 'weekly') {
+        if (now.getDay() !== N(cfg.weekday)) return;
+        if (lastSent && (now - lastSent) < 6 * 86400000) return;
+      }
+
+      /* Fire digest */
+      if (typeof window.nbSendDigest === 'function') {
+        window.nbSendDigest(cfg.frequency).then(() => {
+          CFG.data.digest.lastSent = new Date().toISOString();
+          saveConfig();
+        });
+      }
+    } catch (e) { console.warn('[Biz H] digest scheduler error', e); }
+  }, 5 * 60 * 1000);
+}
+
+window.nbTestDigest = async function() {
+  if (typeof window.nbSendDigest !== 'function') { NB.toast('Digest engine not loaded', 'error'); return; }
+  await window.nbSendDigest(CFG.data.digest.frequency);
+  CFG.data.digest.lastSent = new Date().toISOString();
+  await saveConfig();
+  renderSettingsPanel();
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   H6 — BACKUP / RESTORE
+   ═══════════════════════════════════════════════════════════════════ */
+
+const BACKUP_COLLECTIONS = [
+  'ncMoneySources',
+  'ncDeployments',
+  'ncShopPayments',
+  'ncCashLedger',
+  'ncReinvestments',
+  'ncSourceRepayments',
+  'ncCashTransfers',
+  'ncAlerts',
+  'ncConfig',
+  'chequeCategories',
+  'bankAccounts',
+  'bankTransactions',
+  'projects',
+  'loans',
+  'outPayments',
+  'inPayments',
+  'parties'
+];
+
+window.nbFullBackup = async function() {
+  const db = NB.db(); if (!db) return;
+  NB.toast('Preparing backup…', 'info');
+
+  const dump = {
+    _meta: {
+      date: new Date().toISOString(),
+      user: NB.who(),
+      version: 'Part H',
+      collections: BACKUP_COLLECTIONS
+    },
+    data: {}
+  };
+
+  try {
+    for (const col of BACKUP_COLLECTIONS) {
+      const snap = await db.collection(col).get();
+      dump.data[col] = snap.docs.map(d => Object.assign({_id: d.id}, d.data()));
+    }
+
+    const json = JSON.stringify(dump, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'neoncheque-bizledger-backup-' + T() + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    /* Save metadata to Firestore (for history) */
+    await db.collection('ncBackups').add({
+      date: new Date().toISOString(),
+      user: NB.who(),
+      size: json.length,
+      collections: BACKUP_COLLECTIONS,
+      counts: Object.fromEntries(BACKUP_COLLECTIONS.map(c => [c, dump.data[c].length])),
+      createdAt: NB.TS()
+    });
+
+    NB.toast('Backup downloaded (' + (json.length / 1024).toFixed(1) + ' KB)', 'success');
+    loadBackupHistory();
+  } catch (e) {
+    NB.toast('Backup failed: ' + e.message, 'error');
+  }
+};
+
+window.nbRestoreFromFile = async function(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  if (!confirm('Restore from "' + file.name + '"?\n\nExisting docs with same IDs will be overwritten. New docs will be created. Nothing is deleted.')) return;
+
+  try {
+    const text = await file.text();
+    const dump = JSON.parse(text);
+    if (!dump.data) { NB.toast('Invalid backup file', 'error'); return; }
+
+    const db = NB.db();
+    let total = 0;
+    for (const [col, docs] of Object.entries(dump.data)) {
+      for (const doc of docs) {
+        const id = doc._id;
+        const data = Object.assign({}, doc);
+        delete data._id;
+        try {
+          if (id) {
+            await db.collection(col).doc(id).set(data, { merge: true });
+          } else {
+            await db.collection(col).add(data);
+          }
+          total++;
+        } catch (e) {}
+      }
+    }
+    NB.toast('Restored ' + total + ' documents', 'success');
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    NB.toast('Restore failed: ' + e.message, 'error');
+  }
+  evt.target.value = '';
+};
+
+async function loadBackupHistory() {
+  const el = $('nbBackupHistory'); if (!el) return;
+  const db = NB.db(); if (!db) return;
+  try {
+    const snap = await db.collection('ncBackups').orderBy('date', 'desc').limit(10).get();
+    if (snap.empty) { el.innerHTML = '<div style="color:var(--gray);font-size:12px">No backups yet</div>'; return; }
+    el.innerHTML = snap.docs.map(d => {
+      const b = d.data();
+      const size = (b.size / 1024).toFixed(1);
+      const total = Object.values(b.counts || {}).reduce((s,x) => s + x, 0);
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">' +
+        '<span>' + new Date(b.date).toLocaleString() + '</span>' +
+        '<span style="color:var(--gray)">' + total + ' docs · ' + size + ' KB</span>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="color:var(--gray);font-size:12px">History unavailable</div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   H7 — PROJECT P&L CSV EXPORT
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbExportProjectCSV = async function() {
+  const db = NB.db(); if (!db) return;
+
+  const [projects, deployments, payments, sources, repayments] = await Promise.all([
+    NB.load('projects'),
+    NB.load('ncDeployments'),
+    NB.load('ncShopPayments'),
+    NB.load('ncMoneySources'),
+    NB.load('ncSourceRepayments')
+  ]);
+
+  if (projects.length === 0) { NB.toast('No projects to export', 'error'); return; }
+
+  const rows = [];
+  rows.push(['Project', 'Deployed', 'Received', 'Net', 'ROI %', 'Cash', 'Bank', 'Cheque', 'Reinvested', 'Sources Used']);
+
+  projects.forEach(p => {
+    const dep = deployments.filter(d => d.projectId === p.id);
+    const pay = payments.filter(x => x.projectId === p.id);
+    const deployed = dep.reduce((s,d) => s + N(d.amount), 0);
+    const received = pay.reduce((s,p2) => s + N(p2.amount), 0);
+    const net = received - deployed;
+    const roi = deployed > 0 ? (net / deployed * 100).toFixed(1) : '0.0';
+    const cash = pay.filter(x => x.method === 'cash' || x.method === 'mixed').reduce((s,x) => s + N(x.amount), 0);
+    const bank = pay.filter(x => x.method === 'bank' || x.method === 'mixed').reduce((s,x) => s + N(x.amount), 0);
+    const cheque = pay.filter(x => x.method === 'cheque').reduce((s,x) => s + N(x.amount), 0);
+    const reinvested = pay.reduce((s,x) => s + N(x.reinvestedAmount || 0), 0);
+    const srcNames = [...new Set(dep.map(d => {
+      const s = sources.find(x => x.id === d.sourceId);
+      return s ? (s.party || s.type) : 'unknown';
+    }))].join(' | ');
+
+    rows.push([p.name, deployed, received, net, roi, cash, bank, cheque, reinvested, srcNames]);
+  });
+
+  /* Add totals row */
+  const tot = rows.slice(1).reduce((acc, r) => {
+    acc[1] += N(r[1]); acc[2] += N(r[2]); acc[3] += N(r[3]);
+    acc[5] += N(r[5]); acc[6] += N(r[6]); acc[7] += N(r[7]); acc[8] += N(r[8]);
+    return acc;
+  }, [0,0,0,0,0,0,0,0,0]);
+  rows.push(['TOTAL', tot[1], tot[2], tot[3], '', tot[5], tot[6], tot[7], tot[8], '']);
+
+  const csv = rows.map(r => r.map(x => {
+    const s = String(x == null ? '' : x);
+    return s.includes(',') || s.includes('"') ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(',')).join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'project-pnl-' + T() + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  NB.toast('Project P&L exported', 'success');
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   H8 — HEALTH CHECK
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbRunHealthCheck = async function() {
+  const el = $('nbHealthBody'); if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:20px"><i class="fas fa-spinner fa-spin"></i> Scanning…</div>';
+
+  const [sources, deployments, payments, cash, transfers, repayments, projects] = await Promise.all([
+    NB.load('ncMoneySources'),
+    NB.load('ncDeployments'),
+    NB.load('ncShopPayments'),
+    NB.load('ncCashLedger'),
+    NB.load('ncCashTransfers'),
+    NB.load('ncSourceRepayments'),
+    NB.load('projects')
+  ]);
+
+  const issues = [];
+  const sourceIds = new Set(sources.map(s => s.id));
+  const projectIds = new Set(projects.map(p => p.id));
+
+  /* Orphan deployments */
+  deployments.forEach(d => {
+    if (d.sourceId && !sourceIds.has(d.sourceId)) {
+      issues.push({ sev:'warning', msg:'Deployment ' + d.id + ' references missing source' });
+    }
+    if (d.projectId && !projectIds.has(d.projectId)) {
+      issues.push({ sev:'warning', msg:'Deployment ' + d.id + ' references missing project' });
+    }
+  });
+
+  /* Over-deployed sources */
+  sources.forEach(s => {
+    const dep = deployments.filter(d => d.sourceId === s.id).reduce((x,d) => x + N(d.amount), 0);
+    if (dep > N(s.amount) + 1) {
+      issues.push({ sev:'danger', msg:'Source ' + (s.party || s.id) + ' over-deployed by ' + F(dep - N(s.amount)) });
+    }
+  });
+
+  /* Negative cash ledger */
+  const cashBal = cash.reduce((s,c) => s + (c.type === 'in' ? N(c.amount) : -N(c.amount)), 0);
+  if (cashBal < 0) issues.push({ sev:'danger', msg:'Cash-in-hand is negative: ' + F(cashBal) });
+
+  /* Payments without project */
+  payments.forEach(p => {
+    if (p.projectId && !projectIds.has(p.projectId)) {
+      issues.push({ sev:'warning', msg:'Shop payment ' + p.id + ' references missing project' });
+    }
+  });
+
+  /* Repayments over source amount */
+  sources.forEach(s => {
+    const repaid = repayments.filter(r => r.sourceId === s.id).reduce((x,r) => x + N(r.amount), 0);
+    if (repaid > N(s.amount) + 1) {
+      issues.push({ sev:'danger', msg:'Source ' + (s.party || s.id) + ' over-repaid by ' + F(repaid - N(s.amount)) });
+    }
+  });
+
+  /* Missing bank account on transfers */
+  const banks = await NB.load('bankAccounts');
+  const bankIds = new Set(banks.map(b => b.id));
+  transfers.forEach(t => {
+    if (t.bankAccountId && !bankIds.has(t.bankAccountId)) {
+      issues.push({ sev:'warning', msg:'Transfer ' + t.id + ' references missing bank' });
+    }
+  });
+
+  if (issues.length === 0) {
+    el.innerHTML =
+      '<div style="text-align:center;padding:30px">' +
+        '<i class="fas fa-check-circle" style="font-size:56px;color:var(--success);opacity:0.6"></i>' +
+        '<h3 style="margin-top:12px;color:var(--success)">All healthy</h3>' +
+        '<p style="color:var(--gray);font-size:12px;margin-top:6px">' +
+          sources.length + ' sources · ' + deployments.length + ' deployments · ' +
+          payments.length + ' payments · ' + cash.length + ' cash entries · ' + transfers.length + ' transfers' +
+        '</p>' +
+      '</div>';
+    return;
+  }
+
+  el.innerHTML =
+    '<div style="background:#fee2e2;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px;color:#991b1b">' +
+      '<strong>' + issues.length + '</strong> issue(s) found' +
+    '</div>' +
+    issues.map(i => {
+      const color = i.sev === 'danger' ? 'var(--danger)' : 'var(--warning)';
+      const bg = i.sev === 'danger' ? '#fee2e2' : '#fef3c7';
+      return '<div style="background:' + bg + ';padding:10px;border-left:4px solid ' + color + ';border-radius:6px;margin-bottom:6px;font-size:12px">' +
+        '<strong style="color:' + color + '">' + i.sev.toUpperCase() + '</strong> — ' + E(i.msg) +
+      '</div>';
+    }).join('');
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   H9 — BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function bootH() {
+  await loadConfig();
+  injectSettingsTab();
+  startDigestScheduler();
+  /* Re-inject if settings view is re-rendered */
+  setInterval(() => {
+    if ($('settingsView')?.classList.contains('active') && !$('tab-bizledger')) {
+      injectSettingsTab();
+    }
+  }, 3000);
+  console.log('[Biz H] ✅ Settings + EmailJS + Backup + Health ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(bootH, 9400));
+else setTimeout(bootH, 9400);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART I
+     Cash-Flow Forecast • Category Projections • Trend Charts
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizI) return; window.__ncBizI = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* ═══════════════════════════════════════════════════════════════════
+   I1 — AGGREGATION HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
+
+function monthKey(dateStr) {
+  if (!dateStr) return null;
+  return String(dateStr).slice(0, 7); /* YYYY-MM */
+}
+
+function lastNMonths(n) {
+  const out = [];
+  const d = new Date();
+  d.setDate(1);
+  for (let i = n - 1; i >= 0; i--) {
+    const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    out.push(m.toISOString().slice(0, 7));
+  }
+  return out;
+}
+
+function aggregateByMonth(items, dateKey, valueFn) {
+  const map = {};
+  items.forEach(it => {
+    const k = monthKey(it[dateKey]);
+    if (!k) return;
+    map[k] = (map[k] || 0) + valueFn(it);
+  });
+  return map;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   I2 — ANALYTICS DATA
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function buildAnalytics() {
+  const [sources, deployments, payments, cash, banks] = await Promise.all([
+    NB.load('ncMoneySources'),
+    NB.load('ncDeployments'),
+    NB.load('ncShopPayments'),
+    NB.load('ncCashLedger'),
+    NB.load('bankAccounts')
+  ]);
+
+  const months = lastNMonths(12);
+
+  /* Monthly aggregates */
+  const deployedByMonth = aggregateByMonth(deployments, 'date', d => N(d.amount));
+  const receivedByMonth = aggregateByMonth(payments, 'date', p => N(p.amount));
+  const cashInByMonth   = aggregateByMonth(cash.filter(c => c.type === 'in'),  'date', c => N(c.amount));
+  const cashOutByMonth  = aggregateByMonth(cash.filter(c => c.type === 'out'), 'date', c => N(c.amount));
+
+  /* Category split */
+  const catSplit = {};
+  deployments.forEach(d => {
+    if (!d.category) return;
+    catSplit[d.category] = (catSplit[d.category] || 0) + N(d.amount);
+  });
+  const catSplitReceived = {};
+  payments.forEach(p => {
+    /* Shop payments inherit project's default category */
+    const proj = NB.projects.find(x => x.id === p.projectId);
+    const cat = proj?.defaultCategory || 'Uncategorized';
+    catSplitReceived[cat] = (catSplitReceived[cat] || 0) + N(p.amount);
+  });
+
+  /* Totals */
+  const totalDeployed = deployments.reduce((s,d) => s + N(d.amount), 0);
+  const totalReceived = payments.reduce((s,p) => s + N(p.amount), 0);
+  const totalCash = cash.reduce((s,c) => s + (c.type === 'in' ? N(c.amount) : -N(c.amount)), 0);
+  const totalBank = banks.reduce((s,b) => s + N(b.currentBalance), 0);
+
+  return {
+    months, deployedByMonth, receivedByMonth, cashInByMonth, cashOutByMonth,
+    catSplit, catSplitReceived, totalDeployed, totalReceived, totalCash, totalBank
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   I3 — SIMPLE SVG CHART HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
+
+function barChart(data, labels, opts) {
+  opts = opts || {};
+  const w = opts.width || 700;
+  const h = opts.height || 220;
+  const pad = { l: 60, r: 20, t: 20, b: 40 };
+  const innerW = w - pad.l - pad.r;
+  const innerH = h - pad.t - pad.b;
+  const max = Math.max(1, ...data);
+  const barW = innerW / data.length - 8;
+
+  let svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto">';
+  /* Y grid */
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (innerH / 4) * i;
+    const val = max - (max / 4) * i;
+    svg += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (w - pad.r) + '" y2="' + y + '" stroke="#e2e8f0" stroke-dasharray="3,3"/>';
+    svg += '<text x="' + (pad.l - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="10" fill="#94a3b8">' + Math.round(val).toLocaleString('en-IN') + '</text>';
+  }
+  /* Bars */
+  data.forEach((v, i) => {
+    const x = pad.l + (innerW / data.length) * i + 4;
+    const bh = (v / max) * innerH;
+    const y = pad.t + innerH - bh;
+    svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + bh + '" fill="' + (opts.color || '#6366f1') + '" rx="3"/>';
+    svg += '<text x="' + (x + barW / 2) + '" y="' + (h - 12) + '" text-anchor="middle" font-size="10" fill="#64748b">' + E(labels[i].slice(5)) + '</text>';
+  });
+  svg += '</svg>';
+  return svg;
+}
+
+function lineChart(data, labels, opts) {
+  opts = opts || {};
+  const w = opts.width || 700;
+  const h = opts.height || 220;
+  const pad = { l: 60, r: 20, t: 20, b: 40 };
+  const innerW = w - pad.l - pad.r;
+  const innerH = h - pad.t - pad.b;
+  const max = Math.max(1, ...data);
+  const stepX = data.length > 1 ? innerW / (data.length - 1) : 0;
+
+  let path = '';
+  let dots = '';
+  data.forEach((v, i) => {
+    const x = pad.l + stepX * i;
+    const y = pad.t + innerH - (v / max) * innerH;
+    path += (i === 0 ? 'M' : 'L') + x + ',' + y;
+    dots += '<circle cx="' + x + '" cy="' + y + '" r="3" fill="' + (opts.color || '#0ea5e9') + '"/>';
+  });
+
+  let svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto">';
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (innerH / 4) * i;
+    const val = max - (max / 4) * i;
+    svg += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (w - pad.r) + '" y2="' + y + '" stroke="#e2e8f0" stroke-dasharray="3,3"/>';
+    svg += '<text x="' + (pad.l - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="10" fill="#94a3b8">' + Math.round(val).toLocaleString('en-IN') + '</text>';
+  }
+  svg += '<path d="' + path + '" stroke="' + (opts.color || '#0ea5e9') + '" stroke-width="2" fill="none"/>';
+  svg += dots;
+  labels.forEach((lab, i) => {
+    const x = pad.l + stepX * i;
+    svg += '<text x="' + x + '" y="' + (h - 12) + '" text-anchor="middle" font-size="10" fill="#64748b">' + E(lab.slice(5)) + '</text>';
+  });
+  svg += '</svg>';
+  return svg;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   I4 — RENDER ANALYTICS VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function renderAnalyticsI() {
+  const el = $('nbAnalyticsIBody'); if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px"><i class="fas fa-spinner fa-spin"></i> Analyzing…</div>';
+
+  const A = await buildAnalytics();
+
+  /* KPIs */
+  const netCycle = A.totalReceived - A.totalDeployed;
+  const ROI = A.totalDeployed > 0 ? (netCycle / A.totalDeployed * 100) : 0;
+
+  let html = '';
+
+  /* KPI row */
+  html +=
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px">' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Total Deployed</div><div class="widget-value" style="color:var(--warning)">' + F(A.totalDeployed) + '</div></div><div class="widget-icon warning"><i class="fas fa-arrow-circle-up"></i></div></div></div>' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Total Received</div><div class="widget-value" style="color:var(--success)">' + F(A.totalReceived) + '</div></div><div class="widget-icon success"><i class="fas fa-arrow-circle-down"></i></div></div></div>' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Net Cycle</div><div class="widget-value" style="color:' + (netCycle >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + F(netCycle) + '</div></div><div class="widget-icon ' + (netCycle >= 0 ? 'success' : 'danger') + '"><i class="fas fa-balance-scale"></i></div></div></div>' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">ROI</div><div class="widget-value" style="color:' + (ROI >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + ROI.toFixed(1) + '%</div></div><div class="widget-icon ' + (ROI >= 0 ? 'success' : 'danger') + '"><i class="fas fa-percent"></i></div></div></div>' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Cash Position</div><div class="widget-value" style="color:' + (A.totalCash >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + F(A.totalCash) + '</div></div><div class="widget-icon primary"><i class="fas fa-coins"></i></div></div></div>' +
+      '<div class="widget"><div class="widget-header"><div><div class="widget-title">Bank Position</div><div class="widget-value" style="color:' + (A.totalBank >= 0 ? 'var(--primary)' : 'var(--danger)') + '">' + F(A.totalBank) + '</div></div><div class="widget-icon primary"><i class="fas fa-university"></i></div></div></div>' +
+    '</div>';
+
+  /* Deployed vs Received chart */
+  html +=
+    '<div class="card" style="margin-bottom:18px">' +
+      '<div class="card-header"><h3 class="card-title">Deployed vs Received (12 months)</h3></div>' +
+      '<div style="padding:8px 0">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--warning);margin-bottom:4px">Deployed</div>' +
+        barChart(A.months.map(m => A.deployedByMonth[m] || 0), A.months, { color:'#f59e0b' }) +
+        '<div style="font-size:11px;font-weight:700;color:var(--success);margin:14px 0 4px">Received</div>' +
+        barChart(A.months.map(m => A.receivedByMonth[m] || 0), A.months, { color:'#10b981' }) +
+      '</div>' +
+    '</div>';
+
+  /* Cash flow line */
+  html +=
+    '<div class="card" style="margin-bottom:18px">' +
+      '<div class="card-header"><h3 class="card-title">Net Cash Flow Trend</h3></div>' +
+      '<div style="padding:8px 0">' +
+        lineChart(
+          A.months.map(m => (A.cashInByMonth[m] || 0) - (A.cashOutByMonth[m] || 0)),
+          A.months,
+          { color:'#8b5cf6' }
+        ) +
+      '</div>' +
+    '</div>';
+
+  /* Category split */
+  html += '<div class="card" style="margin-bottom:18px"><div class="card-header"><h3 class="card-title">Category Deployment vs Received</h3></div>';
+  const allCats = [...new Set([...Object.keys(A.catSplit), ...Object.keys(A.catSplitReceived)])];
+  if (allCats.length === 0) {
+    html += '<div style="text-align:center;padding:20px;color:var(--gray)">No categories yet</div>';
+  } else {
+    const grand = allCats.reduce((s,c) => s + Math.max(A.catSplit[c] || 0, A.catSplitReceived[c] || 0), 0);
+    html += '<div style="display:flex;flex-direction:column;gap:10px">';
+    allCats.sort((a,b) => (A.catSplit[b]||0) - (A.catSplit[a]||0)).forEach(c => {
+      const dep = A.catSplit[c] || 0;
+      const rec = A.catSplitReceived[c] || 0;
+      const depPct = grand > 0 ? (dep / grand) * 100 : 0;
+      const recPct = grand > 0 ? (rec / grand) * 100 : 0;
+      const diff = rec - dep;
+      html +=
+        '<div style="background:var(--light);padding:12px;border-radius:10px">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+            '<strong style="font-size:13px">' + E(c) + '</strong>' +
+            '<span style="font-weight:700;color:' + (diff >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (diff >= 0 ? '+' : '') + F(diff) + '</span>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--gray);display:flex;justify-content:space-between;margin-bottom:6px">' +
+            '<span>Deployed ' + F(dep) + '</span>' +
+            '<span>Received ' + F(rec) + '</span>' +
+          '</div>' +
+          '<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--border)">' +
+            '<div style="width:' + depPct + '%;background:#f59e0b"></div>' +
+            '<div style="width:' + recPct + '%;background:#10b981"></div>' +
+          '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  /* Forecast next 3 months (simple linear regression on received) */
+  const recArr = A.months.map(m => A.receivedByMonth[m] || 0);
+  const n = recArr.length;
+  const sumX = (n * (n - 1)) / 2;
+  const sumY = recArr.reduce((s,v) => s + v, 0);
+  const sumXY = recArr.reduce((s,v,i) => s + i * v, 0);
+  const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
+  const slope = n > 1 ? (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX) : 0;
+  const intercept = n > 0 ? (sumY - slope * sumX) / n : 0;
+
+  const forecast = [];
+  const fLabels = [];
+  const today = new Date();
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    fLabels.push(d.toISOString().slice(0, 7));
+    forecast.push(Math.max(0, intercept + slope * (n + i - 1)));
+  }
+
+  html +=
+    '<div class="card">' +
+      '<div class="card-header"><h3 class="card-title">3-Month Revenue Forecast</h3></div>' +
+      '<div style="padding:8px 0">' +
+        '<div style="font-size:11px;color:var(--gray);margin-bottom:6px">Based on linear trend of last 12 months</div>' +
+        barChart(forecast, fLabels, { color:'#6366f1' }) +
+        '<div style="display:flex;justify-content:space-around;margin-top:10px;font-size:12px">' +
+          fLabels.map((m,i) => '<div><strong>' + m + '</strong><br>' + F(forecast[i]) + '</div>').join('') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  el.innerHTML = html;
+
+  /* Save forecast snapshot */
+  try {
+    await NB.db().collection('ncForecasts').add({
+      generatedAt: new Date().toISOString(),
+      forecast: fLabels.map((m,i) => ({ month: m, amount: forecast[i] })),
+      generatedBy: NB.who(),
+      createdAt: NB.TS()
+    });
+  } catch(e){}
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   I5 — VIEW + SIDEBAR
+   ═══════════════════════════════════════════════════════════════════ */
+
+function injectViewI() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('nbAnalyticsIView')) return;
+  const v = document.createElement('div');
+  v.id = 'nbAnalyticsIView';
+  v.className = 'view-content';
+  v.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-chart-line" style="color:var(--primary);margin-right:8px"></i>Advanced Analytics</h2>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbRenderAnalyticsI()"><i class="fas fa-sync"></i> Refresh</button>' +
+    '</div>' +
+    '<div id="nbAnalyticsIBody"></div></div>';
+  main.appendChild(v);
+}
+
+window.nbRenderAnalyticsI = renderAnalyticsI;
+
+function injectSidebarI() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('nbSidebarSectionI')) return;
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'nbSidebarSectionI';
+  sect.dataset.nctab = 'finance';
+  sect.innerHTML =
+    '<div class="nav-title">Analytics</div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbAnalyticsIView\',\'Advanced Analytics\',this)"><i class="fas fa-chart-line"></i><span>Advanced Analytics</span></div>';
+  const cont = $('ncSectionsContainer') || nav;
+  const finSec = $('ncSection-finance') || cont;
+  finSec.appendChild(sect);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   I6 — BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+
+function bootI() {
+  injectViewI();
+  injectSidebarI();
+  setInterval(() => {
+    if ($('nbAnalyticsIView')?.classList.contains('active') && !$('nbAnalyticsIBody').innerHTML.trim()) {
+      renderAnalyticsI();
+    }
+  }, 3000);
+  console.log('[Biz I] ✅ Advanced Analytics ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(bootI, 10200));
+else setTimeout(bootI, 10200);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART J
+     Multi-Currency • EMI Amortization • Late Penalties
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizJ) return; window.__ncBizJ = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* ═══════════════════════════════════════════════════════════════════
+   J1 — CURRENCY SUPPORT
+   ═══════════════════════════════════════════════════════════════════ */
+
+const CURRENCIES = [
+  { code:'LKR', symbol:'Rs. ', name:'Sri Lankan Rupee', defaultRate: 1 },
+  { code:'USD', symbol:'$',    name:'US Dollar',         defaultRate: 300 },
+  { code:'EUR', symbol:'€',    name:'Euro',              defaultRate: 325 },
+  { code:'GBP', symbol:'£',    name:'British Pound',     defaultRate: 380 },
+  { code:'INR', symbol:'₹',    name:'Indian Rupee',      defaultRate: 3.6 },
+  { code:'AED', symbol:'د.إ',  name:'UAE Dirham',        defaultRate: 82 },
+  { code:'CNY', symbol:'¥',    name:'Chinese Yuan',      defaultRate: 42 }
+];
+
+let EX_RATES = { LKR: 1 };
+
+async function loadExRates() {
+  const db = NB.db(); if (!db) return;
+  try {
+    const doc = await db.collection('ncExchangeRates').doc('current').get();
+    if (doc.exists) {
+      EX_RATES = Object.assign({ LKR: 1 }, doc.data());
+    }
+  } catch (e) {}
+}
+
+async function saveExRates(rates) {
+  const db = NB.db(); if (!db) return;
+  await db.collection('ncExchangeRates').doc('current').set(rates);
+  EX_RATES = Object.assign({ LKR: 1 }, rates);
+}
+
+function toLKR(amount, currency) {
+  return N(amount) * N(EX_RATES[currency] || 1);
+}
+
+function fmtWithCurrency(amount, currency) {
+  const cur = CURRENCIES.find(c => c.code === currency);
+  if (!cur) return F(amount);
+  return cur.symbol + N(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   J2 — EMI AMORTIZATION SCHEDULE GENERATOR
+   ═══════════════════════════════════════════════════════════════════ */
+
+function generateEMISchedule(principal, annualRate, months, startDate) {
+  const P = N(principal);
+  const r = N(annualRate) / 100 / 12;
+  const n = Math.max(1, N(months));
+  const emi = r > 0 ? P * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1) : P / n;
+
+  const start = new Date(startDate || T());
+  const rows = [];
+  let balance = P;
+
+  for (let i = 1; i <= n; i++) {
+    const interest = balance * r;
+    const principalPart = emi - interest;
+    balance = Math.max(0, balance - principalPart);
+    const dueDate = new Date(start);
+    dueDate.setMonth(dueDate.getMonth() + i);
+
+    rows.push({
+      period: i,
+      dueDate: dueDate.toISOString().slice(0, 10),
+      emi: Math.round(emi * 100) / 100,
+      interest: Math.round(interest * 100) / 100,
+      principal: Math.round(principalPart * 100) / 100,
+      balance: Math.round(balance * 100) / 100
+    });
+  }
+
+  return {
+    principal: P,
+    annualRate: N(annualRate),
+    months: n,
+    emi: Math.round(emi * 100) / 100,
+    totalPayment: Math.round(emi * n * 100) / 100,
+    totalInterest: Math.round((emi * n - P) * 100) / 100,
+    rows
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   J3 — PENALTIES
+   ═══════════════════════════════════════════════════════════════════ */
+
+function calcPenalty(emiRow, asOf) {
+  if (!emiRow || !emiRow.dueDate) return 0;
+  const due = new Date(emiRow.dueDate).getTime();
+  const now = (asOf ? new Date(asOf) : new Date()).getTime();
+  if (now <= due) return 0;
+  const daysLate = Math.floor((now - due) / 86400000);
+  /* 0.1% of EMI per day of delay, capped at 25% of EMI */
+  return Math.min(emiRow.emi * 0.001 * daysLate, emiRow.emi * 0.25);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   J4 — VIEW: EMI SCHEDULE MODAL
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbViewEMI = function(sourceId) {
+  const src = (NB.sources || []).find(s => s.id === sourceId);
+  if (!src) { NB.toast('Source not found', 'error'); return; }
+
+  const months = (function() {
+    if (!src.endDate || !src.date) return 12;
+    const s = new Date(src.date);
+    const e = new Date(src.endDate);
+    return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()));
+  })();
+
+  const schedule = generateEMISchedule(src.amount, src.interestRate || 0, months, src.date);
+
+  /* Compute paid amount */
+  const repaid = (NB.repayments || []).filter(r => r.sourceId === sourceId).reduce((s,r) => s + N(r.amount), 0);
+  let cumulative = 0;
+  schedule.rows.forEach(r => {
+    cumulative += r.emi;
+    r.paid = cumulative <= repaid;
+    r.partial = !r.paid && cumulative - r.emi < repaid;
+  });
+
+  const totalPaidRows = schedule.rows.filter(r => r.paid).length;
+  const totalPenalty = schedule.rows
+    .filter(r => !r.paid && new Date(r.dueDate).getTime() < Date.now())
+    .reduce((s,r) => s + calcPenalty(r), 0);
+
+  let host = $('nbEmiModal');
+  if (host) host.remove();
+  host = document.createElement('div');
+  host.id = 'nbEmiModal';
+  host.className = 'modal-overlay active';
+  host.innerHTML =
+    '<div class="modal" style="max-width:820px">' +
+      '<div class="modal-header" style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:white">' +
+        '<h2 class="modal-title"><i class="fas fa-calculator"></i> EMI Amortization — ' + E(src.party || src.type) + '</h2>' +
+        '<button class="modal-close" onclick="document.getElementById(\'nbEmiModal\').remove()" style="background:rgba(255,255,255,0.2);color:white"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div class="modal-body" style="max-height:70vh;overflow:auto">' +
+        '<div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:white;padding:16px;border-radius:10px;margin-bottom:16px">' +
+          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center">' +
+            '<div><div style="font-size:10px;opacity:0.9">Principal</div><div style="font-size:17px;font-weight:800">' + F(schedule.principal) + '</div></div>' +
+            '<div><div style="font-size:10px;opacity:0.9">EMI</div><div style="font-size:17px;font-weight:800">' + F(schedule.emi) + '</div></div>' +
+            '<div><div style="font-size:10px;opacity:0.9">Interest</div><div style="font-size:17px;font-weight:800">' + F(schedule.totalInterest) + '</div></div>' +
+            '<div><div style="font-size:10px;opacity:0.9">Total</div><div style="font-size:17px;font-weight:800">' + F(schedule.totalPayment) + '</div></div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">' +
+          '<div style="flex:1;background:var(--light);padding:10px;border-radius:8px"><div style="font-size:10px;color:var(--gray)">Repaid</div><div style="font-weight:700;color:var(--success)">' + totalPaidRows + ' / ' + schedule.months + ' EMIs</div></div>' +
+          '<div style="flex:1;background:var(--light);padding:10px;border-radius:8px"><div style="font-size:10px;color:var(--gray)">Late Penalty</div><div style="font-weight:700;color:' + (totalPenalty > 0 ? 'var(--danger)' : 'var(--success)') + '">' + F(totalPenalty) + '</div></div>' +
+        '</div>' +
+        '<div class="table-container"><table><thead><tr>' +
+          '<th>#</th><th>Due Date</th><th>EMI</th><th>Interest</th><th>Principal</th><th>Balance</th><th>Status</th><th>Penalty</th>' +
+        '</tr></thead><tbody>' +
+        schedule.rows.map(r => {
+          const pen = !r.paid && new Date(r.dueDate).getTime() < Date.now() ? calcPenalty(r) : 0;
+          const status = r.paid ? '<span class="status-badge status-cleared">Paid</span>' :
+                        r.partial ? '<span class="status-badge status-in-hand">Partial</span>' :
+                        new Date(r.dueDate).getTime() < Date.now() ? '<span class="status-badge status-returned">Overdue</span>' :
+                        '<span class="status-badge status-draft">Pending</span>';
+          return '<tr>' +
+            '<td>' + r.period + '</td>' +
+            '<td>' + r.dueDate + '</td>' +
+            '<td>' + F(r.emi) + '</td>' +
+            '<td>' + F(r.interest) + '</td>' +
+            '<td>' + F(r.principal) + '</td>' +
+            '<td>' + F(r.balance) + '</td>' +
+            '<td>' + status + '</td>' +
+            '<td>' + (pen > 0 ? '<span style="color:var(--danger);font-weight:700">' + F(pen) + '</span>' : '-') + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="document.getElementById(\'nbEmiModal\').remove()">Close</button>' +
+        '<button class="btn btn-primary" onclick="nbExportEMI(\'' + sourceId + '\')"><i class="fas fa-download"></i> Export CSV</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(host);
+  host.addEventListener('click', e => { if (e.target === host) host.remove(); });
+};
+
+window.nbExportEMI = function(sourceId) {
+  const src = (NB.sources || []).find(s => s.id === sourceId);
+  if (!src) return;
+  const months = (function() {
+    if (!src.endDate || !src.date) return 12;
+    const s = new Date(src.date), e = new Date(src.endDate);
+    return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()));
+  })();
+  const sch = generateEMISchedule(src.amount, src.interestRate || 0, months, src.date);
+  const rows = [['#','Due Date','EMI','Interest','Principal','Balance']];
+  sch.rows.forEach(r => rows.push([r.period, r.dueDate, r.emi, r.interest, r.principal, r.balance]));
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'emi-' + (src.party || sourceId) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  NB.toast('EMI schedule exported', 'success');
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   J5 — CURRENCY SETTINGS VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function renderCurrencySettings() {
+  const el = $('nbCurrencyBody'); if (!el) return;
+  await loadExRates();
+
+  let html = '<div class="admin-card"><h4><i class="fas fa-coins"></i> Exchange Rates (to LKR)</h4>';
+  html += '<div style="background:#dbeafe;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#1e40af"><i class="fas fa-info-circle"></i> Used when converting foreign amounts to LKR in totals and reports.</div>';
+  html += '<table style="width:100%"><thead><tr><th>Currency</th><th>Rate to LKR</th></tr></thead><tbody>';
+  CURRENCIES.forEach(c => {
+    if (c.code === 'LKR') {
+      html += '<tr><td><strong>' + c.code + '</strong> — ' + c.name + '</td><td>1.00 (base)</td></tr>';
+    } else {
+      html += '<tr><td><strong>' + c.code + '</strong> — ' + c.name + '</td>' +
+        '<td><input type="number" step="0.01" min="0.01" id="exr_' + c.code + '" value="' + (EX_RATES[c.code] || c.defaultRate) + '" style="width:140px;padding:6px;border:1px solid var(--border);border-radius:6px"></td>' +
+      '</tr>';
+    }
+  });
+  html += '</tbody></table>';
+  html += '<button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="nbSaveExRates()"><i class="fas fa-save"></i> Save Rates</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+window.nbSaveExRates = async function() {
+  const rates = { LKR: 1 };
+  CURRENCIES.forEach(c => {
+    if (c.code !== 'LKR') {
+      const el = $('exr_' + c.code);
+      if (el) rates[c.code] = N(el.value) || c.defaultRate;
+    }
+  });
+  await saveExRates(rates);
+  NB.toast('Exchange rates saved', 'success');
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   J6 — INJECT EMI BUTTON INTO SOURCES ROWS
+   ═══════════════════════════════════════════════════════════════════ */
+
+function injectEmiButtons() {
+  const el = $('nbSourcesBody');
+  if (!el) return;
+  el.querySelectorAll('table tbody tr').forEach(row => {
+    if (row.dataset.nbEmi) return;
+    const delBtn = row.querySelector('button[onclick*="nbDeleteSource"]');
+    if (!delBtn) return;
+    const m = delBtn.getAttribute('onclick').match(/nbDeleteSource\('([^']+)'\)/);
+    if (!m) return;
+    const srcId = m[1];
+    const src = NB.sources.find(s => s.id === srcId);
+    if (!src || src.type !== 'loan') return;
+    if (!src.interestRate || N(src.interestRate) <= 0) return;
+
+    row.dataset.nbEmi = '1';
+    const actions = row.lastElementChild;
+    if (actions && !actions.querySelector('.nb-emi-btn')) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-secondary nb-emi-btn';
+      btn.title = 'EMI Schedule';
+      btn.style.marginRight = '4px';
+      btn.innerHTML = '<i class="fas fa-calculator"></i>';
+      btn.onclick = () => window.nbViewEMI(srcId);
+      actions.insertBefore(btn, actions.firstChild);
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   J7 — VIEW + SIDEBAR
+   ═══════════════════════════════════════════════════════════════════ */
+
+function injectViewJ() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('nbCurrencyView')) return;
+  const v = document.createElement('div');
+  v.id = 'nbCurrencyView';
+  v.className = 'view-content';
+  v.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-coins" style="color:var(--primary);margin-right:8px"></i>Multi-Currency & EMI</h2>' +
+    '</div>' +
+    '<div id="nbCurrencyBody"></div></div>';
+  main.appendChild(v);
+}
+
+function injectSidebarJ() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('nbSidebarSectionJ')) return;
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'nbSidebarSectionJ';
+  sect.dataset.nctab = 'finance';
+  sect.innerHTML =
+    '<div class="nav-title">Multi-Currency</div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbCurrencyView\',\'Currency & EMI\',this)"><i class="fas fa-coins"></i><span>Currency & EMI</span></div>';
+  const cont = $('ncSectionsContainer') || nav;
+  const finSec = $('ncSection-finance') || cont;
+  finSec.appendChild(sect);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   J8 — BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+
+async function bootJ() {
+  await loadExRates();
+  injectViewJ();
+  injectSidebarJ();
+  setInterval(() => {
+    if ($('nbSourcesView')?.classList.contains('active')) injectEmiButtons();
+    if ($('nbCurrencyView')?.classList.contains('active') && !$('nbCurrencyBody').innerHTML.trim()) renderCurrencySettings();
+  }, 3000);
+  console.log('[Biz J] ✅ Multi-Currency + EMI + Penalties ready');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(bootJ, 11000));
+else setTimeout(bootJ, 11000);
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — PART K
+     Mobile-first PDF Reports • Final Capstone
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__ncBizK) return; window.__ncBizK = true;
+
+const NB = window.NB;
+const $ = NB.$, E = NB.E, N = NB.N, F = NB.F, T = NB.T;
+
+/* ═══════════════════════════════════════════════════════════════════
+   K1 — HTML PRINT REPORT (browser-based "PDF" via print dialog)
+   ═══════════════════════════════════════════════════════════════════ */
+
+function openPrintReport(title, bodyHtml) {
+  const w = window.open('', '_blank', 'width=900,height=1200');
+  if (!w) { NB.toast('Popup blocked — allow popups', 'error'); return; }
+
+  w.document.write(
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + E(title) + '</title>' +
+    '<style>' +
+      '@page { size: A4; margin: 14mm; }' +
+      'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#1e293b;margin:0;padding:0}' +
+      '.rpt-header{background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;padding:22px;border-radius:10px;margin-bottom:20px}' +
+      '.rpt-header h1{margin:0;font-size:20px}' +
+      '.rpt-header .meta{font-size:11px;opacity:0.9;margin-top:6px}' +
+      '.rpt-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}' +
+      '.rpt-kpi > div{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px}' +
+      '.rpt-kpi .lbl{font-size:10px;color:#64748b;text-transform:uppercase;font-weight:700}' +
+      '.rpt-kpi .val{font-size:18px;font-weight:800;margin-top:4px}' +
+      'table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}' +
+      'th{background:#f1f5f9;padding:8px;text-align:left;font-weight:700;font-size:10px;text-transform:uppercase;color:#64748b}' +
+      'td{padding:8px;border-bottom:1px solid #e2e8f0}' +
+      'tr:hover{background:#f8fafc}' +
+      '.badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}' +
+      '.footer{margin-top:30px;padding-top:14px;border-top:2px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center}' +
+      '.sec-title{font-size:14px;font-weight:800;margin:18px 0 8px;color:#1e293b}' +
+      '@media print { .no-print{display:none} }' +
+    '</style></head><body>' + bodyHtml +
+    '<div class="footer">Generated ' + new Date().toLocaleString() + ' · NeonCheque Business Ledger · By ' + E(NB.who()) + '</div>' +
+    '<div class="no-print" style="text-align:center;margin:20px"><button onclick="window.print()" style="padding:10px 24px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700">🖨 Print / Save as PDF</button></div>' +
+    '</body></html>'
+  );
+  w.document.close();
+  setTimeout(() => { try { w.print(); } catch(e){} }, 600);
+}
+
+function reportHeader(title, subtitle) {
+  return '<div class="rpt-header"><h1>' + E(title) + '</h1>' +
+    (subtitle ? '<div class="meta">' + E(subtitle) + '</div>' : '') +
+    '<div class="meta">' + new Date().toLocaleDateString() + '</div></div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   K2 — REPORT: PERIOD SUMMARY
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbReportPeriod = async function(startDate, endDate) {
+  const [deployments, payments, cash, sources, repayments] = await Promise.all([
+    NB.load('ncDeployments'),
+    NB.load('ncShopPayments'),
+    NB.load('ncCashLedger'),
+    NB.load('ncMoneySources'),
+    NB.load('ncSourceRepayments')
+  ]);
+
+  const inRange = (d) => {
+    if (!d) return false;
+    return d >= startDate && d <= endDate;
+  };
+
+  const depRange = deployments.filter(d => inRange(d.date));
+  const payRange = payments.filter(p => inRange(p.date));
+  const cashRange = cash.filter(c => inRange(c.date));
+  const repayRange = repayments.filter(r => inRange(r.date));
+
+  const totalDeployed = depRange.reduce((s,d) => s + N(d.amount), 0);
+  const totalReceived = payRange.reduce((s,p) => s + N(p.amount), 0);
+  const cashIn = cashRange.filter(c => c.type === 'in').reduce((s,c) => s + N(c.amount), 0);
+  const cashOut = cashRange.filter(c => c.type === 'out').reduce((s,c) => s + N(c.amount), 0);
+  const repaid = repayRange.reduce((s,r) => s + N(r.amount) + N(r.interest), 0);
+  const net = totalReceived - totalDeployed;
+
+  let body = reportHeader('Period Report', startDate + ' → ' + endDate);
+
+  body += '<div class="rpt-kpi">' +
+    '<div><div class="lbl">Deployed</div><div class="val" style="color:#f59e0b">' + F(totalDeployed) + '</div></div>' +
+    '<div><div class="lbl">Received</div><div class="val" style="color:#10b981">' + F(totalReceived) + '</div></div>' +
+    '<div><div class="lbl">Net</div><div class="val" style="color:' + (net >= 0 ? '#10b981' : '#ef4444') + '">' + F(net) + '</div></div>' +
+    '<div><div class="lbl">Cash In/Out</div><div class="val" style="font-size:14px">' + F(cashIn) + ' / ' + F(cashOut) + '</div></div>' +
+    '<div><div class="lbl">Repaid</div><div class="val" style="color:#ef4444">' + F(repaid) + '</div></div>' +
+  '</div>';
+
+  /* Deployments table */
+  body += '<div class="sec-title">Deployments (' + depRange.length + ')</div>';
+  body += '<table><thead><tr><th>Date</th><th>Project</th><th>Category</th><th>Purpose</th><th>Amount</th></tr></thead><tbody>';
+  depRange.forEach(d => {
+    const proj = NB.projects.find(p => p.id === d.projectId);
+    body += '<tr><td>' + E(d.date) + '</td><td>' + E(proj ? proj.name : '-') + '</td><td>' + E(d.category || '-') + '</td><td>' + E(d.purpose || '-') + '</td><td>' + F(d.amount) + '</td></tr>';
+  });
+  body += '</tbody></table>';
+
+  /* Payments table */
+  body += '<div class="sec-title">Shop Payments (' + payRange.length + ')</div>';
+  body += '<table><thead><tr><th>Date</th><th>Project</th><th>Method</th><th>Amount</th></tr></thead><tbody>';
+  payRange.forEach(p => {
+    const proj = NB.projects.find(x => x.id === p.projectId);
+    body += '<tr><td>' + E(p.date) + '</td><td>' + E(proj ? proj.name : '-') + '</td><td><span class="badge" style="background:#dbeafe">' + E(p.method) + '</span></td><td>' + F(p.amount) + '</td></tr>';
+  });
+  body += '</tbody></table>';
+
+  openPrintReport('Period Report ' + startDate + ' to ' + endDate, body);
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   K3 — REPORT: PROJECT P&L
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbReportProject = async function(projectId) {
+  const [deployments, payments, sources] = await Promise.all([
+    NB.load('ncDeployments'),
+    NB.load('ncShopPayments'),
+    NB.load('ncMoneySources')
+  ]);
+
+  const proj = NB.projects.find(p => p.id === projectId);
+  if (!proj) { NB.toast('Project not found', 'error'); return; }
+
+  const dep = deployments.filter(d => d.projectId === projectId);
+  const pay = payments.filter(p => p.projectId === projectId);
+  const totalDep = dep.reduce((s,d) => s + N(d.amount), 0);
+  const totalRec = pay.reduce((s,p) => s + N(p.amount), 0);
+  const net = totalRec - totalDep;
+  const roi = totalDep > 0 ? (net / totalDep * 100) : 0;
+
+  let body = reportHeader('Project P&L — ' + proj.name,
+    (proj.client ? 'Client: ' + proj.client + ' · ' : '') +
+    (proj.defaultCategory ? 'Category: ' + proj.defaultCategory : ''));
+
+  body += '<div class="rpt-kpi">' +
+    '<div><div class="lbl">Invested</div><div class="val" style="color:#f59e0b">' + F(totalDep) + '</div></div>' +
+    '<div><div class="lbl">Received</div><div class="val" style="color:#10b981">' + F(totalRec) + '</div></div>' +
+    '<div><div class="lbl">Net</div><div class="val" style="color:' + (net >= 0 ? '#10b981' : '#ef4444') + '">' + F(net) + '</div></div>' +
+    '<div><div class="lbl">ROI</div><div class="val">' + roi.toFixed(1) + '%</div></div>' +
+  '</div>';
+
+  body += '<div class="sec-title">Money Sources Used</div>';
+  body += '<table><thead><tr><th>Date</th><th>Source</th><th>Category</th><th>Purpose</th><th>Amount</th></tr></thead><tbody>';
+  dep.forEach(d => {
+    const src = sources.find(s => s.id === d.sourceId);
+    body += '<tr><td>' + E(d.date) + '</td><td>' + E(src ? (src.party || src.type) : '-') + '</td><td>' + E(d.category || '-') + '</td><td>' + E(d.purpose || '-') + '</td><td>' + F(d.amount) + '</td></tr>';
+  });
+  body += '</tbody></table>';
+
+  body += '<div class="sec-title">Shop Payments Received</div>';
+  body += '<table><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Notes</th></tr></thead><tbody>';
+  pay.forEach(p => {
+    body += '<tr><td>' + E(p.date) + '</td><td>' + E(p.method) + '</td><td>' + F(p.amount) + '</td><td>' + E(p.notes || '-') + '</td></tr>';
+  });
+  body += '</tbody></table>';
+
+  openPrintReport('P&L ' + proj.name, body);
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   K4 — REPORT: SOURCE LEDGER (loan history)
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbReportSource = async function(sourceId) {
+  const src = NB.sources.find(s => s.id === sourceId);
+  if (!src) { NB.toast('Source not found', 'error'); return; }
+
+  const [deployments, repayments] = await Promise.all([
+    NB.load('ncDeployments'),
+    NB.load('ncSourceRepayments')
+  ]);
+
+  const dep = deployments.filter(d => d.sourceId === sourceId);
+  const rep = repayments.filter(r => r.sourceId === sourceId);
+
+  const totalDep = dep.reduce((s,d) => s + N(d.amount), 0);
+  const totalRep = rep.reduce((s,r) => s + N(r.amount), 0);
+  const interestPaid = rep.reduce((s,r) => s + N(r.interest), 0);
+  const balance = N(src.amount) - totalRep;
+  const available = N(src.amount) - totalDep;
+
+  let body = reportHeader('Source Ledger — ' + (src.party || src.type),
+    'Type: ' + src.type + (src.date ? ' · Opened ' + src.date : ''));
+
+  body += '<div class="rpt-kpi">' +
+    '<div><div class="lbl">Total</div><div class="val">' + F(src.amount) + '</div></div>' +
+    '<div><div class="lbl">Deployed</div><div class="val" style="color:#f59e0b">' + F(totalDep) + '</div></div>' +
+    '<div><div class="lbl">Available</div><div class="val" style="color:#10b981">' + F(available) + '</div></div>' +
+    '<div><div class="lbl">Repaid</div><div class="val" style="color:#ef4444">' + F(totalRep) + '</div></div>' +
+    '<div><div class="lbl">Outstanding</div><div class="val">' + F(balance) + '</div></div>' +
+    '<div><div class="lbl">Interest Paid</div><div class="val">' + F(interestPaid) + '</div></div>' +
+  '</div>';
+
+  body += '<div class="sec-title">Deployments From This Source</div>';
+  body += '<table><thead><tr><th>Date</th><th>Project</th><th>Category</th><th>Amount</th></tr></thead><tbody>';
+  dep.forEach(d => {
+    const proj = NB.projects.find(p => p.id === d.projectId);
+    body += '<tr><td>' + E(d.date) + '</td><td>' + E(proj ? proj.name : '-') + '</td><td>' + E(d.category || '-') + '</td><td>' + F(d.amount) + '</td></tr>';
+  });
+  body += '</tbody></table>';
+
+  body += '<div class="sec-title">Repayments</div>';
+  body += '<table><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Interest</th><th>Notes</th></tr></thead><tbody>';
+  rep.forEach(r => {
+    body += '<tr><td>' + E(r.date) + '</td><td>' + E(r.method) + '</td><td>' + F(r.amount) + '</td><td>' + F(r.interest || 0) + '</td><td>' + E(r.notes || '-') + '</td></tr>';
+  });
+  body += '</tbody></table>';
+
+  openPrintReport('Source Ledger — ' + (src.party || src.type), body);
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   K5 — REPORT: MASTER TIMELINE
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.nbReportTimeline = async function() {
+  const [sources, deployments, payments, cash, repayments] = await Promise.all([
+    NB.load('ncMoneySources'), NB.load('ncDeployments'), NB.load('ncShopPayments'),
+    NB.load('ncCashLedger'), NB.load('ncSourceRepayments')
+  ]);
+
+  const events = [];
+  sources.forEach(s => events.push({ date: s.date, icon:'↓', color:'#10b981', desc:'Money IN: ' + (s.party || s.type), amt: N(s.amount) }));
+  deployments.forEach(d => events.push({ date: d.date, icon:'→', color:'#f59e0b', desc:'Deploy: ' + (NB.projects.find(p => p.id === d.projectId)?.name || '-') + ' · ' + (d.category || ''), amt: -N(d.amount) }));
+  payments.forEach(p => events.push({ date: p.date, icon:'$', color:'#0ea5e9', desc:'Shop paid: ' + p.method, amt: N(p.amount) }));
+  cash.forEach(c => events.push({ date: c.date, icon:'C', color: c.type === 'in' ? '#10b981' : '#ef4444', desc: 'Cash ' + c.type, amt: c.type === 'in' ? N(c.amount) : -N(c.amount) }));
+  repayments.forEach(r => events.push({ date: r.date, icon:'←', color:'#dc2626', desc:'Repay: ' + r.method, amt: -(N(r.amount) + N(r.interest)) }));
+
+  events.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+
+  let body = reportHeader('Master Transaction Timeline', events.length + ' events');
+
+  body += '<table><thead><tr><th>Date</th><th>Event</th><th>Amount</th></tr></thead><tbody>';
+  events.forEach(e => {
+    body += '<tr>' +
+      '<td>' + E(e.date || '-') + '</td>' +
+      '<td><span style="display:inline-block;width:22px;height:22px;text-align:center;line-height:22px;background:' + e.color + '22;color:' + e.color + ';border-radius:50%;font-weight:700;font-size:11px;margin-right:8px">' + e.icon + '</span>' + E(e.desc) + '</td>' +
+      '<td style="font-weight:700;color:' + (e.amt >= 0 ? '#10b981' : '#ef4444') + '">' + (e.amt >= 0 ? '+' : '') + F(e.amt) + '</td>' +
+    '</tr>';
+  });
+  body += '</tbody></table>';
+
+  openPrintReport('Master Timeline', body);
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   K6 — REPORTS VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+
+function renderReportsView() {
+  const el = $('nbReportsBody'); if (!el) return;
+
+  const projOpts = (NB.projects || []).map(p => '<option value="' + E(p.id) + '">' + E(p.name) + '</option>').join('');
+  const srcOpts = (NB.sources || []).map(s => '<option value="' + E(s.id) + '">' + E(s.party || s.type) + '</option>').join('');
+
+  let html =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">' +
+
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-calendar-alt" style="color:var(--primary)"></i> Period Report</h4>' +
+        '<p style="font-size:12px;color:var(--gray);margin:8px 0">Everything between two dates.</p>' +
+        '<div class="form-group"><label>From</label><input type="date" id="rptFrom" value="' + new Date(Date.now() - 30*86400000).toISOString().slice(0,10) + '"></div>' +
+        '<div class="form-group"><label>To</label><input type="date" id="rptTo" value="' + T() + '"></div>' +
+        '<button class="btn btn-primary btn-sm" onclick="nbReportPeriod(document.getElementById(\'rptFrom\').value, document.getElementById(\'rptTo\').value)"><i class="fas fa-file-pdf"></i> Generate</button>' +
+      '</div>' +
+
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-project-diagram" style="color:var(--success)"></i> Project P&L</h4>' +
+        '<p style="font-size:12px;color:var(--gray);margin:8px 0">Per-project invested vs received + ROI.</p>' +
+        '<div class="form-group"><label>Project</label><select id="rptProj"><option value="">-- Select --</option>' + projOpts + '</select></div>' +
+        '<button class="btn btn-primary btn-sm" onclick="nbReportProject(document.getElementById(\'rptProj\').value)"><i class="fas fa-file-pdf"></i> Generate</button>' +
+      '</div>' +
+
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-hand-holding-usd" style="color:var(--warning)"></i> Source Ledger</h4>' +
+        '<p style="font-size:12px;color:var(--gray);margin:8px 0">Full history of a loan or capital source.</p>' +
+        '<div class="form-group"><label>Source</label><select id="rptSrc"><option value="">-- Select --</option>' + srcOpts + '</select></div>' +
+        '<button class="btn btn-primary btn-sm" onclick="nbReportSource(document.getElementById(\'rptSrc\').value)"><i class="fas fa-file-pdf"></i> Generate</button>' +
+      '</div>' +
+
+      '<div class="admin-card">' +
+        '<h4><i class="fas fa-stream" style="color:#8b5cf6"></i> Master Timeline</h4>' +
+        '<p style="font-size:12px;color:var(--gray);margin:8px 0">Every transaction, chronologically.</p>' +
+        '<button class="btn btn-primary btn-sm" style="margin-top:22px" onclick="nbReportTimeline()"><i class="fas fa-file-pdf"></i> Generate</button>' +
+      '</div>' +
+
+    '</div>';
+  el.innerHTML = html;
+}
+
+function injectViewK() {
+  const main = document.querySelector('.main-content');
+  if (!main || $('nbReportsView')) return;
+  const v = document.createElement('div');
+  v.id = 'nbReportsView';
+  v.className = 'view-content';
+  v.innerHTML =
+    '<div class="card"><div class="card-header">' +
+      '<h2 class="card-title"><i class="fas fa-file-pdf" style="color:var(--primary);margin-right:8px"></i>Printable Reports</h2>' +
+      '<button class="btn btn-secondary btn-sm" onclick="nbRefreshReportsView()"><i class="fas fa-sync"></i> Refresh</button>' +
+    '</div>' +
+    '<div style="background:#e0e7ff;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#4338ca">' +
+      '<i class="fas fa-info-circle"></i> Opens a print-ready page — use browser Print → Save as PDF. Works on mobile.' +
+    '</div>' +
+    '<div id="nbReportsBody"></div></div>';
+  main.appendChild(v);
+}
+
+window.nbRefreshReportsView = async function() {
+  if (typeof loadData === 'function') await loadData();
+  if (typeof window.loadB === 'function') await window.loadB();
+  try { NB.cheques = (Array.isArray(allCheques)?allCheques:[]).filter(c => !c.deletedAt); } catch(e){}
+  renderReportsView();
+  NB.toast('Reports refreshed', 'success');
+};
+
+function injectSidebarK() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav || $('nbSidebarSectionK')) return;
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'nbSidebarSectionK';
+  sect.dataset.nctab = 'finance';
+  sect.innerHTML =
+    '<div class="nav-title">Reports</div>' +
+    '<div class="nav-item" onclick="nbGo(\'nbReportsView\',\'Printable Reports\',this)"><i class="fas fa-file-pdf"></i><span>Printable Reports</span></div>';
+  const cont = $('ncSectionsContainer') || nav;
+  const finSec = $('ncSection-finance') || cont;
+  finSec.appendChild(sect);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   K7 — CAPSTONE: SYSTEM STATUS PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+
+function renderCapstonePanel() {
+  const dash = $('dashboardView');
+  if (!dash) return;
+  let panel = $('nbCapstonePanel');
+  if (panel) return;
+
+  panel = document.createElement('div');
+  panel.id = 'nbCapstonePanel';
+  panel.style.cssText = 'margin-top:20px;background:linear-gradient(135deg,#1e293b,#0f172a);color:white;border-radius:14px;padding:20px';
+  panel.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+      '<div>' +
+        '<div style="font-size:16px;font-weight:800">🎯 Business Ledger — Complete</div>' +
+        '<div style="font-size:11px;opacity:0.8;margin-top:2px">Parts A → K · ' + new Date().toLocaleDateString() + '</div>' +
+      '</div>' +
+      '<button class="btn btn-sm" style="background:rgba(255,255,255,0.1);color:white;border:none" onclick="document.getElementById(\'nbCapstonePanel\').style.display=\'none\'">' +
+        '<i class="fas fa-times"></i>' +
+      '</button>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;font-size:11px">' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Money Sources & Deployments</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Shop Payments & Cash</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Bulk Cheque Intake</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Reinvestment Chain</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Project P&L</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Repayment & Cash↔Bank</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Alerts & Interest</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Backup & Health</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Forecasts & Analytics</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Multi-Currency & EMI</div>' +
+      '<div style="background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:6px"><i class="fas fa-check" style="color:#10b981;margin-right:6px"></i>Printable PDF Reports</div>' +
+    '</div>';
+  dash.appendChild(panel);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   K8 — BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+
+function bootK() {
+  injectViewK();
+  injectSidebarK();
+  setTimeout(renderCapstonePanel, 2000);
+
+  setInterval(() => {
+    if ($('nbReportsView')?.classList.contains('active') && !$('nbReportsBody').innerHTML.trim()) renderReportsView();
+  }, 3000);
+
+  console.log('[Biz K] ✅ PDF Reports + Capstone ready');
+  console.log('');
+  console.log('%c╔══════════════════════════════════════════════════════╗', 'color:#6366f1;font-weight:bold');
+  console.log('%c║  NEONCHEQUE BUSINESS LEDGER — ALL PARTS LOADED       ║', 'color:#6366f1;font-weight:bold');
+  console.log('%c║  A • B • C • D • E • F • G • H • I • J • K           ║', 'color:#6366f1;font-weight:bold');
+  console.log('%c║  100% interconnected · Firestore-backed              ║', 'color:#6366f1;font-weight:bold');
+  console.log('%c╚══════════════════════════════════════════════════════╝', 'color:#6366f1;font-weight:bold');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(bootK, 11800));
+else setTimeout(bootK, 11800);
+
+})();
+</script>
 <!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
      Appended at end of file. Runs alongside the existing console blocker.
