@@ -12156,20 +12156,18 @@ else setTimeout(boot, 3200);
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
-     CHANGE #8 — 3-Tab Sidebar Layout
-     • Top tabs: Cheques / Finance / Payments
-     • Auto-sorts every existing nav-item into the right tab
-     • Auto-switches on route/view change
-     • Self-healing reorg (safe with v10 + Change #2–#7)
+     CHANGE #8 v2 — 3-Tab Sidebar Layout (FIXED)
+     • Tab switching only on route/view change — NOT on interval
+     • Manual tab clicks honored for 15 seconds
+     • Self-healing reorg still works
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__ncChange8) return;
-window.__ncChange8 = true;
+if (window.__ncChange8v2) return;
+window.__ncChange8v2 = true;
 
 const $  = id => document.getElementById(id);
-const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 const TAB_META = {
   cheques:  { label:'Cheques',  icon:'fa-money-check-alt', color:'#6366f1' },
@@ -12177,29 +12175,26 @@ const TAB_META = {
   payments: { label:'Payments', icon:'fa-exchange-alt',    color:'#10b981' }
 };
 
-/* ─────── TAB DETECTION FOR A NAV-ITEM ─────── */
+/* ─────── TAB DETECTION ─────── */
 function getTab(el) {
   const oc = (el.getAttribute('onclick') || '').toLowerCase();
   const txt = (el.textContent || '').toLowerCase().trim();
 
-  /* Finance */
   if (oc.includes('ncfinanceroute')) return 'finance';
   if (/ncv10-loans|ncv10-projects|nc-?projects|nc-?loans/.test(oc)) return 'finance';
   if (/^(loans|projects|finance ledger|finance dashboard)$/.test(txt)) return 'finance';
 
-  /* Payments */
   if (/ncv10-inp|ncv10-out|ncv10-banks|ncv10-txns|ncv10-parties/.test(oc)) return 'payments';
   if (/^(in payments|out payments|bank accounts|bank transactions|parties)$/.test(txt)) return 'payments';
   if (/in payment|out payment|bank account|bank transaction/i.test(txt)) return 'payments';
 
-  /* Cheques (default + explicit) */
   if (oc.includes('ncv10-cats')) return 'cheques';
   if (/cheque categories|categories/i.test(txt)) return 'cheques';
 
   return 'cheques';
 }
 
-/* ─────── CREATE THE TAB BAR ─────── */
+/* ─────── TAB BAR ─────── */
 function createTabBar(nav) {
   const bar = document.createElement('div');
   bar.id = 'ncMainTabs';
@@ -12211,7 +12206,7 @@ function createTabBar(nav) {
     const btn = document.createElement('button');
     btn.className = 'nc-tab';
     btn.dataset.tab = key;
-    btn.onclick = () => window.ncSwitchTab(key);
+    btn.onclick = () => manualSwitchTab(key);
     btn.style.cssText =
       'flex:1;padding:8px 4px;border:none;background:transparent;border-radius:9px;' +
       'font-weight:700;font-size:11px;cursor:pointer;color:var(--gray);' +
@@ -12227,7 +12222,7 @@ function createTabBar(nav) {
   return bar;
 }
 
-/* ─────── CREATE / GET A TAB SECTION ─────── */
+/* ─────── SECTIONS ─────── */
 function getOrCreateSection(tab) {
   const id = 'ncSection-' + tab;
   let s = document.getElementById(id);
@@ -12247,7 +12242,7 @@ function getOrCreateSection(tab) {
   return s;
 }
 
-/* ─────── APPLY ACTIVE TAB (SHOW/HIDE SECTIONS + HIGHLIGHT BUTTON) ─────── */
+/* ─────── APPLY TAB (VISUAL) ─────── */
 function applyTab(tab, silent) {
   if (!TAB_META[tab]) tab = 'cheques';
 
@@ -12270,50 +12265,49 @@ function applyTab(tab, silent) {
   }
 }
 
-window.ncSwitchTab = function (tab) {
-  applyTab(tab);
-  /* Scroll sidebar to top */
+/* ─────── MANUAL SWITCH (user clicked tab) ─────── */
+let __manualAt = 0;
+function manualSwitchTab(tab) {
+  __manualAt = Date.now();
+  applyTab(tab, false);
   const sb = document.getElementById('sidebar');
   if (sb) sb.scrollTop = 0;
-};
+  console.log('[Change #8] Manual tab → ' + tab);
+}
+window.ncSwitchTab = manualSwitchTab;
 
-/* ─────── THE REORGANIZER ─────── */
+/* ─────── REORGANIZER ─────── */
 function reorgSidebar() {
   const nav = document.querySelector('.sidebar nav');
   if (!nav) return;
 
-  /* Ensure container + tab bar exist */
   let cont = document.getElementById('ncSectionsContainer');
   if (!cont) {
     cont = document.createElement('div');
     cont.id = 'ncSectionsContainer';
     nav.appendChild(cont);
   }
-  if (!document.getElementById('ncMainTabs')) {
-    createTabBar(nav);
-  }
+  if (!document.getElementById('ncMainTabs')) createTabBar(nav);
 
-  /* Ensure 3 sections */
   const sections = {
     cheques:  getOrCreateSection('cheques'),
     finance:  getOrCreateSection('finance'),
     payments: getOrCreateSection('payments')
   };
 
-  /* Gather all nav-items that ARE inside our 3 sections */
+  /* Track existing items */
   const ourItems = new Set();
   Object.values(sections).forEach(s => {
     s.querySelectorAll('.nav-item').forEach(el => ourItems.add(el));
   });
 
-  /* Build "seen" map by (onclick|text) key */
   const seen = new Map();
   ourItems.forEach(el => {
     const key = (el.getAttribute('onclick') || '') + '|' + (el.textContent || '').trim();
     seen.set(key, el);
   });
 
-  /* Now scan for nav-items NOT in our sections */
+  /* Move any outside items into correct tab */
   const allItems = Array.from(nav.querySelectorAll('.nav-item'));
   let moved = 0;
   allItems.forEach(el => {
@@ -12321,18 +12315,14 @@ function reorgSidebar() {
     if (el.closest('#ncMainTabs')) return;
 
     const key = (el.getAttribute('onclick') || '') + '|' + (el.textContent || '').trim();
-    if (seen.has(key)) {
-      /* Duplicate — remove */
-      el.remove();
-      return;
-    }
+    if (seen.has(key)) { el.remove(); return; }
     seen.set(key, el);
     const tab = getTab(el);
     sections[tab].appendChild(el);
     moved++;
   });
 
-  /* Move special widgets into Finance section (Personal + Finance tracker) */
+  /* Move special widgets */
   ['ncPersonalWidget', 'ncFinanceSection'].forEach(id => {
     const w = document.getElementById(id);
     if (w && !w.closest('#ncSectionsContainer')) {
@@ -12341,7 +12331,7 @@ function reorgSidebar() {
     }
   });
 
-  /* Remove orphaned sections that have no nav-items left */
+  /* Clean orphans */
   nav.querySelectorAll('.nav-section').forEach(s => {
     if (s.closest('#ncSectionsContainer')) return;
     if (s.id === 'ncPersonalWidget' || s.id === 'ncFinanceSection') return;
@@ -12350,43 +12340,79 @@ function reorgSidebar() {
     }
   });
 
-  /* Apply last active tab */
+  /* Apply saved tab */
   let saved = 'cheques';
   try { saved = localStorage.getItem('ncActiveTab') || 'cheques'; } catch(e){}
   applyTab(saved, true);
 
-  if (moved > 0) {
-    console.log('[Change #8] Sidebar reorganized — ' + moved + ' item(s) moved into tabs');
-  }
+  if (moved > 0) console.log('[Change #8] Reorganized — ' + moved + ' item(s) moved');
 }
 
-/* ─────── AUTO-TAB ON ROUTE CHANGE ─────── */
-function autoSwitchForCurrentView() {
-  const active = document.querySelector('.view-content.active');
-  if (!active) return;
-  const id = active.id || '';
+/* ─────── AUTO-SWITCH — ONLY WHEN VIEW CHANGES ─────── */
+let __lastViewId = '';
 
-  let tab = null;
-  if (['ncV10LoansView','ncV10ProjectsView','ncFinanceLedgerView'].includes(id)) {
-    tab = 'finance';
-  } else if (['ncV10InpView','ncV10OutView','ncV10BanksView','ncV10TxnsView','ncV10PartiesView'].includes(id)) {
-    tab = 'payments';
-  } else if (id) {
-    tab = 'cheques';
+function viewToTab(viewId) {
+  if (!viewId) return null;
+  if (['ncV10LoansView','ncV10ProjectsView','ncFinanceLedgerView'].includes(viewId)) return 'finance';
+  if (['ncV10InpView','ncV10OutView','ncV10BanksView','ncV10TxnsView','ncV10PartiesView'].includes(viewId)) return 'payments';
+  if (['dashboardView','allChequesView','inHandView','returnedView','recycleView','payeesView','issuersView','kanbanView','timelineView','analyticsView','booksView','reportsView','agingView','auditView','settingsView','ncV10CatsView'].includes(viewId)) return 'cheques';
+  return null;
+}
+
+function checkViewChange() {
+  const active = document.querySelector('.view-content.active');
+  const id = active ? active.id : '';
+  if (id === __lastViewId) return;   /* no change → do nothing */
+  __lastViewId = id;
+
+  /* Respect manual tab click for 15 seconds */
+  if (Date.now() - __manualAt < 15000) {
+    console.log('[Change #8] View changed to ' + id + ' — tab switch suppressed (manual grace)');
+    return;
   }
-  if (!tab) return;
+
+  const targetTab = viewToTab(id);
+  if (!targetTab) return;
 
   const current = (function(){ try { return localStorage.getItem('ncActiveTab'); } catch(e){ return null; } })();
-  if (current !== tab) applyTab(tab);
+  if (current !== targetTab) {
+    console.log('[Change #8] View changed to ' + id + ' → switching tab to ' + targetTab);
+    applyTab(targetTab, false);
+  }
 }
 
-/* ─────── HOOK ROUTING FUNCTIONS TO AUTO-SWITCH TABS ─────── */
+/* ─────── OBSERVE VIEW CLASS CHANGES ONLY ─────── */
+function startViewObserver() {
+  const main = document.querySelector('.main-content');
+  if (!main) return setTimeout(startViewObserver, 400);
+  if (main.__ncC8ViewObs) return;
+  main.__ncC8ViewObs = true;
+
+  /* MutationObserver on class changes → detects view switch */
+  const obs = new MutationObserver(muts => {
+    for (const m of muts) {
+      if (m.type === 'attributes' && m.attributeName === 'class') {
+        const el = m.target;
+        if (el.classList && el.classList.contains('view-content')) {
+          setTimeout(checkViewChange, 60);
+          return;
+        }
+      }
+    }
+  });
+  obs.observe(main, { attributes: true, attributeFilter: ['class'], subtree: true });
+
+  /* Initial */
+  checkViewChange();
+}
+
+/* ─────── HOOK ROUTE FUNCTIONS ─────── */
 function hookFn(name, wrapper) {
   if (typeof window[name] !== 'function') return false;
-  if (window[name].__ncC8Hooked) return true;
+  if (window[name].__ncC8v2Hooked) return true;
   const orig = window[name];
   const hooked = wrapper(orig);
-  hooked.__ncC8Hooked = true;
+  hooked.__ncC8v2Hooked = true;
   window[name] = hooked;
   return true;
 }
@@ -12395,45 +12421,39 @@ function installHooks() {
   ['showView','ncV10Route','ncFinanceRoute','ncAORoute'].forEach(name => {
     hookFn(name, orig => function () {
       const r = orig.apply(this, arguments);
-      setTimeout(autoSwitchForCurrentView, 150);
+      /* Give the view some time to activate, then check */
+      setTimeout(checkViewChange, 200);
       return r;
     });
   });
 }
 
-/* ─────── MUTATION OBSERVER (SELF-HEALING) ─────── */
+/* ─────── MUTATION OBSERVER ON NAV (SELF-HEALING) ─────── */
 function shouldReorg() {
   const nav = document.querySelector('.sidebar nav');
   if (!nav) return false;
-
-  /* Any nav-item outside our container? */
   const outside = Array.from(nav.querySelectorAll('.nav-item')).filter(el => !el.closest('#ncSectionsContainer'));
   if (outside.length > 0) return true;
-
-  /* Any live widget outside our container? */
   if (document.getElementById('ncPersonalWidget') && !document.getElementById('ncPersonalWidget').closest('#ncSectionsContainer')) return true;
   if (document.getElementById('ncFinanceSection') && !document.getElementById('ncFinanceSection').closest('#ncSectionsContainer')) return true;
-
-  /* Tab bar missing? */
   if (!document.getElementById('ncMainTabs')) return true;
-
   return false;
 }
 
-let reorgScheduled = null;
+let __reorgScheduled = null;
 function scheduleReorg() {
-  if (reorgScheduled) return;
-  reorgScheduled = setTimeout(() => {
-    reorgScheduled = null;
-    try { reorgSidebar(); } catch (e) { console.warn('[Change #8] reorg error', e); }
-  }, 250);
+  if (__reorgScheduled) return;
+  __reorgScheduled = setTimeout(() => {
+    __reorgScheduled = null;
+    try { reorgSidebar(); } catch(e) { console.warn('[Change #8] reorg error', e); }
+  }, 300);
 }
 
-function startObserver() {
+function startNavObserver() {
   const nav = document.querySelector('.sidebar nav');
-  if (!nav) return setTimeout(startObserver, 300);
-  if (nav.__ncC8Watched) return;
-  nav.__ncC8Watched = true;
+  if (!nav) return setTimeout(startNavObserver, 300);
+  if (nav.__ncC8v2Watched) return;
+  nav.__ncC8v2Watched = true;
 
   const obs = new MutationObserver(() => {
     if (shouldReorg()) scheduleReorg();
@@ -12443,9 +12463,9 @@ function startObserver() {
 
 /* ─────── BOOT ─────── */
 function boot() {
-  /* First pass immediately, then another after all modules settle */
   reorgSidebar();
-  startObserver();
+  startNavObserver();
+  startViewObserver();
   installHooks();
 
   setTimeout(reorgSidebar, 400);
@@ -12453,13 +12473,12 @@ function boot() {
   setTimeout(reorgSidebar, 2500);
   setTimeout(reorgSidebar, 4500);
 
-  /* Safety net every 3s (cheap check) */
+  /* Cheap safety net — reorg only, NO auto-switch */
   setInterval(() => {
     if (shouldReorg()) reorgSidebar();
-    autoSwitchForCurrentView();
   }, 3000);
 
-  console.log('[Change #8] ✅ 3-tab sidebar active (Cheques / Finance / Payments)');
+  console.log('[Change #8 v2] ✅ 3-tab sidebar active — manual clicks honored');
 }
 
 if (document.readyState === 'loading') {
