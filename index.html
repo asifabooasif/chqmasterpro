@@ -11270,43 +11270,30 @@ else setTimeout(boot, 2500);
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
-     CHANGE #6 — Bank Deposit Categorization
-     • Category field on every bank transaction
-     • Auto-tag from linked cheque / in-payment / out-payment
-     • Per-bank category breakdown widget
-     • Category filter in Bank Transactions view
-     • Full source traceability (sourceType + sourceId)
+     CHANGE #6 v2 — Bank Transaction Auto-Categorization (FIXED)
+     • Real-time listener catches new txns
+     • Resolves category from loan / cheque / in-payment / out-payment
+     • "Tag All Untagged" button
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__ncChange6) return;
-window.__ncChange6 = true;
+if (window.__ncChange6v2) return;
+window.__ncChange6v2 = true;
 
 const $  = id => document.getElementById(id);
 const N  = n  => parseFloat(n) || 0;
 const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
-const T  = () => new Date().toISOString().slice(0,10);
 const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
 const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
-const getCheques = () => { try { return (Array.isArray(allCheques) ? allCheques : []).filter(c => !c.deletedAt); } catch(e){ return []; } };
 
 function toast(m, t) {
   try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
   console.log('['+(t||'info')+']', m);
 }
 
-/* ─────── CACHE ─────── */
-const C6 = {
-  cats: [],
-  banks: [],
-  txns: [],
-  out: [],
-  inp: [],
-  loans: [],
-  activeCatFilter: 'ALL'
-};
+const C6 = { cats:[], banks:[], txns:[], out:[], inp:[], loans:[], cheques:[] };
+let __txnUnsub = null;
 
 async function loadC6() {
   const db = DB(); if (!db) return;
@@ -11314,9 +11301,9 @@ async function loadC6() {
     const [cs, bs, ts, os, is, ls] = await Promise.all([
       db.collection('chequeCategories').get().catch(()=>({docs:[]})),
       db.collection('bankAccounts').get().catch(()=>({docs:[]})),
-      db.collection('bankTransactions').orderBy('date','desc').limit(1000).get().catch(()=>({docs:[]})),
-      db.collection('outPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
-      db.collection('inPayments').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('bankTransactions').orderBy('date','desc').limit(500).get().catch(()=>({docs:[]})),
+      db.collection('outPayments').orderBy('date','desc').limit(300).get().catch(()=>({docs:[]})),
+      db.collection('inPayments').orderBy('date','desc').limit(300).get().catch(()=>({docs:[]})),
       db.collection('loans').get().catch(()=>({docs:[]}))
     ]);
     C6.cats  = cs.docs.map(d => Object.assign({id:d.id}, d.data()));
@@ -11325,163 +11312,195 @@ async function loadC6() {
     C6.out   = os.docs.map(d => Object.assign({id:d.id}, d.data()));
     C6.inp   = is.docs.map(d => Object.assign({id:d.id}, d.data()));
     C6.loans = ls.docs.map(d => Object.assign({id:d.id}, d.data()));
-    renderBankCategoryWidget();
-    renderBankTxnsView();
-  } catch(e) { console.warn('[Change #6] load', e.message); }
-}
-
-const catColor = name => (C6.cats.find(c => c.name === name) || {}).color || '#64748b';
-
-/* ─────── CATEGORY SELECT OPTIONS HELPER ─────── */
-function categoryOptions(includeBlank, selectedValue) {
-  const opts = (includeBlank ? '<option value="">-- None --</option>' : '') +
-    C6.cats.map(c => '<option value="'+E(c.name)+'"'+(c.name===selectedValue?' selected':'')+'>'+E(c.name)+'</option>').join('');
-  return opts;
-}
-
-/* ─────── 1. AUTO-TAG NEW TXNS FROM SOURCES ─────── */
-
-/**
- * Given a bank transaction being created with a `reference` like "cheque:ID",
- * "inpayment:ID", "outpayment:ID", "loan:ID" — look up the source and return
- * its category (if any).
- */
-async function resolveCategoryFromSource(txn) {
-  const ref = txn.reference || '';
-  if (!ref) return null;
-
-  const m = ref.match(/^(cheque|inpayment|outpayment|loan)[:_](.+)$/i);
-  if (!m) return null;
-
-  const type = m[1].toLowerCase();
-  const id   = m[2];
-
-  try {
-    if (type === 'cheque') {
-      const snap = await DB().collection('cheques').doc(id).get();
-      if (snap.exists) return snap.data().category || null;
-    } else if (type === 'inpayment') {
-      const snap = await DB().collection('inPayments').doc(id).get();
-      if (snap.exists) return snap.data().category || null;
-    } else if (type === 'outpayment') {
-      const snap = await DB().collection('outPayments').doc(id).get();
-      if (snap.exists) return snap.data().category || null;
-    } else if (type === 'loan') {
-      /* loan payments don't have a category per-se, but allocations might.
-         Try to grab the first allocation's category as a hint. */
-      const snap = await DB().collection('loans').doc(id).get();
-      if (snap.exists) {
-        const l = snap.data();
-        const allocs = l.allocations || [];
-        if (allocs.length > 0) return allocs[0].category || null;
-      }
-    }
+    try {
+      C6.cheques = (Array.isArray(allCheques) ? allCheques : []).filter(c => !c.deletedAt);
+    } catch(e) { C6.cheques = []; }
   } catch(e) {}
+}
+
+/* ─── RESOLVE CATEGORY FOR A TXN ─── */
+async function resolveCategory(txn) {
+  const db = DB(); if (!db) return null;
+  const ref = (txn.reference || '').toLowerCase();
+  const desc = (txn.description || '').toLowerCase();
+
+  /* 1. Loan reference */
+  const mLoan = ref.match(/loan[:_]([a-z0-9]+)/);
+  if (mLoan) {
+    try {
+      const s = await db.collection('loans').doc(mLoan[1]).get();
+      if (s.exists) {
+        const l = s.data();
+        const allocs = l.allocations || [];
+        if (allocs.length > 0) return { cat: allocs[0].category, src:'loan-allocation' };
+        return { cat: 'Finance', src:'loan' };
+      }
+    } catch(e){}
+  }
+
+  /* 2. Cheque reference */
+  const mChq = ref.match(/cheque[:_]([a-z0-9]+)/);
+  if (mChq) {
+    try {
+      const s = await db.collection('cheques').doc(mChq[1]).get();
+      if (s.exists && s.data().category) return { cat: s.data().category, src:'cheque' };
+    } catch(e){}
+  }
+
+  /* 3. Description hints */
+  if (desc.includes('loan payment')) return { cat:'Finance', src:'loan-desc' };
+
+  /* 4. Match recent in/out payment by amount + bank + within 5 min */
+  const cutoff = Date.now() - 5 * 60 * 1000;
+  const amt = N(txn.amount);
+  const bankId = txn.bankAccountId;
+
+  const matchIn = C6.inp.find(p =>
+    N(p.amount) === amt && p.bankAccountId === bankId && p.category &&
+    (new Date(p.createdAt?.seconds ? p.createdAt.seconds*1000 : p.createdAt || p.date).getTime() > cutoff)
+  );
+  if (matchIn) return { cat: matchIn.category, src:'in-payment' };
+
+  const matchOut = C6.out.find(p =>
+    N(p.amount) === amt && p.bankAccountId === bankId && p.category &&
+    (new Date(p.createdAt?.seconds ? p.createdAt.seconds*1000 : p.createdAt || p.date).getTime() > cutoff)
+  );
+  if (matchOut) return { cat: matchOut.category, src:'out-payment' };
+
+  /* 5. Match any in/out payment ever with same amount + bank */
+  const anyIn = C6.inp.find(p => N(p.amount) === amt && p.category);
+  if (anyIn && txn.type === 'credit') return { cat: anyIn.category, src:'in-payment-historical' };
+
+  const anyOut = C6.out.find(p => N(p.amount) === amt && p.category);
+  if (anyOut && txn.type === 'debit') return { cat: anyOut.category, src:'out-payment-historical' };
+
   return null;
 }
 
-/** Extract source info from a txn reference */
-function parseSourceFromReference(ref) {
-  if (!ref) return { sourceType:null, sourceId:null };
-  const m = ref.match(/^(cheque|inpayment|outpayment|loan)[:_](.+)$/i);
-  if (!m) return { sourceType:null, sourceId:null };
-  return { sourceType: m[1].toLowerCase(), sourceId: m[2] };
-}
+/* ─── WATCH FOR NEW TXNS AND AUTO-TAG ─── */
+function startWatcher() {
+  const db = DB(); if (!db) return setTimeout(startWatcher, 500);
+  if (__txnUnsub) { try { __txnUnsub(); } catch(e){} __txnUnsub = null; }
 
-/* ─────── 2. HOOK BANK TRANSACTION CREATION ─────── */
-/**
- * Payment modal (v10) creates bank txns with reference like "cheque:ID".
- * We intercept BEFORE the save by pre-tagging the txns. But the v10 flow
- * happens internally — so we use a listener approach:
- *  - Listen for changes on bankTransactions collection (via polling new txns)
- *  - Auto-tag any untagged txn with a valid source reference
- */
-async function autoTagUntaggedTxns() {
-  const db = DB(); if (!db) return;
   try {
-    const snap = await db.collection('bankTransactions')
-      .where('category', '==', null)
-      .limit(50).get().catch(() => null);
-
-    /* Fallback: also fetch recent and check in-memory */
-    const recentSnap = await db.collection('bankTransactions')
-      .orderBy('date','desc').limit(30).get().catch(()=>({docs:[]}));
-
-    for (const doc of recentSnap.docs) {
-      const txn = Object.assign({ id: doc.id }, doc.data());
-      if (txn.category) continue;
-      const cat = await resolveCategoryFromSource(txn);
-      if (cat) {
-        const src = parseSourceFromReference(txn.reference);
-        await db.collection('bankTransactions').doc(doc.id).update({
-          category: cat,
-          sourceType: src.sourceType,
-          sourceId: src.sourceId,
-          autoTaggedAt: new Date().toISOString()
+    __txnUnsub = db.collection('bankTransactions')
+      .orderBy('date','desc').limit(30)
+      .onSnapshot(async snap => {
+        snap.docChanges().forEach(async change => {
+          if (change.type !== 'added') return;
+          const txn = Object.assign({ id: change.doc.id }, change.doc.data());
+          if (txn.category) return; /* already tagged */
+          /* Wait a moment for linked payments to save fully */
+          setTimeout(async () => {
+            await loadC6();
+            const res = await resolveCategory(txn);
+            if (res && res.cat) {
+              try {
+                await db.collection('bankTransactions').doc(txn.id).update({
+                  category: res.cat,
+                  autoTagged: true,
+                  autoTagSource: res.src,
+                  autoTaggedAt: new Date().toISOString()
+                });
+                console.log('[Change #6 v2] Auto-tagged txn', txn.id, '→', res.cat, 'from', res.src);
+              } catch(e) {}
+            }
+          }, 1200);
         });
-      }
+      }, err => {
+        console.warn('[Change #6 v2] snapshot error:', err.message);
+      });
+  } catch(e) { console.warn('[Change #6 v2] watcher failed', e); }
+}
+
+/* ─── VIEW RENDERING ─── */
+function renderTxnsView() {
+  const body = $('ncV10TxnsBody'); if (!body) return;
+  if (C6.txns.length === 0) {
+    body.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No transactions yet</h3></div>';
+    return;
+  }
+
+  let html = '<div style="margin-bottom:12px">' +
+    '<button class="btn btn-secondary btn-sm" onclick="ncC6v2TagAll()"><i class="fas fa-magic"></i> Auto-tag all untagged</button>' +
+    '<span id="ncC6v2Status" style="margin-left:10px;font-size:12px;color:var(--gray)"></span>' +
+  '</div>';
+
+  html += '<div class="table-container"><table><thead><tr>' +
+    '<th>Date</th><th>Bank</th><th>Type</th><th>Amount</th><th>Category</th><th>Description</th><th>Actions</th>' +
+  '</tr></thead><tbody>';
+
+  C6.txns.forEach(t => {
+    const bank = C6.banks.find(b => b.id === t.bankAccountId);
+    const isC = t.type === 'credit' || t.type === 'deposit';
+    const cat = t.category || '';
+    const cobj = C6.cats.find(c => c.name === cat) || {};
+    const color = cobj.color || '#64748b';
+    const catBadge = cat
+      ? '<span class="status-badge" style="background:'+color+'22;color:'+color+'">'+E(cat)+'</span>'
+      : '<span class="status-badge" style="background:#f1f5f9;color:#94a3b8">UNCAT</span>';
+
+    html += '<tr>' +
+      '<td>'+E(t.date||'-')+'</td>' +
+      '<td>'+E(bank ? bank.bankName : '-')+'</td>' +
+      '<td><span class="status-badge '+(isC?'status-cleared':'status-returned')+'">'+E(t.type)+'</span></td>' +
+      '<td style="font-weight:700;color:'+(isC?'var(--success)':'var(--danger)')+'">'+F(t.amount)+'</td>' +
+      '<td>'+catBadge+' <button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="ncC6v2EditCat(\''+t.id+'\')"><i class="fas fa-tag"></i></button></td>' +
+      '<td style="font-size:12px">'+E(t.description||'-')+(t.autoTagged ? ' <i class="fas fa-magic" title="Auto-tagged: '+E(t.autoTagSource||'')+'" style="color:var(--primary);font-size:10px"></i>' : '')+'</td>' +
+      '<td><button class="btn btn-sm btn-secondary" onclick="ncV10DelTxn(\''+t.id+'\')"><i class="fas fa-trash"></i></button></td>' +
+    '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  body.innerHTML = html;
+}
+
+window.ncC6v2EditCat = function (txnId) {
+  const txn = C6.txns.find(t => t.id === txnId);
+  if (!txn) return;
+  const opts = '<option value="">-- None --</option>' +
+    C6.cats.map(c => '<option value="'+E(c.name)+'"'+(c.name===txn.category?' selected':'')+'>'+E(c.name)+'</option>').join('');
+  const choice = prompt('Category for this transaction:\n\n' +
+    C6.cats.map((c,i) => (i+1)+'. '+c.name).join('\n') + '\n\n' +
+    'Type number (or empty to unset):', '');
+  if (choice === null) return;
+  const idx = parseInt(choice, 10) - 1;
+  const cat = (choice === '' || isNaN(idx) || !C6.cats[idx]) ? null : C6.cats[idx].name;
+  DB().collection('bankTransactions').doc(txnId).update({ category: cat, autoTagged: false, manualTag: true })
+    .then(() => { toast('Updated', 'success'); loadC6().then(renderTxnsView); })
+    .catch(e => toast('Error: '+e.message, 'error'));
+};
+
+window.ncC6v2TagAll = async function () {
+  const status = $('ncC6v2Status');
+  if (status) status.textContent = 'Scanning...';
+  await loadC6();
+  const untagged = C6.txns.filter(t => !t.category);
+  if (untagged.length === 0) {
+    if (status) status.textContent = 'All tagged ✓';
+    return;
+  }
+  let done = 0;
+  for (const txn of untagged) {
+    const res = await resolveCategory(txn);
+    if (res && res.cat) {
+      try {
+        await DB().collection('bankTransactions').doc(txn.id).update({
+          category: res.cat, autoTagged: true,
+          autoTagSource: res.src, autoTaggedAt: new Date().toISOString()
+        });
+        done++;
+      } catch(e) {}
     }
-  } catch(e) {}
-}
+    if (status) status.textContent = done + '/' + untagged.length;
+  }
+  toast('Tagged ' + done + ' of ' + untagged.length + ' transactions', done > 0 ? 'success' : 'info');
+  await loadC6();
+  renderTxnsView();
+};
 
-/* ─────── 3. HOOK v10 ADD TXN (enhance modal with category) ─────── */
-function enhanceAddTxnModal() {
-  const host = $('ncAddOnModalHost');
-  if (!host || !host.classList.contains('active')) return;
-  const title = $('ncAddOnTitle');
-  if (!title || title.textContent !== 'Add Bank Transaction') return;
-  if ($('ncAO_category')) return; /* already injected */
-
-  const body = $('ncAddOnBody');
-  if (!body) return;
-
-  /* Insert category field after the description field */
-  const descGroup = $('ncAO_description');
-  if (!descGroup) return;
-  const wrapper = descGroup.closest('.form-group');
-  if (!wrapper) return;
-
-  const div = document.createElement('div');
-  div.className = 'form-group';
-  div.innerHTML =
-    '<label>Category</label>' +
-    '<select id="ncAO_category">' + categoryOptions(true, '') + '</select>' +
-    '<small style="color:var(--gray);font-size:11px">Which business category does this money belong to?</small>';
-  wrapper.parentElement.insertBefore(div, wrapper.nextSibling);
-}
-
-/* ─────── 4. OVERRIDE v10 ADD TXN HANDLER TO INCLUDE CATEGORY ─────── */
-function patchAddTxnHandler() {
-  if (window.__ncV10AddTxnPatched) return;
-  window.__ncV10AddTxnPatched = true;
-
-  const orig = window.ncV10AddTxn;
-  if (typeof orig !== 'function') return setTimeout(patchAddTxnHandler, 500);
-
-  const wrapped = function () {
-    /* Let the original open the modal */
-    const result = orig.apply(this, arguments);
-
-    /* The v10 modal save handler reads `data` from all inputs matching `ncV10F_<id>`.
-       We injected `ncAO_category`, not `ncV10F_category`, so it won't be picked up.
-       Instead, patch: rename our input id to match v10 convention. */
-    setTimeout(() => {
-      const our = $('ncAO_category');
-      if (our && !$('ncV10F_category')) {
-        our.id = 'ncV10F_category';
-      }
-    }, 100);
-
-    return result;
-  };
-  window.ncV10AddTxn = wrapped;
-}
-
-/* ─────── 5. OVERRIDE EDIT TXN TOO (edit modal doesn't exist for txns in v10,
-              so we skip editing — deletion is the only option) ─────── */
-
-/* ─────── 6. PER-BANK CATEGORY BREAKDOWN WIDGET ─────── */
-function renderBankCategoryWidget() {
+/* ─── ALSO RENDER CATEGORY SUMMARY PER BANK ─── */
+function renderBankSummary() {
   const view = $('ncV10BanksView');
   if (!view) return;
   let widget = $('ncBankCatWidget');
@@ -11491,340 +11510,101 @@ function renderBankCategoryWidget() {
     widget.style.marginTop = '20px';
     const card = view.querySelector('.card');
     if (card) card.appendChild(widget);
-    else view.appendChild(widget);
   }
 
-  /* Aggregate bank balances by category — using bank txns with category */
   const byBankCat = {};
   C6.txns.forEach(t => {
-    if (!t.bankAccountId) return;
-    const cat = t.category || '(Uncategorized)';
+    if (!t.category) return;
     if (!byBankCat[t.bankAccountId]) byBankCat[t.bankAccountId] = {};
-    if (!byBankCat[t.bankAccountId][cat]) byBankCat[t.bankAccountId][cat] = 0;
-    const delta = t.type === 'credit' ? N(t.amount) : -N(t.amount);
-    byBankCat[t.bankAccountId][cat] += delta;
+    if (!byBankCat[t.bankAccountId][t.category]) byBankCat[t.bankAccountId][t.category] = 0;
+    const isC = t.type === 'credit' || t.type === 'deposit';
+    byBankCat[t.bankAccountId][t.category] += isC ? N(t.amount) : -N(t.amount);
   });
 
-  let html = '<div class="card" style="margin-top:12px">' +
-    '<div class="card-header"><h3 class="card-title">' +
-      '<i class="fas fa-layer-group" style="color:var(--primary);margin-right:8px"></i>Balance by Category (per bank)' +
-    '</h3></div>';
+  let html = '<div class="card" style="margin-top:12px"><div class="card-header">' +
+    '<h3 class="card-title"><i class="fas fa-layer-group" style="color:var(--primary);margin-right:8px"></i>Balance by Category</h3>' +
+  '</div>';
 
-  if (C6.banks.length === 0) {
-    html += '<div style="text-align:center;padding:30px;color:var(--gray)">Add a bank account to see category breakdown</div>';
-  } else {
-    C6.banks.forEach(b => {
-      const splits = byBankCat[b.id] || {};
-      const catKeys = Object.keys(splits).filter(k => splits[k] !== 0);
-      const total = catKeys.reduce((s,k) => s + splits[k], 0);
-
-      html += '<div style="background:var(--light);padding:14px;border-radius:10px;margin-bottom:12px">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-        '<div><strong style="font-size:14px">'+E(b.bankName)+'</strong>' +
-        '<div style="font-size:11px;color:var(--gray)">'+E(b.accountNumber||'')+'</div></div>' +
-        '<div style="font-weight:700;font-size:15px;color:'+(N(b.currentBalance)>=0?'var(--success)':'var(--danger)')+'">'+F(b.currentBalance)+'</div>' +
-      '</div>';
-
-      if (catKeys.length === 0) {
-        html += '<div style="font-size:12px;color:var(--gray);text-align:center;padding:8px">No categorized transactions yet</div>';
-      } else {
-        const sorted = catKeys.sort((a,b2) => Math.abs(splits[b2]) - Math.abs(splits[a]));
-        sorted.forEach(k => {
-          const amt = splits[k];
-          const share = total !== 0 ? Math.abs(amt / total) * 100 : 0;
-          const color = k === '(Uncategorized)' ? '#94a3b8' : catColor(k);
-          html +=
-            '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">' +
-              '<span style="width:10px;height:10px;border-radius:50%;background:'+color+'"></span>' +
-              '<span style="font-size:12px;min-width:120px;font-weight:600">'+E(k)+'</span>' +
-              '<div style="flex:1;background:var(--border);height:5px;border-radius:3px;overflow:hidden">' +
-                '<div style="height:100%;width:'+share+'%;background:'+color+'"></div>' +
-              '</div>' +
-              '<span style="font-size:12px;font-weight:700;min-width:100px;text-align:right;color:'+(amt>=0?'var(--success)':'var(--danger)')+'">'+F(amt)+'</span>' +
-            '</div>';
-        });
-      }
-
-      html += '</div>';
-    });
-  }
+  C6.banks.forEach(b => {
+    const splits = byBankCat[b.id] || {};
+    const keys = Object.keys(splits);
+    html += '<div style="background:var(--light);padding:14px;border-radius:10px;margin-bottom:12px">';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
+      '<strong>'+E(b.bankName)+'</strong>' +
+      '<strong style="color:'+(N(b.currentBalance)>=0?'var(--success)':'var(--danger)')+'">'+F(b.currentBalance)+'</strong>' +
+    '</div>';
+    if (keys.length === 0) {
+      html += '<div style="font-size:12px;color:var(--gray);text-align:center;padding:8px">No categorized txns yet — click Auto-tag above</div>';
+    } else {
+      keys.forEach(k => {
+        const cobj = C6.cats.find(c => c.name === k) || {};
+        const color = cobj.color || '#6366f1';
+        html += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px">' +
+          '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-right:6px"></span>'+E(k)+'</span>' +
+          '<span style="font-weight:700;color:'+(splits[k]>=0?'var(--success)':'var(--danger)')+'">'+F(splits[k])+'</span>' +
+        '</div>';
+      });
+    }
+    html += '</div>';
+  });
 
   html += '</div>';
   widget.innerHTML = html;
 }
 
-/* ─────── 7. CATEGORY FILTER + ENHANCED VIEW IN BANK TRANSACTIONS ─────── */
-function injectTxnCategoryFilter() {
-  const view = $('ncV10TxnsView');
-  if (!view || $('ncTxnCatFilter')) return;
-  const card = view.querySelector('.card');
-  if (!card) return;
-
-  const bar = document.createElement('div');
-  bar.id = 'ncTxnCatFilter';
-  bar.style.cssText = 'display:flex;gap:8px;overflow-x:auto;padding:8px 0 14px;margin-bottom:14px;border-bottom:1px solid var(--border)';
-  const header = card.querySelector('.card-header');
-  if (header && header.nextSibling) card.insertBefore(bar, header.nextSibling);
-  else card.insertBefore(bar, card.firstChild);
-
-  renderTxnFilterChips();
-}
-
-function renderTxnFilterChips() {
-  const bar = $('ncTxnCatFilter'); if (!bar) return;
-  const txns = C6.txns;
-  const active = C6.activeCatFilter || 'ALL';
-
-  const items = [
-    { key:'ALL', label:'All', color:'#6366f1', count: txns.length },
-    { key:'UNC', label:'Uncategorized', color:'#94a3b8', count: txns.filter(t => !t.category).length }
-  ];
-  C6.cats.forEach(cat => {
-    items.push({
-      key: cat.name, label: cat.name, color: cat.color || '#6366f1',
-      count: txns.filter(t => t.category === cat.name).length
-    });
-  });
-
-  bar.innerHTML = items.map(it => {
-    const isA = String(active) === String(it.key);
-    return '<button onclick="ncSetTxnCat(\''+E(it.key).replace(/'/g,"\\'")+'\')" ' +
-      'style="white-space:nowrap;padding:7px 14px;border-radius:20px;border:2px solid '+(isA?it.color:'var(--border)')+';' +
-      'background:'+(isA?it.color:'white')+';color:'+(isA?'white':'var(--dark)')+';font-weight:600;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">' +
-      '<span style="width:8px;height:8px;border-radius:50%;background:'+(isA?'white':it.color)+'"></span>' +
-      E(it.label) + '<span style="opacity:0.75;font-size:10px">('+it.count+')</span>' +
-    '</button>';
-  }).join('');
-}
-
-window.ncSetTxnCat = function (key) {
-  C6.activeCatFilter = key;
-  renderTxnFilterChips();
-  renderBankTxnsView();
-};
-
-/* Re-render the v10 Txns table with our category badge + filter */
-function renderBankTxnsView() {
-  const body = $('ncV10TxnsBody');
-  if (!body) return;
-  const active = C6.activeCatFilter || 'ALL';
-
-  const filtered = C6.txns.filter(t => {
-    if (active === 'ALL') return true;
-    if (active === 'UNC') return !t.category;
-    return t.category === active;
-  });
-
-  if (filtered.length === 0) {
-    body.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No matching transactions</h3></div>';
-    return;
-  }
-
-  let html = '<div class="table-container"><table><thead><tr>' +
-    '<th>Date</th><th>Bank</th><th>Type</th><th>Amount</th><th>Category</th><th>Description</th><th>Reference</th><th>Actions</th>' +
-    '</tr></thead><tbody>';
-
-  filtered.forEach(t => {
-    const bank = C6.banks.find(b => b.id === t.bankAccountId);
-    const isC = t.type === 'credit';
-    const cat = t.category || '';
-    const catBadge = cat
-      ? '<span class="status-badge" style="background:'+catColor(cat)+'22;color:'+catColor(cat)+'">'+E(cat)+'</span>'
-      : '<span class="status-badge" style="background:#f1f5f9;color:#94a3b8">UNCAT</span>';
-
-    /* Source indicator */
-    let srcTag = '';
-    if (t.sourceType) {
-      const icons = { cheque:'fa-money-check-alt', inpayment:'fa-arrow-circle-down', outpayment:'fa-arrow-circle-up', loan:'fa-hand-holding-usd' };
-      srcTag = ' <i class="fas '+(icons[t.sourceType]||'fa-link')+'" style="color:var(--gray);font-size:10px" title="From '+E(t.sourceType)+'"></i>';
-    }
-
-    html += '<tr>' +
-      '<td>'+E(t.date||'-')+'</td>' +
-      '<td>'+E(bank ? bank.bankName : '(deleted)')+'</td>' +
-      '<td><span class="status-badge '+(isC?'status-cleared':'status-returned')+'">'+E(t.type)+'</span></td>' +
-      '<td style="font-weight:700;color:'+(isC?'var(--success)':'var(--danger)')+'">'+F(t.amount)+'</td>' +
-      '<td>'+catBadge+' <button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="ncEditTxnCategory(\''+t.id+'\')" title="Change category"><i class="fas fa-tag"></i></button></td>' +
-      '<td>'+E(t.description||'-')+srcTag+'</td>' +
-      '<td>'+E(t.reference||'-')+'</td>' +
-      '<td><button class="btn btn-sm btn-secondary" onclick="ncV10DelTxn(\''+t.id+'\')"><i class="fas fa-trash"></i></button></td>' +
-    '</tr>';
-  });
-
-  html += '</tbody></table></div>';
-  body.innerHTML = html;
-}
-
-/* ─────── 8. CHANGE CATEGORY OF EXISTING TXN ─────── */
-window.ncEditTxnCategory = function (txnId) {
-  const txn = C6.txns.find(t => t.id === txnId);
-  if (!txn) { toast('Transaction not found', 'error'); return; }
-
-  let host = $('ncEditTxnCatModal');
-  if (!host) {
-    host = document.createElement('div');
-    host.id = 'ncEditTxnCatModal';
-    host.className = 'modal-overlay';
-    host.innerHTML =
-      '<div class="modal" style="max-width:440px">' +
-        '<div class="modal-header">' +
-          '<h2 class="modal-title">Change Category</h2>' +
-          '<button class="modal-close" onclick="document.getElementById(\'ncEditTxnCatModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button>' +
-        '</div>' +
-        '<div class="modal-body" id="ncEditTxnCatBody"></div>' +
-        '<div class="modal-footer">' +
-          '<button class="btn btn-secondary" onclick="document.getElementById(\'ncEditTxnCatModal\').classList.remove(\'active\')">Cancel</button>' +
-          '<button class="btn btn-primary" id="ncEditTxnCatSave"><i class="fas fa-save"></i> Save</button>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(host);
-    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
-  }
-
-  $('ncEditTxnCatBody').innerHTML =
-    '<div style="background:var(--light);padding:12px;border-radius:8px;margin-bottom:14px;font-size:12px">' +
-      '<div><strong>'+E(txn.date||'-')+' • '+F(txn.amount)+' • '+E(txn.type)+'</strong></div>' +
-      '<div style="color:var(--gray);margin-top:4px">'+E(txn.description||'-')+'</div>' +
-    '</div>' +
-    '<div class="form-group"><label>Category</label>' +
-      '<select id="ncEditTxnCatSel">' + categoryOptions(true, txn.category||'') + '</select>' +
-    '</div>';
-
-  const btn = $('ncEditTxnCatSave');
-  const fresh = btn.cloneNode(true);
-  btn.parentNode.replaceChild(fresh, btn);
-  fresh.addEventListener('click', async () => {
-    const cat = ($('ncEditTxnCatSel') || {}).value || '';
-    try {
-      await DB().collection('bankTransactions').doc(txnId).update({
-        category: cat || null,
-        categoryEditedAt: new Date().toISOString(),
-        categoryEditedBy: who()
-      });
-      toast('Category updated', 'success');
-      host.classList.remove('active');
-      await loadC6();
-    } catch (e) { toast('Error: '+e.message, 'error'); }
-  });
-
-  host.classList.add('active');
-};
-
-/* ─────── 9. AUTO-TAG ON CHEQUE CLEAR ─────── */
-/**
- * When a cheque is marked as cleared in the main NeonCheque app, the
- * Corrections Patch / Finance Manager typically creates a bank txn.
- * We listen via loadAllChequesData re-runs and tag any untagged txns.
- */
-function hookLoadCheques() {
-  if (typeof window.loadAllChequesData !== 'function') return setTimeout(hookLoadCheques, 500);
-  if (window.loadAllChequesData.__ncC6Hooked) return;
-  const orig = window.loadAllChequesData;
-  const wrapped = function () {
-    const r = orig.apply(this, arguments);
-    const after = () => {
-      setTimeout(() => {
-        autoTagUntaggedTxns().then(() => {
-          loadC6().then(() => {
-            renderBankCategoryWidget();
-            renderTxnFilterChips();
-            renderBankTxnsView();
-          });
-        });
-      }, 300);
-    };
-    if (r && r.then) r.then(after); else setTimeout(after, 400);
-    return r;
-  };
-  wrapped.__ncC6Hooked = true;
-  window.loadAllChequesData = wrapped;
-}
-
-/* ─────── 10. HOOK v10 REFRESH (txns view) TO RE-RENDER WITH CATEGORY ─────── */
-function hookV10Refresh() {
-  if (typeof window.ncV10Refresh !== 'function') return setTimeout(hookV10Refresh, 500);
-  if (window.ncV10Refresh.__ncC6Hooked) return;
-  const orig = window.ncV10Refresh;
-  const wrapped = function (key) {
-    const r = orig.apply(this, arguments);
-    if (key === 'txns' || key === 'banks') {
-      setTimeout(() => {
-        loadC6().then(() => {
-          renderBankCategoryWidget();
-          renderTxnFilterChips();
-          renderBankTxnsView();
-        });
-      }, 300);
-    }
-    return r;
-  };
-  wrapped.__ncC6Hooked = true;
-  window.ncV10Refresh = wrapped;
-}
-
-/* ─────── 11. MUTATION OBSERVER TO PATCH MODALS + VIEWS ─────── */
-function watch() {
-  const observer = new MutationObserver(() => {
-    /* Enhance v10 Add Bank Transaction modal */
-    if ($('ncAddOnModalHost') && $('ncAddOnModalHost').classList.contains('active')) {
-      const title = $('ncAddOnTitle');
-      if (title && title.textContent === 'Add Bank Transaction') {
-        enhanceAddTxnModal();
-      }
-    }
-
-    /* Inject chips + re-render when txn view is active */
-    const v = $('ncV10TxnsView');
-    if (v && v.classList.contains('active')) {
-      if (!$('ncTxnCatFilter')) injectTxnCategoryFilter();
-      /* Only re-render if the table looks un-styled (contains raw "bankTransactions" strings) */
-      const body = $('ncV10TxnsBody');
-      if (body && body.dataset.ncC6Rendered !== '1') {
-        body.dataset.ncC6Rendered = '1';
-        renderBankTxnsView();
-      }
-    }
-
-    /* Re-render widget when banks view is active */
-    const bv = $('ncV10BanksView');
-    if (bv && bv.classList.contains('active')) {
-      if (!$('ncBankCatWidget')) renderBankCategoryWidget();
-    }
-  });
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-}
-
-/* ─────── 12. PERIODIC ─────── */
-function periodic() {
-  /* Only re-render txns view if user is actively viewing it */
+/* ─── HOOK VIEW RENDER ─── */
+function hookViews() {
   const v = $('ncV10TxnsView');
   if (v && v.classList.contains('active')) {
     const body = $('ncV10TxnsBody');
-    if (body) body.dataset.ncC6Rendered = '';
+    if (body && body.dataset.ncC6v2 !== '1') {
+      body.dataset.ncC6v2 = '1';
+      renderTxnsView();
+    }
+  }
+  const bv = $('ncV10BanksView');
+  if (bv && bv.classList.contains('active')) {
+    renderBankSummary();
   }
 }
 
-/* ─────── 13. BOOT ─────── */
-async function boot() {
-  await loadC6();
-  injectTxnCategoryFilter();
-  renderBankCategoryWidget();
-  hookLoadCheques();
-  hookV10Refresh();
-  patchAddTxnHandler();
-  watch();
-  setInterval(periodic, 3000);
-  setInterval(() => {
-    autoTagUntaggedTxns().then(() => {
-      /* silent — no re-render unless user is on relevant view */
-    });
-  }, 45000);
-  setInterval(loadC6, 60000);
-  console.log('[Change #6] ✅ Bank deposit categorization ready');
+function hookFn(name, wrap) {
+  if (typeof window[name] !== 'function') return false;
+  if (window[name].__ncC6v2) return true;
+  const orig = window[name];
+  const w = wrap(orig);
+  w.__ncC6v2 = true;
+  window[name] = w;
+  return true;
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 3000));
-else setTimeout(boot, 3000);
+function installHooks() {
+  ['ncV10Route','showView','ncV10Refresh'].forEach(n => {
+    hookFn(n, orig => function () {
+      const r = orig.apply(this, arguments);
+      setTimeout(() => { loadC6().then(hookViews); }, 350);
+      return r;
+    });
+  });
+  /* Also hook loadAllChequesData for cheque-tag propagation */
+  hookFn('loadAllChequesData', orig => function () {
+    const r = orig.apply(this, arguments);
+    const after = () => { loadC6().then(hookViews); };
+    if (r && r.then) r.then(after); else setTimeout(after, 400);
+    return r;
+  });
+}
+
+async function boot() {
+  await loadC6();
+  startWatcher();
+  installHooks();
+  setInterval(() => { loadC6().then(hookViews); }, 8000);
+  console.log('[Change #6 v2] ✅ Bank categorization — real-time auto-tag active');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 5000));
+else setTimeout(boot, 5000);
 
 })();
 </script>
@@ -12156,18 +11936,19 @@ else setTimeout(boot, 3200);
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
-     CHANGE #8 v2 — 3-Tab Sidebar Layout (FIXED)
-     • Tab switching only on route/view change — NOT on interval
-     • Manual tab clicks honored for 15 seconds
-     • Self-healing reorg still works
+     CHANGE #8 v3 — 3-Tab Sidebar with Manual Assignment
+     • Gear icon in tab bar opens assign UI
+     • You pick which tab each item goes to
+     • Saved in localStorage
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__ncChange8v2) return;
-window.__ncChange8v2 = true;
+if (window.__ncChange8v3) return;
+window.__ncChange8v3 = true;
 
-const $  = id => document.getElementById(id);
+const $ = id => document.getElementById(id);
+const E = s => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 const TAB_META = {
   cheques:  { label:'Cheques',  icon:'fa-money-check-alt', color:'#6366f1' },
@@ -12175,38 +11956,58 @@ const TAB_META = {
   payments: { label:'Payments', icon:'fa-exchange-alt',    color:'#10b981' }
 };
 
-/* ─────── TAB DETECTION ─────── */
-function getTab(el) {
-  const oc = (el.getAttribute('onclick') || '').toLowerCase();
-  const txt = (el.textContent || '').toLowerCase().trim();
+const LS_KEY = 'ncTabAssignments_v3';
+let ASSIGN = {};
 
+function loadAssignments() {
+  try { ASSIGN = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e){ ASSIGN = {}; }
+}
+function saveAssignments() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(ASSIGN)); } catch(e){}
+}
+
+/* ─── DEFAULTS (fallback only if user hasn't assigned) ─── */
+function defaultTabFor(el) {
+  const txt = (el.textContent || '').toLowerCase();
+  const oc  = (el.getAttribute('onclick') || '').toLowerCase();
+
+  /* Finance Manager items — heuristic */
+  if (/finance|plan|deduction|commission|capital/.test(txt)) return 'finance';
   if (oc.includes('ncfinanceroute')) return 'finance';
-  if (/ncv10-loans|ncv10-projects|nc-?projects|nc-?loans/.test(oc)) return 'finance';
-  if (/^(loans|projects|finance ledger|finance dashboard)$/.test(txt)) return 'finance';
+  if (/ncv10-loans|ncv10-projects|nc-?loans|nc-?projects/.test(oc)) return 'finance';
 
+  /* Payments */
+  if (/in payment|out payment|bank account|bank transaction|parties|loan payment/i.test(txt)) return 'payments';
   if (/ncv10-inp|ncv10-out|ncv10-banks|ncv10-txns|ncv10-parties/.test(oc)) return 'payments';
-  if (/^(in payments|out payments|bank accounts|bank transactions|parties)$/.test(txt)) return 'payments';
-  if (/in payment|out payment|bank account|bank transaction/i.test(txt)) return 'payments';
 
-  if (oc.includes('ncv10-cats')) return 'cheques';
-  if (/cheque categories|categories/i.test(txt)) return 'cheques';
-
+  /* Cheques default */
   return 'cheques';
 }
 
-/* ─────── TAB BAR ─────── */
+function getKey(el) {
+  return (el.textContent || '').trim() + '|' + (el.getAttribute('onclick') || '').slice(0,40);
+}
+
+function getTab(el) {
+  const k = getKey(el);
+  if (ASSIGN[k]) return ASSIGN[k];
+  return defaultTabFor(el);
+}
+
+/* ─── TAB BAR ─── */
 function createTabBar(nav) {
-  const bar = document.createElement('div');
+  let bar = $('ncMainTabs');
+  if (bar) return bar;
+  bar = document.createElement('div');
   bar.id = 'ncMainTabs';
-  bar.style.cssText =
-    'display:flex;gap:4px;margin-bottom:16px;padding:4px;background:var(--light);border-radius:12px;';
+  bar.style.cssText = 'display:flex;gap:4px;margin-bottom:14px;padding:4px;background:var(--light);border-radius:12px;position:relative';
 
   Object.keys(TAB_META).forEach(key => {
     const m = TAB_META[key];
     const btn = document.createElement('button');
     btn.className = 'nc-tab';
     btn.dataset.tab = key;
-    btn.onclick = () => manualSwitchTab(key);
+    btn.onclick = () => window.ncSwitchTab(key);
     btn.style.cssText =
       'flex:1;padding:8px 4px;border:none;background:transparent;border-radius:9px;' +
       'font-weight:700;font-size:11px;cursor:pointer;color:var(--gray);' +
@@ -12218,14 +12019,24 @@ function createTabBar(nav) {
     bar.appendChild(btn);
   });
 
+  /* Gear icon */
+  const gear = document.createElement('button');
+  gear.title = 'Assign items to tabs';
+  gear.style.cssText =
+    'position:absolute;top:-30px;right:0;background:transparent;border:none;cursor:pointer;' +
+    'color:var(--gray);font-size:12px;padding:4px';
+  gear.innerHTML = '<i class="fas fa-cog"></i>';
+  gear.onclick = openAssignModal;
+  bar.appendChild(gear);
+
   nav.insertBefore(bar, nav.firstChild);
   return bar;
 }
 
-/* ─────── SECTIONS ─────── */
+/* ─── SECTIONS ─── */
 function getOrCreateSection(tab) {
   const id = 'ncSection-' + tab;
-  let s = document.getElementById(id);
+  let s = $(id);
   if (s) return s;
   const meta = TAB_META[tab];
   s = document.createElement('div');
@@ -12237,15 +12048,13 @@ function getOrCreateSection(tab) {
       '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+meta.color+'"></span>' +
       meta.label +
     '</div>';
-  const cont = document.getElementById('ncSectionsContainer');
+  const cont = $('ncSectionsContainer');
   (cont || document.querySelector('.sidebar nav')).appendChild(s);
   return s;
 }
 
-/* ─────── APPLY TAB (VISUAL) ─────── */
 function applyTab(tab, silent) {
   if (!TAB_META[tab]) tab = 'cheques';
-
   document.querySelectorAll('#ncMainTabs .nc-tab').forEach(b => {
     const isActive = b.dataset.tab === tab;
     const meta = TAB_META[b.dataset.tab];
@@ -12254,40 +12063,35 @@ function applyTab(tab, silent) {
     b.style.boxShadow = isActive ? '0 2px 8px rgba(99,102,241,0.18)' : 'none';
     b.style.transform = isActive ? 'translateY(-1px)' : 'none';
   });
-
   Object.keys(TAB_META).forEach(t => {
-    const s = document.getElementById('ncSection-' + t);
+    const s = $('ncSection-' + t);
     if (s) s.style.display = (t === tab) ? 'block' : 'none';
   });
-
   if (!silent) {
     try { localStorage.setItem('ncActiveTab', tab); } catch(e){}
   }
 }
 
-/* ─────── MANUAL SWITCH (user clicked tab) ─────── */
 let __manualAt = 0;
-function manualSwitchTab(tab) {
+window.ncSwitchTab = function (tab) {
   __manualAt = Date.now();
-  applyTab(tab, false);
-  const sb = document.getElementById('sidebar');
+  applyTab(tab);
+  const sb = $('sidebar');
   if (sb) sb.scrollTop = 0;
-  console.log('[Change #8] Manual tab → ' + tab);
-}
-window.ncSwitchTab = manualSwitchTab;
+};
 
-/* ─────── REORGANIZER ─────── */
+/* ─── REORG ─── */
 function reorgSidebar() {
   const nav = document.querySelector('.sidebar nav');
   if (!nav) return;
 
-  let cont = document.getElementById('ncSectionsContainer');
+  let cont = $('ncSectionsContainer');
   if (!cont) {
     cont = document.createElement('div');
     cont.id = 'ncSectionsContainer';
     nav.appendChild(cont);
   }
-  if (!document.getElementById('ncMainTabs')) createTabBar(nav);
+  createTabBar(nav);
 
   const sections = {
     cheques:  getOrCreateSection('cheques'),
@@ -12295,197 +12099,204 @@ function reorgSidebar() {
     payments: getOrCreateSection('payments')
   };
 
-  /* Track existing items */
   const ourItems = new Set();
-  Object.values(sections).forEach(s => {
-    s.querySelectorAll('.nav-item').forEach(el => ourItems.add(el));
-  });
+  Object.values(sections).forEach(s => s.querySelectorAll('.nav-item').forEach(el => ourItems.add(el)));
 
   const seen = new Map();
-  ourItems.forEach(el => {
-    const key = (el.getAttribute('onclick') || '') + '|' + (el.textContent || '').trim();
-    seen.set(key, el);
-  });
+  ourItems.forEach(el => seen.set(getKey(el), el));
 
-  /* Move any outside items into correct tab */
-  const allItems = Array.from(nav.querySelectorAll('.nav-item'));
-  let moved = 0;
-  allItems.forEach(el => {
+  /* Move any outside items */
+  nav.querySelectorAll('.nav-item').forEach(el => {
     if (ourItems.has(el)) return;
     if (el.closest('#ncMainTabs')) return;
-
-    const key = (el.getAttribute('onclick') || '') + '|' + (el.textContent || '').trim();
-    if (seen.has(key)) { el.remove(); return; }
-    seen.set(key, el);
-    const tab = getTab(el);
-    sections[tab].appendChild(el);
-    moved++;
+    const k = getKey(el);
+    if (seen.has(k)) { el.remove(); return; }
+    seen.set(k, el);
+    sections[getTab(el)].appendChild(el);
   });
 
-  /* Move special widgets */
-  ['ncPersonalWidget', 'ncFinanceSection'].forEach(id => {
-    const w = document.getElementById(id);
+  /* Move widgets into Finance */
+  ['ncPersonalWidget','ncFinanceSection','ncAdminSection'].forEach(id => {
+    const w = $(id);
     if (w && !w.closest('#ncSectionsContainer')) {
       sections.finance.appendChild(w);
-      moved++;
     }
   });
 
   /* Clean orphans */
   nav.querySelectorAll('.nav-section').forEach(s => {
     if (s.closest('#ncSectionsContainer')) return;
-    if (s.id === 'ncPersonalWidget' || s.id === 'ncFinanceSection') return;
+    if (['ncPersonalWidget','ncFinanceSection','ncAdminSection'].includes(s.id)) return;
     if (s.querySelectorAll('.nav-item').length === 0 && s.querySelectorAll('button').length === 0) {
       s.remove();
     }
   });
 
-  /* Apply saved tab */
   let saved = 'cheques';
   try { saved = localStorage.getItem('ncActiveTab') || 'cheques'; } catch(e){}
   applyTab(saved, true);
-
-  if (moved > 0) console.log('[Change #8] Reorganized — ' + moved + ' item(s) moved');
 }
 
-/* ─────── AUTO-SWITCH — ONLY WHEN VIEW CHANGES ─────── */
-let __lastViewId = '';
+/* ─── ASSIGN MODAL ─── */
+function openAssignModal() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return;
 
-function viewToTab(viewId) {
-  if (!viewId) return null;
-  if (['ncV10LoansView','ncV10ProjectsView','ncFinanceLedgerView'].includes(viewId)) return 'finance';
-  if (['ncV10InpView','ncV10OutView','ncV10BanksView','ncV10TxnsView','ncV10PartiesView'].includes(viewId)) return 'payments';
-  if (['dashboardView','allChequesView','inHandView','returnedView','recycleView','payeesView','issuersView','kanbanView','timelineView','analyticsView','booksView','reportsView','agingView','auditView','settingsView','ncV10CatsView'].includes(viewId)) return 'cheques';
-  return null;
-}
+  const items = Array.from(nav.querySelectorAll('.nav-item')).filter(el => !el.closest('#ncMainTabs'));
 
-function checkViewChange() {
-  const active = document.querySelector('.view-content.active');
-  const id = active ? active.id : '';
-  if (id === __lastViewId) return;   /* no change → do nothing */
-  __lastViewId = id;
-
-  /* Respect manual tab click for 15 seconds */
-  if (Date.now() - __manualAt < 15000) {
-    console.log('[Change #8] View changed to ' + id + ' — tab switch suppressed (manual grace)');
-    return;
-  }
-
-  const targetTab = viewToTab(id);
-  if (!targetTab) return;
-
-  const current = (function(){ try { return localStorage.getItem('ncActiveTab'); } catch(e){ return null; } })();
-  if (current !== targetTab) {
-    console.log('[Change #8] View changed to ' + id + ' → switching tab to ' + targetTab);
-    applyTab(targetTab, false);
-  }
-}
-
-/* ─────── OBSERVE VIEW CLASS CHANGES ONLY ─────── */
-function startViewObserver() {
-  const main = document.querySelector('.main-content');
-  if (!main) return setTimeout(startViewObserver, 400);
-  if (main.__ncC8ViewObs) return;
-  main.__ncC8ViewObs = true;
-
-  /* MutationObserver on class changes → detects view switch */
-  const obs = new MutationObserver(muts => {
-    for (const m of muts) {
-      if (m.type === 'attributes' && m.attributeName === 'class') {
-        const el = m.target;
-        if (el.classList && el.classList.contains('view-content')) {
-          setTimeout(checkViewChange, 60);
-          return;
-        }
-      }
-    }
-  });
-  obs.observe(main, { attributes: true, attributeFilter: ['class'], subtree: true });
-
-  /* Initial */
-  checkViewChange();
-}
-
-/* ─────── HOOK ROUTE FUNCTIONS ─────── */
-function hookFn(name, wrapper) {
-  if (typeof window[name] !== 'function') return false;
-  if (window[name].__ncC8v2Hooked) return true;
-  const orig = window[name];
-  const hooked = wrapper(orig);
-  hooked.__ncC8v2Hooked = true;
-  window[name] = hooked;
-  return true;
-}
-
-function installHooks() {
-  ['showView','ncV10Route','ncFinanceRoute','ncAORoute'].forEach(name => {
-    hookFn(name, orig => function () {
-      const r = orig.apply(this, arguments);
-      /* Give the view some time to activate, then check */
-      setTimeout(checkViewChange, 200);
-      return r;
+  let host = $('ncAssignModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ncAssignModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:560px">' +
+        '<div class="modal-header">' +
+          '<h2 class="modal-title"><i class="fas fa-cog"></i> Assign Sidebar Items to Tabs</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'ncAssignModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<div class="modal-body" id="ncAssignBody"></div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" onclick="ncResetAssign()">Reset</button>' +
+          '<button class="btn btn-primary" id="ncAssignSave"><i class="fas fa-save"></i> Save</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+    const save = $('ncAssignSave');
+    save.addEventListener('click', () => {
+      document.querySelectorAll('#ncAssignBody [data-key]').forEach(sel => {
+        ASSIGN[sel.dataset.key] = sel.value;
+      });
+      saveAssignments();
+      host.classList.remove('active');
+      /* Force re-org from scratch */
+      const cs = $('ncSectionsContainer');
+      if (cs) cs.innerHTML = '';
+      reorgSidebar();
+      applyTab((function(){ try { return localStorage.getItem('ncActiveTab') || 'cheques'; } catch(e){ return 'cheques'; } })());
+      if (typeof showToast === 'function') showToast('Tab assignments saved', 'success');
     });
+  }
+
+  const body = $('ncAssignBody');
+  let html = '<div style="background:#dbeafe;padding:10px;border-radius:8px;margin-bottom:12px;font-size:12px;color:#1e40af">' +
+    '<i class="fas fa-info-circle"></i> Pick which tab each item belongs to. Changes apply immediately after saving.' +
+  '</div>';
+
+  items.forEach((el, idx) => {
+    const k = getKey(el);
+    const current = ASSIGN[k] || defaultTabFor(el);
+    const label = (el.textContent || '').trim().slice(0, 40) || '(unnamed)';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+      '<div style="flex:1;font-size:13px">'+E(label)+'</div>' +
+      '<select data-key="'+E(k)+'" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">' +
+        '<option value="cheques"'+(current==='cheques'?' selected':'')+'>Cheques</option>' +
+        '<option value="finance"'+(current==='finance'?' selected':'')+'>Finance</option>' +
+        '<option value="payments"'+(current==='payments'?' selected':'')+'>Payments</option>' +
+        '<option value="hidden"'+(current==='hidden'?' selected':'')+'>Hide</option>' +
+      '</select>' +
+    '</div>';
+  });
+
+  body.innerHTML = html;
+  host.classList.add('active');
+}
+
+window.ncResetAssign = function () {
+  if (!confirm('Reset all tab assignments to defaults?')) return;
+  ASSIGN = {};
+  saveAssignments();
+  const cs = $('ncSectionsContainer');
+  if (cs) cs.innerHTML = '';
+  reorgSidebar();
+  const host = $('ncAssignModal');
+  if (host) host.classList.remove('active');
+};
+
+/* ─── HIDDEN ASSIGNMENTS ─── */
+function applyHidden() {
+  document.querySelectorAll('.sidebar nav .nav-item').forEach(el => {
+    const k = getKey(el);
+    if (ASSIGN[k] === 'hidden') el.style.display = 'none';
+    else el.style.display = '';
   });
 }
 
-/* ─────── MUTATION OBSERVER ON NAV (SELF-HEALING) ─────── */
+/* ─── OBSERVER ─── */
 function shouldReorg() {
   const nav = document.querySelector('.sidebar nav');
   if (!nav) return false;
   const outside = Array.from(nav.querySelectorAll('.nav-item')).filter(el => !el.closest('#ncSectionsContainer'));
   if (outside.length > 0) return true;
-  if (document.getElementById('ncPersonalWidget') && !document.getElementById('ncPersonalWidget').closest('#ncSectionsContainer')) return true;
-  if (document.getElementById('ncFinanceSection') && !document.getElementById('ncFinanceSection').closest('#ncSectionsContainer')) return true;
   if (!document.getElementById('ncMainTabs')) return true;
   return false;
 }
 
-let __reorgScheduled = null;
+let __scheduled = null;
 function scheduleReorg() {
-  if (__reorgScheduled) return;
-  __reorgScheduled = setTimeout(() => {
-    __reorgScheduled = null;
-    try { reorgSidebar(); } catch(e) { console.warn('[Change #8] reorg error', e); }
-  }, 300);
+  if (__scheduled) return;
+  __scheduled = setTimeout(() => { __scheduled = null; reorgSidebar(); applyHidden(); }, 300);
 }
 
-function startNavObserver() {
+function startObserver() {
   const nav = document.querySelector('.sidebar nav');
-  if (!nav) return setTimeout(startNavObserver, 300);
-  if (nav.__ncC8v2Watched) return;
-  nav.__ncC8v2Watched = true;
+  if (!nav) return setTimeout(startObserver, 300);
+  if (nav.__ncC8v3) return;
+  nav.__ncC8v3 = true;
+  const obs = new MutationObserver(() => { if (shouldReorg()) scheduleReorg(); });
+  obs.observe(nav, { childList:true, subtree:true });
+}
 
-  const obs = new MutationObserver(() => {
-    if (shouldReorg()) scheduleReorg();
+/* ─── HOOK ROUTES FOR AUTO-TAB ─── */
+function hookFn(name, wrap) {
+  if (typeof window[name] !== 'function') return false;
+  if (window[name].__ncC8v3) return true;
+  const orig = window[name];
+  const w = wrap(orig);
+  w.__ncC8v3 = true;
+  window[name] = w;
+  return true;
+}
+
+function installHooks() {
+  ['showView','ncV10Route','ncFinanceRoute','ncAORoute'].forEach(n => {
+    hookFn(n, orig => function () {
+      const r = orig.apply(this, arguments);
+      if (Date.now() - __manualAt < 15000) return r;
+      setTimeout(() => {
+        const view = document.querySelector('.view-content.active');
+        if (!view) return;
+        const vid = view.id || '';
+        const map = {
+          'ncV10LoansView':'finance','ncV10ProjectsView':'finance','ncFinanceLedgerView':'finance',
+          'ncV10InpView':'payments','ncV10OutView':'payments','ncV10BanksView':'payments',
+          'ncV10TxnsView':'payments','ncV10PartiesView':'payments'
+        };
+        const tab = map[vid];
+        if (tab) applyTab(tab);
+      }, 200);
+      return r;
+    });
   });
-  obs.observe(nav, { childList: true, subtree: true });
 }
 
-/* ─────── BOOT ─────── */
+/* ─── BOOT ─── */
 function boot() {
+  loadAssignments();
   reorgSidebar();
-  startNavObserver();
-  startViewObserver();
+  applyHidden();
+  startObserver();
   installHooks();
-
-  setTimeout(reorgSidebar, 400);
-  setTimeout(reorgSidebar, 1200);
-  setTimeout(reorgSidebar, 2500);
-  setTimeout(reorgSidebar, 4500);
-
-  /* Cheap safety net — reorg only, NO auto-switch */
-  setInterval(() => {
-    if (shouldReorg()) reorgSidebar();
-  }, 3000);
-
-  console.log('[Change #8 v2] ✅ 3-tab sidebar active — manual clicks honored');
+  setTimeout(() => { reorgSidebar(); applyHidden(); }, 800);
+  setTimeout(() => { reorgSidebar(); applyHidden(); }, 2500);
+  setTimeout(() => { reorgSidebar(); applyHidden(); }, 5000);
+  setInterval(() => { if (shouldReorg()) { reorgSidebar(); applyHidden(); } }, 3000);
+  console.log('[Change #8 v3] ✅ 3-tab sidebar — click the gear icon to assign items');
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 3500));
-} else {
-  setTimeout(boot, 3500);
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 4200));
+else setTimeout(boot, 4200);
 
 })();
 </script>
