@@ -4770,5 +4770,792 @@ window.addEventListener('keydown', function(e){
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BUSINESS LEDGER — v2.1 EXTENSION
+     Adds: Cheque Category chips · Bulk Categorize · Bank Transactions
+           Analytics charts · Auto-tag from project · Auto-tag bank txns
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__bizV21) return;
+window.__bizV21 = true;
+
+const $  = id => document.getElementById(id);
+const N  = n  => parseFloat(n) || 0;
+const F  = n  => 'Rs. ' + Math.round(N(n)).toLocaleString('en-IN');
+const T  = () => new Date().toISOString().slice(0,10);
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const TS = () => { try { return firebase.firestore.FieldValue.serverTimestamp(); } catch(e){ return new Date(); } };
+const WHO= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+const toast = (m,t) => { try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){} console.log('['+(t||'info')+']', m); };
+
+const BIZ = window.BIZ || { cats:[], banks:[], txns:[], projects:[], loans:[], parties:[], sources:[], deployments:[], payments:[], cash:[], reinvestments:[], repayments:[], transfers:[] };
+window.BIZ = BIZ;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   1 · EXPAND SIDEBAR — add 3 new nav items
+   ═══════════════════════════════════════════════════════════════════════ */
+const EXTRA_NAV = [
+  { id:'biz-analytics', icon:'chart-line',     label:'Analytics' },
+  { id:'biz-txns',      icon:'exchange-alt',   label:'Bank Transactions' }
+];
+
+function expandSidebar() {
+  const sect = $('bizSidebarSection');
+  if (!sect) return;
+  /* Insert the two new items after biz-reports */
+  const reportsItem = sect.querySelector('[data-biz-view="biz-reports"]');
+  if (!reportsItem) return;
+  EXTRA_NAV.forEach(item => {
+    if (sect.querySelector('[data-biz-view="' + item.id + '"]')) return;
+    const el = document.createElement('div');
+    el.className = 'nav-item';
+    el.dataset.bizView = item.id;
+    el.setAttribute('onclick', 'bizRoute(\'' + item.id + '\',this)');
+    el.innerHTML = '<i class="fas fa-' + item.icon + '"></i><span>' + E(item.label) + '</span>';
+    reportsItem.parentNode.insertBefore(el, reportsItem.nextSibling);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   2 · EXPAND VIEWS — add 2 new views
+   ═══════════════════════════════════════════════════════════════════════ */
+function expandViews() {
+  const main = document.querySelector('.main-content');
+  if (!main) return;
+  EXTRA_NAV.forEach(item => {
+    if ($(item.id)) return;
+    const v = document.createElement('div');
+    v.id = item.id;
+    v.className = 'view-content';
+    v.innerHTML =
+      '<div class="card">' +
+        '<div class="card-header">' +
+          '<h2 class="card-title"><i class="fas fa-' + item.icon + '" style="color:var(--primary);margin-right:8px"></i>' + E(item.label) + '</h2>' +
+          '<div id="' + item.id + '-actions"></div>' +
+        '</div>' +
+        '<div id="' + item.id + '-body"></div>' +
+      '</div>';
+    main.appendChild(v);
+  });
+}
+
+/* Hook bizRoute to render our new views */
+const _origBizRoute = window.bizRoute;
+window.bizRoute = function (viewId, navEl) {
+  if (viewId === 'biz-analytics') { switchView(viewId, navEl, 'Analytics'); renderAnalytics(); return; }
+  if (viewId === 'biz-txns')      { switchView(viewId, navEl, 'Bank Transactions'); renderBankTxns(); return; }
+  return _origBizRoute.apply(this, arguments);
+};
+
+function switchView(viewId, navEl, title) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  if (navEl) navEl.classList.add('active');
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const el = $(viewId);
+  if (el) { el.classList.add('active'); el.style.display = 'block'; }
+  const t = $('pageTitle');
+  if (t) t.textContent = title;
+  if (window.innerWidth <= 768) {
+    const sb = $('sidebar'), ov = $('sidebarOverlay');
+    if (sb) sb.classList.remove('active');
+    if (ov) ov.classList.remove('active');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   3 · CHEQUE CATEGORY CHIPS in All Cheques view
+   ═══════════════════════════════════════════════════════════════════════ */
+let activeCatFilter = 'ALL';
+function injectCategoryChips() {
+  const view = $('allChequesView');
+  if (!view) return;
+  if ($('ncCategoryChipsContainer')) { renderChips(); return; }
+  const card = view.querySelector('.card');
+  if (!card) return;
+  const bar = document.createElement('div');
+  bar.id = 'ncCategoryChipsContainer';
+  bar.style.cssText = 'display:flex;gap:8px;overflow-x:auto;padding:8px 0 14px;margin-bottom:14px;border-bottom:1px solid var(--border);scrollbar-width:thin';
+  const header = card.querySelector('.card-header');
+  if (header && header.nextSibling) card.insertBefore(bar, header.nextSibling);
+  else card.insertBefore(bar, card.firstChild);
+  renderChips();
+}
+
+function renderChips() {
+  const bar = $('ncCategoryChipsContainer'); if (!bar) return;
+  const cheques = (window.allCheques || []).filter(c => !c.deletedAt);
+  const cats = BIZ.cats || [];
+  const items = [
+    { key:'ALL', label:'All', color:'#6366f1', count: cheques.length },
+    { key:'UNC', label:'Uncategorized', color:'#94a3b8', count: cheques.filter(c => !c.category).length }
+  ];
+  cats.forEach(cat => {
+    items.push({ key: cat.name, label: cat.name, color: cat.color || '#6366f1', count: cheques.filter(c => c.category === cat.name).length });
+  });
+
+  bar.innerHTML = items.map(it => {
+    const isA = String(activeCatFilter) === String(it.key);
+    return '<button onclick="bizSetCat(\'' + E(it.key).replace(/'/g, "\\'") + '\')" ' +
+      'style="white-space:nowrap;padding:7px 14px;border-radius:20px;border:2px solid ' + (isA?it.color:'var(--border)') + ';' +
+      'background:' + (isA?it.color:'white') + ';color:' + (isA?'white':'var(--dark)') + ';font-weight:600;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:' + (isA?'white':it.color) + '"></span>' +
+      E(it.label) + ' <span style="opacity:0.75;font-size:10px">(' + it.count + ')</span></button>';
+  }).join('');
+}
+
+window.bizSetCat = function (key) {
+  activeCatFilter = key;
+  renderChips();
+  try { if (typeof renderAllCheques === 'function') renderAllCheques(); } catch(e){}
+  setTimeout(tagAndFilterRows, 120);
+};
+
+function tagAndFilterRows() {
+  const tbody = $('allChequesTable'); if (!tbody) return;
+  const active = activeCatFilter || 'ALL';
+  const cheques = (window.allCheques || []).filter(c => !c.deletedAt);
+
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length < 3) return;
+    let numText = '';
+    cells.forEach(c => {
+      if (!numText) { const t = (c.textContent||'').trim(); if (/^\d+$/.test(t)) numText = t; }
+    });
+    if (!numText) return;
+    const cheque = cheques.find(c => String(c.number) === numText);
+    if (!cheque) return;
+    const cat = cheque.category || '';
+    const payeeCell = cells[2] || cells[1];
+    if (payeeCell && !payeeCell.querySelector('.nc-cat-badge')) {
+      const badge = document.createElement('span');
+      badge.className = 'nc-cat-badge';
+      badge.style.cssText = 'display:inline-block;margin-left:6px;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;vertical-align:middle';
+      if (cat) {
+        const cobj = (BIZ.cats || []).find(x => x.name === cat) || {};
+        const color = cobj.color || '#6366f1';
+        badge.style.background = color + '22'; badge.style.color = color; badge.textContent = cat;
+      } else {
+        badge.style.background = '#f1f5f9'; badge.style.color = '#94a3b8'; badge.textContent = 'UNCAT';
+      }
+      payeeCell.appendChild(badge);
+    }
+    let show = true;
+    if (active === 'UNC') show = !cat;
+    else if (active !== 'ALL') show = (cat === active);
+    tr.style.display = show ? '' : 'none';
+  });
+}
+
+function hookRenderAllCheques() {
+  if (typeof window.renderAllCheques !== 'function') return setTimeout(hookRenderAllCheques, 300);
+  if (window.renderAllCheques.__bizV21Hooked) return;
+  const orig = window.renderAllCheques;
+  const wrapped = function () {
+    const r = orig.apply(this, arguments);
+    setTimeout(() => { try { tagAndFilterRows(); renderChips(); } catch(e){} }, 60);
+    return r;
+  };
+  wrapped.__bizV21Hooked = true;
+  window.renderAllCheques = wrapped;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   4 · BULK CATEGORIZE
+   ═══════════════════════════════════════════════════════════════════════ */
+window.bizBulkCategorize = function () {
+  const catOpts = (BIZ.cats||[]).map(c => ({value:c.name, label:c.name}));
+  if (catOpts.length === 0) { toast('Add categories first', 'error'); return; }
+  openExtModal('Bulk Categorize Cheques', [
+    {id:'category', label:'Assign Category', type:'select', required:true, options:catOpts, placeholder:'-- Select --'},
+    {id:'filter', label:'Apply to', type:'select', required:true, options:[
+      {value:'uncat', label:'Only uncategorized'},
+      {value:'all', label:'ALL cheques (overwrite)'},
+      {value:'in-hand', label:'In-hand only'},
+      {value:'issued', label:'Issued only'},
+      {value:'returned', label:'Returned only'},
+      {value:'cleared', label:'Cleared only'},
+      {value:'draft', label:'Draft only'}
+    ], value:'uncat'}
+  ], async d => {
+    const cheques = (window.allCheques||[]).filter(c => !c.deletedAt);
+    let targets = cheques;
+    if (d.filter === 'uncat') targets = cheques.filter(c => !c.category);
+    else if (d.filter !== 'all') targets = cheques.filter(c => c.status === d.filter);
+    if (targets.length === 0) throw new Error('No matching cheques');
+    if (!confirm('Assign "' + d.category + '" to ' + targets.length + ' cheque(s)?')) throw new Error('Cancelled');
+    const db = DB(); let done = 0, failed = 0;
+    for (const c of targets) {
+      try { await db.collection('cheques').doc(c.id).update({category: d.category}); done++; } catch(e){ failed++; }
+    }
+    toast('Categorized ' + done + ' cheque(s)' + (failed ? ' (' + failed + ' failed)' : ''), 'success');
+    try { if (typeof loadAllChequesData === 'function') await loadAllChequesData(); } catch(e){}
+    renderChips(); tagAndFilterRows(); renderCatsExt();
+  });
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   5 · AUTO-TAG BY PROJECT DEFAULT
+   ═══════════════════════════════════════════════════════════════════════ */
+document.addEventListener('change', async (e) => {
+  if (!e.target || e.target.id !== 'chequeProject') return;
+  const pid = e.target.value;
+  if (!pid) return;
+  const db = DB(); if (!db) return;
+  try {
+    const doc = await db.collection('projects').doc(pid).get();
+    if (doc.exists) {
+      const p = doc.data();
+      if (p.defaultCategory) {
+        const catSel = $('chequeCategory');
+        if (catSel) { catSel.value = p.defaultCategory; toast('Auto-tagged: ' + p.defaultCategory, 'info'); }
+      }
+    }
+  } catch (err) {}
+}, true);
+
+/* ═══════════════════════════════════════════════════════════════════════
+   6 · CHEQUE MODAL INJECTION — Category + Project
+   ═══════════════════════════════════════════════════════════════════════ */
+function injectChequeDropdowns() {
+  const targets = [
+    {statusId:'chequeStatus',     catId:'chequeCategory',     projId:'chequeProject'},
+    {statusId:'editChequeStatus', catId:'editChequeCategory', projId:'editChequeProject'}
+  ];
+  const catOpts = '<option value="">-- None --</option>' + (BIZ.cats || []).map(c => '<option value="' + E(c.name) + '">' + E(c.name) + '</option>').join('');
+  const projOpts = '<option value="">-- None --</option>' + (BIZ.projects || []).map(p => '<option value="' + E(p.id) + '">' + E(p.name) + '</option>').join('');
+
+  targets.forEach(t => {
+    const statusEl = $(t.statusId);
+    if (!statusEl) return;
+    const grp = statusEl.closest('.form-group');
+    if (!grp || !grp.parentElement) return;
+
+    let catSel = $(t.catId);
+    if (!catSel) {
+      const d = document.createElement('div');
+      d.className = 'form-group';
+      d.innerHTML = '<label>Category</label><select id="' + t.catId + '">' + catOpts + '</select>';
+      grp.parentElement.insertBefore(d, grp.nextSibling);
+      catSel = $(t.catId);
+    } else { const v = catSel.value; catSel.innerHTML = catOpts; catSel.value = v; }
+
+    let projSel = $(t.projId);
+    if (!projSel) {
+      const d = document.createElement('div');
+      d.className = 'form-group';
+      d.innerHTML = '<label>Link to Project</label><select id="' + t.projId + '">' + projOpts + '</select>';
+      const catGrp = catSel.closest('.form-group');
+      catGrp.parentElement.insertBefore(d, catGrp.nextSibling);
+      projSel = $(t.projId);
+    } else { const v = projSel.value; projSel.innerHTML = projOpts; projSel.value = v; }
+  });
+}
+
+function installHooks() {
+  if (typeof window.openModal === 'function' && !window.openModal.__bizV21Hooked) {
+    const orig = window.openModal;
+    const wrapped = function (id) {
+      const r = orig.apply(this, arguments);
+      setTimeout(() => {
+        if (id === 'addChequeModal') injectChequeDropdowns();
+        if (id === 'editChequeModal') {
+          injectChequeDropdowns();
+          const idEl = $('editChequeId');
+          if (idEl && idEl.value) {
+            const c = (window.allCheques||[]).find(x => x.id === idEl.value);
+            if (c) {
+              if ($('editChequeCategory') && c.category) $('editChequeCategory').value = c.category;
+              if ($('editChequeProject') && c.projectId) $('editChequeProject').value = c.projectId;
+            }
+          }
+        }
+      }, 80);
+      return r;
+    };
+    wrapped.__bizV21Hooked = true;
+    window.openModal = wrapped;
+  }
+
+  if (typeof window.saveCheque === 'function' && !window.saveCheque.__bizV21Hooked) {
+    const orig = window.saveCheque;
+    const wrapped = function () {
+      try {
+        const cat = $('chequeCategory');
+        const proj = $('chequeProject');
+        window.__bizPendingCat  = cat ? cat.value : null;
+        window.__bizPendingProj = proj ? proj.value : null;
+      } catch(e){}
+      return orig.apply(this, arguments);
+    };
+    wrapped.__bizV21Hooked = true;
+    window.saveCheque = wrapped;
+  }
+
+  if (typeof window.saveEditCheque === 'function' && !window.saveEditCheque.__bizV21Hooked) {
+    const orig = window.saveEditCheque;
+    const wrapped = function () {
+      try {
+        const idEl = $('editChequeId');
+        const cat = $('editChequeCategory');
+        const proj = $('editChequeProject');
+        if (idEl && idEl.value && DB()) {
+          const update = {};
+          if (cat) update.category = cat.value || null;
+          if (proj) update.projectId = proj.value || null;
+          if (Object.keys(update).length) DB().collection('cheques').doc(idEl.value).update(update).catch(e => console.warn('[v2.1]', e.message));
+        }
+      } catch(e){}
+      return orig.apply(this, arguments);
+    };
+    wrapped.__bizV21Hooked = true;
+    window.saveEditCheque = wrapped;
+  }
+}
+
+async function attachPendingToNewest() {
+  if (!window.__bizPendingCat && !window.__bizPendingProj) return;
+  const db = DB(); if (!db) return;
+  try {
+    const snap = await db.collection('cheques').orderBy('createdAt','desc').limit(1).get();
+    if (!snap.empty) {
+      const upd = {};
+      if (window.__bizPendingCat)  upd.category  = window.__bizPendingCat;
+      if (window.__bizPendingProj) upd.projectId = window.__bizPendingProj;
+      await db.collection('cheques').doc(snap.docs[0].id).update(upd);
+    }
+  } catch (e) {}
+  window.__bizPendingCat = null;
+  window.__bizPendingProj = null;
+}
+
+function installChequeWatcher() {
+  if (typeof window.loadAllChequesData !== 'function') return setTimeout(installChequeWatcher, 300);
+  if (window.loadAllChequesData.__bizV21Watched) return;
+  const orig = window.loadAllChequesData;
+  const wrapped = function () {
+    const r = orig.apply(this, arguments);
+    const after = () => { try { attachPendingToNewest(); renderChips(); tagAndFilterRows(); renderCatsExt(); } catch(e){} };
+    if (r && r.then) r.then(after); else setTimeout(after, 400);
+    return r;
+  };
+  wrapped.__bizV21Watched = true;
+  window.loadAllChequesData = wrapped;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   7 · BANK TRANSACTIONS VIEW + AUTO-CATEGORIZATION
+   ═══════════════════════════════════════════════════════════════════════ */
+let activeTxnFilter = 'ALL';
+
+function renderBankTxns() {
+  const el = $('biz-txns-body'); if (!el) return;
+  const actions = $('biz-txns-actions');
+  if (actions) actions.innerHTML =
+    '<button class="btn btn-secondary btn-sm" onclick="bizAutoTagTxns()" style="margin-right:8px"><i class="fas fa-magic"></i> Auto-Tag</button>' +
+    '<button class="btn btn-secondary btn-sm" onclick="bizRefreshTxns()"><i class="fas fa-sync"></i> Refresh</button>';
+
+  const txns = BIZ.txns || [];
+  const banks = BIZ.banks || [];
+  const cats = BIZ.cats || [];
+
+  /* chip bar */
+  const chipItems = [
+    { key:'ALL', label:'All', color:'#6366f1', count: txns.length },
+    { key:'UNC', label:'Uncategorized', color:'#94a3b8', count: txns.filter(t => !t.category).length }
+  ];
+  cats.forEach(c => chipItems.push({ key:c.name, label:c.name, color:c.color||'#6366f1', count:txns.filter(t => t.category === c.name).length }));
+
+  let html = '<div style="display:flex;gap:8px;overflow-x:auto;padding:8px 0 14px;margin-bottom:14px;border-bottom:1px solid var(--border);scrollbar-width:thin">';
+  html += chipItems.map(it => {
+    const isA = String(activeTxnFilter) === String(it.key);
+    return '<button onclick="bizSetTxnCat(\'' + E(it.key).replace(/'/g, "\\'") + '\')" style="white-space:nowrap;padding:7px 14px;border-radius:20px;border:2px solid ' + (isA?it.color:'var(--border)') + ';background:' + (isA?it.color:'white') + ';color:' + (isA?'white':'var(--dark)') + ';font-weight:600;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:' + (isA?'white':it.color) + '"></span>' + E(it.label) + ' <span style="opacity:0.75;font-size:10px">(' + it.count + ')</span></button>';
+  }).join('');
+  html += '</div>';
+
+  const filtered = txns.filter(t => {
+    if (activeTxnFilter === 'ALL') return true;
+    if (activeTxnFilter === 'UNC') return !t.category;
+    return t.category === activeTxnFilter;
+  });
+
+  if (filtered.length === 0) { html += '<div class="empty-state"><i class="fas fa-exchange-alt"></i><h3>No transactions</h3><p style="margin-top:8px">Click "Auto-Tag" to detect categories from linked records</p></div>'; el.innerHTML = html; return; }
+
+  const catColor = name => (cats.find(c => c.name === name) || {}).color || '#64748b';
+  html += '<div class="table-container"><table><thead><tr><th>Date</th><th>Bank</th><th>Type</th><th>Amount</th><th>Category</th><th>Description</th><th></th></tr></thead><tbody>';
+  filtered.forEach(t => {
+    const bank = banks.find(b => b.id === t.bankAccountId);
+    const isC = t.type === 'credit';
+    const cat = t.category || '';
+    const catBadge = cat
+      ? '<span class="status-badge" style="background:' + catColor(cat) + '22;color:' + catColor(cat) + '">' + E(cat) + '</span>'
+      : '<span class="status-badge" style="background:#f1f5f9;color:#94a3b8">UNCAT</span>';
+    html += '<tr>' +
+      '<td>' + E(t.date||'-') + '</td>' +
+      '<td>' + E(bank ? (bank.bankName||bank.name) : '(deleted)') + '</td>' +
+      '<td><span class="status-badge ' + (isC?'status-cleared':'status-returned') + '">' + E(t.type) + '</span></td>' +
+      '<td style="font-weight:700;color:' + (isC?'var(--success)':'var(--danger)') + '">' + F(t.amount) + '</td>' +
+      '<td>' + catBadge + ' <button class="btn btn-xs btn-secondary" onclick="bizEditTxnCat(\'' + t.id + '\')" title="Change category"><i class="fas fa-tag"></i></button></td>' +
+      '<td style="font-size:12px">' + E(t.description||'-') + '</td>' +
+      '<td><button class="btn btn-xs btn-secondary" onclick="bizDeleteTxn(\'' + t.id + '\')"><i class="fas fa-trash"></i></button></td>' +
+    '</tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+window.bizSetTxnCat = function (key) { activeTxnFilter = key; renderBankTxns(); };
+
+window.bizRefreshTxns = async function () {
+  if (typeof window.bizReload === 'function') await window.bizReload();
+  renderBankTxns();
+  toast('Refreshed', 'success');
+};
+
+window.bizEditTxnCat = function (txnId) {
+  const txn = (BIZ.txns||[]).find(t => t.id === txnId);
+  if (!txn) return;
+  const catOpts = (BIZ.cats||[]).map(c => ({value:c.name, label:c.name}));
+  openExtModal('Change Transaction Category', [
+    {id:'category', label:'Category', type:'select', options:[{value:'', label:'-- None --'}].concat(catOpts), value: txn.category || ''}
+  ], async d => {
+    await DB().collection('bankTransactions').doc(txnId).update({category: d.category || null, categoryEditedAt: new Date().toISOString(), categoryEditedBy: WHO()});
+    toast('Category updated', 'success');
+    if (typeof window.bizReload === 'function') await window.bizReload();
+    renderBankTxns();
+  });
+};
+
+window.bizDeleteTxn = async function (id) {
+  if (!confirm('Delete this transaction? Bank balance will NOT be reversed.')) return;
+  await DB().collection('bankTransactions').doc(id).delete();
+  toast('Deleted', 'success');
+  if (typeof window.bizReload === 'function') await window.bizReload();
+  renderBankTxns();
+};
+
+/* Auto-tag bank transactions by resolving linked source records */
+function parseSource(ref) {
+  if (!ref) return { type:null, id:null };
+  const m = String(ref).match(/^(cheque|inpayment|outpayment|loan|shoppayment)[:_](.+)$/i);
+  if (!m) return { type:null, id:null };
+  return { type: m[1].toLowerCase(), id: m[2] };
+}
+
+async function resolveCategory(txn) {
+  const src = parseSource(txn.reference);
+  if (!src.type || !src.id) return null;
+  const db = DB(); if (!db) return null;
+  try {
+    if (src.type === 'cheque') {
+      const d = await db.collection('cheques').doc(src.id).get();
+      if (d.exists) return d.data().category || null;
+    } else if (src.type === 'inpayment') {
+      const d = await db.collection('inPayments').doc(src.id).get();
+      if (d.exists) return d.data().category || null;
+    } else if (src.type === 'outpayment') {
+      const d = await db.collection('outPayments').doc(src.id).get();
+      if (d.exists) return d.data().category || null;
+    } else if (src.type === 'shoppayment') {
+      const d = await db.collection('ncShopPayments').doc(src.id).get();
+      if (d.exists) return d.data().category || 'Shop Payment';
+    } else if (src.type === 'loan') {
+      const d = await db.collection('loans').doc(src.id).get();
+      if (d.exists) {
+        const allocs = d.data().allocations || [];
+        if (allocs.length > 0) return allocs[0].category || null;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
+window.bizAutoTagTxns = async function () {
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Tagging…'; }
+  const db = DB();
+  const snap = await db.collection('bankTransactions').orderBy('date','desc').limit(200).get().catch(() => null);
+  if (!snap) { toast('Failed to load transactions', 'error'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Auto-Tag'; } return; }
+  let done = 0, skipped = 0;
+  for (const doc of snap.docs) {
+    const txn = Object.assign({id:doc.id}, doc.data());
+    if (txn.category) { skipped++; continue; }
+    const cat = await resolveCategory(txn);
+    if (cat) {
+      const src = parseSource(txn.reference);
+      try { await db.collection('bankTransactions').doc(txn.id).update({category: cat, sourceType: src.type, sourceId: src.id, autoTaggedAt: new Date().toISOString()}); done++; } catch(e){}
+    }
+  }
+  toast('Auto-tagged ' + done + ' transaction(s)' + (skipped ? ' (' + skipped + ' already tagged)' : ''), done > 0 ? 'success' : 'info');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Auto-Tag'; }
+  if (typeof window.bizReload === 'function') await window.bizReload();
+  renderBankTxns();
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   8 · ANALYTICS VIEW — full dashboard with charts
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderAnalytics() {
+  const el = $('biz-analytics-body'); if (!el) return;
+  const actions = $('biz-analytics-actions');
+  if (actions) actions.innerHTML = '<button class="btn btn-secondary btn-sm" onclick="renderAnalytics()"><i class="fas fa-sync"></i> Refresh</button>';
+
+  const cheques = (window.allCheques || []).filter(c => !c.deletedAt);
+  const cats = BIZ.cats || [];
+  const totalCheques = cheques.length;
+  const totalValue = cheques.reduce((s,c) => s + N(c.amount), 0);
+  const statusGroups = {}; const valueByStatus = {};
+  cheques.forEach(c => {
+    statusGroups[c.status] = (statusGroups[c.status] || 0) + 1;
+    valueByStatus[c.status] = (valueByStatus[c.status] || 0) + N(c.amount);
+  });
+  const returned = cheques.filter(c => c.status === 'returned');
+  const returnedAmount = returned.reduce((s,c) => s + N(c.amount), 0);
+  const recovered = returned.reduce((s,c) => s + (c.payments||[]).reduce((p,pay) => p + N(pay.amount), 0), 0);
+  const recoveryRate = returnedAmount > 0 ? (recovered/returnedAmount*100).toFixed(1) : '0.0';
+  const inHand = cheques.filter(c => c.status === 'in-hand');
+  const inHandValue = inHand.reduce((s,c) => s + N(c.amount), 0);
+
+  /* Category breakdown */
+  const catBreakdown = {};
+  cheques.forEach(c => {
+    const cat = c.category || '(uncategorized)';
+    if (!catBreakdown[cat]) catBreakdown[cat] = { count:0, value:0 };
+    catBreakdown[cat].count++;
+    catBreakdown[cat].value += N(c.amount);
+  });
+
+  /* Top payees */
+  const payeeMap = {};
+  cheques.forEach(c => {
+    if (!c.payee) return;
+    const k = c.payee.toLowerCase();
+    if (!payeeMap[k]) payeeMap[k] = { name:c.payee, total:0, count:0 };
+    payeeMap[k].total += N(c.amount);
+    payeeMap[k].count++;
+  });
+  const topPayees = Object.values(payeeMap).sort((a,b) => b.total - a.total).slice(0,5);
+
+  /* Bank breakdown */
+  const bankMap = {};
+  cheques.forEach(c => {
+    if (!c.bank) return;
+    if (!bankMap[c.bank]) bankMap[c.bank] = { name:c.bank, total:0, count:0 };
+    bankMap[c.bank].total += N(c.amount);
+    bankMap[c.bank].count++;
+  });
+  const bankBreakdown = Object.values(bankMap).sort((a,b) => b.total - a.total);
+
+  /* 6-month trend */
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ label: d.toLocaleDateString('en-IN', { month:'short', year:'2-digit' }), key: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'), count:0, total:0 });
+  }
+  cheques.forEach(c => {
+    if (!c.date) return;
+    const d = new Date(c.date); if (isNaN(d.getTime())) return;
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const m = months.find(x => x.key === key);
+    if (m) { m.count++; m.total += N(c.amount); }
+  });
+  const maxMonthly = Math.max.apply(null, months.map(m => m.total).concat([1]));
+
+  /* In-hand aging buckets */
+  const today = new Date(); today.setHours(0,0,0,0);
+  const aging = { c30:0, c60:0, c90:0, c90plus:0 };
+  inHand.forEach(c => {
+    const d = new Date(c.date); d.setHours(0,0,0,0);
+    const days = Math.floor((d - today) / 86400000);
+    const amt = N(c.amount);
+    if (days <= 30) aging.c30 += amt;
+    else if (days <= 60) aging.c60 += amt;
+    else if (days <= 90) aging.c90 += amt;
+    else aging.c90plus += amt;
+  });
+  const maxAging = Math.max(aging.c30, aging.c60, aging.c90, aging.c90plus, 1);
+
+  const statusColors = { 'draft':'#64748b','in-hand':'#3b82f6','issued':'#f59e0b','deposited':'#4338ca','returned':'#ef4444','cleared':'#10b981','stopped':'#991b1b' };
+  const catColors = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#0ea5e9'];
+
+  let html = '';
+
+  /* KPI row */
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:22px">' +
+    '<div class="widget" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white"><div style="font-size:11px;opacity:.9;font-weight:700;text-transform:uppercase">Total Cheques</div><div style="font-size:32px;font-weight:800;margin-top:6px">' + totalCheques + '</div><div style="font-size:11px;opacity:.85;margin-top:4px">' + F(totalValue) + '</div></div>' +
+    '<div class="widget" style="background:linear-gradient(135deg,#10b981,#059669);color:white"><div style="font-size:11px;opacity:.9;font-weight:700;text-transform:uppercase">Recovery Rate</div><div style="font-size:32px;font-weight:800;margin-top:6px">' + recoveryRate + '%</div><div style="font-size:11px;opacity:.85;margin-top:4px">' + F(recovered) + ' recovered</div></div>' +
+    '<div class="widget" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white"><div style="font-size:11px;opacity:.9;font-weight:700;text-transform:uppercase">Outstanding Bounced</div><div style="font-size:32px;font-weight:800;margin-top:6px">' + F(returnedAmount - recovered) + '</div><div style="font-size:11px;opacity:.85;margin-top:4px">' + returned.length + ' cheques</div></div>' +
+    '<div class="widget" style="background:linear-gradient(135deg,#06b6d4,#0891b2);color:white"><div style="font-size:11px;opacity:.9;font-weight:700;text-transform:uppercase">In Hand</div><div style="font-size:32px;font-weight:800;margin-top:6px">' + inHand.length + '</div><div style="font-size:11px;opacity:.85;margin-top:4px">' + F(inHandValue) + '</div></div>' +
+  '</div>';
+
+  /* Status + Monthly trend */
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:22px">';
+  html += '<div class="card" style="margin:0"><div class="card-header"><h3 class="card-title">Status Distribution</h3></div><div style="display:flex;flex-direction:column;gap:12px">';
+  Object.keys(statusGroups).forEach(status => {
+    const count = statusGroups[status];
+    const pct = totalCheques > 0 ? (count/totalCheques*100) : 0;
+    const color = statusColors[status] || '#6366f1';
+    const val = valueByStatus[status] || 0;
+    html += '<div><div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px"><span style="font-weight:600;text-transform:capitalize">' + status.replace('-',' ') + '</span><span style="color:var(--gray)">' + count + ' · ' + F(val) + '</span></div><div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden"><div style="background:' + color + ';height:100%;width:' + pct + '%"></div></div></div>';
+  });
+  if (!Object.keys(statusGroups).length) html += '<div style="text-align:center;color:var(--gray);padding:20px">No data</div>';
+  html += '</div></div>';
+
+  html += '<div class="card" style="margin:0"><div class="card-header"><h3 class="card-title">Last 6 Months</h3></div><div style="display:flex;align-items:flex-end;justify-content:space-around;height:200px;gap:8px;padding:10px 0">';
+  months.forEach(m => {
+    const h = (m.total/maxMonthly) * 100;
+    html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="font-size:10px;color:var(--gray);font-weight:600">' + m.count + '</div><div style="width:100%;height:' + h + '%;min-height:4px;background:linear-gradient(180deg,#6366f1,#8b5cf6);border-radius:6px 6px 0 0" title="' + F(m.total) + '"></div><div style="font-size:11px;color:var(--gray);font-weight:600">' + m.label + '</div></div>';
+  });
+  html += '</div></div>';
+  html += '</div>';
+
+  /* Aging + Top payees */
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:22px">';
+  html += '<div class="card" style="margin:0"><div class="card-header"><h3 class="card-title">In-Hand Aging</h3></div><div style="display:flex;flex-direction:column;gap:12px">';
+  [{ label:'0-30 Days', val:aging.c30, color:'#10b981' }, { label:'31-60 Days', val:aging.c60, color:'#f59e0b' }, { label:'61-90 Days', val:aging.c90, color:'#ef4444' }, { label:'90+ Days', val:aging.c90plus, color:'#7c3aed' }].forEach(b => {
+    const pct = (b.val/maxAging)*100;
+    html += '<div><div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px"><span style="font-weight:600">' + b.label + '</span><span style="color:var(--gray)">' + F(b.val) + '</span></div><div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden"><div style="background:' + b.color + ';height:100%;width:' + pct + '%"></div></div></div>';
+  });
+  html += '</div></div>';
+
+  html += '<div class="card" style="margin:0"><div class="card-header"><h3 class="card-title">Top 5 Payees</h3></div><div style="display:flex;flex-direction:column;gap:10px">';
+  if (topPayees.length) {
+    topPayees.forEach((p,i) => {
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--light);border-radius:8px"><div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">' + (i+1) + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + E(p.name) + '</div><div style="font-size:11px;color:var(--gray)">' + p.count + ' cheques</div></div><div style="font-weight:700;color:var(--primary);font-size:13px">' + F(p.total) + '</div></div>';
+    });
+  } else html += '<div style="text-align:center;color:var(--gray);padding:20px">No data</div>';
+  html += '</div></div>';
+  html += '</div>';
+
+  /* Category breakdown + Banks */
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:22px">';
+  html += '<div class="card" style="margin:0"><div class="card-header"><h3 class="card-title">Category Breakdown</h3></div><div style="display:flex;flex-direction:column;gap:10px">';
+  const catKeys = Object.keys(catBreakdown).sort((a,b) => catBreakdown[b].value - catBreakdown[a].value);
+  if (catKeys.length) {
+    catKeys.forEach((k, i) => {
+      const info = catBreakdown[k];
+      const color = (cats.find(c => c.name === k) || {}).color || catColors[i % catColors.length];
+      const pct = totalValue > 0 ? (info.value / totalValue * 100) : 0;
+      html += '<div><div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px"><span style="font-weight:600"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:6px"></span>' + E(k) + '</span><span style="color:var(--gray)">' + info.count + ' · ' + F(info.value) + ' (' + pct.toFixed(0) + '%)</span></div><div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden"><div style="background:' + color + ';height:100%;width:' + pct + '%"></div></div></div>';
+    });
+  } else html += '<div style="text-align:center;color:var(--gray);padding:20px">No data</div>';
+  html += '</div></div>';
+
+  html += '<div class="card" style="margin:0"><div class="card-header"><h3 class="card-title">Bank Breakdown</h3></div><div style="display:flex;flex-direction:column;gap:10px">';
+  if (bankBreakdown.length) {
+    bankBreakdown.slice(0,8).forEach(b => {
+      const pct = totalValue > 0 ? (b.total / totalValue * 100) : 0;
+      html += '<div><div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px"><span style="font-weight:600">' + E(b.name) + '</span><span style="color:var(--gray)">' + b.count + ' · ' + F(b.total) + '</span></div><div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden"><div style="background:linear-gradient(90deg,#06b6d4,#3b82f6);height:100%;width:' + pct + '%"></div></div></div>';
+    });
+  } else html += '<div style="text-align:center;color:var(--gray);padding:20px">No data</div>';
+  html += '</div></div>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   9 · ENHANCE Cheque Categories view — add Bulk Assign button
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderCatsExt() {
+  const actions = $('biz-cats-actions');
+  if (actions) {
+    if (!actions.querySelector('.biz-bulk-cat-btn')) {
+      actions.innerHTML = '<button class="btn btn-secondary btn-sm biz-bulk-cat-btn" onclick="bizBulkCategorize()" style="margin-right:8px"><i class="fas fa-tags"></i> Bulk Assign</button>' + actions.innerHTML;
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   10 · GENERIC MODAL for v2.1
+   ═══════════════════════════════════════════════════════════════════════ */
+function openExtModal(title, fields, onSubmit) {
+  let host = $('bizExtModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'bizExtModal';
+    host.className = 'modal-overlay';
+    host.innerHTML = '<div class="modal" style="max-width:560px"><div class="modal-header"><h2 class="modal-title" id="bizExtTitle">Modal</h2><button class="modal-close" onclick="document.getElementById(\'bizExtModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button></div><div class="modal-body" id="bizExtBody"></div><div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById(\'bizExtModal\').classList.remove(\'active\')">Cancel</button><button class="btn btn-primary" id="bizExtSave"><i class="fas fa-save"></i> Save</button></div></div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+  $('bizExtTitle').textContent = title;
+  $('bizExtBody').innerHTML = fields.map(f => {
+    const req = f.required ? ' *' : '';
+    const v = f.value == null ? '' : String(f.value);
+    if (f.type === 'select') {
+      return '<div class="form-group"><label>' + E(f.label) + req + '</label><select id="bx_' + f.id + '">' + (f.placeholder ? '<option value="">' + E(f.placeholder) + '</option>' : '') + (f.options||[]).map(o => { const val = typeof o === 'string' ? o : o.value; const lbl = typeof o === 'string' ? o : o.label; return '<option value="' + E(val) + '"' + (String(f.value)===String(val)?' selected':'') + '>' + E(lbl) + '</option>'; }).join('') + '</select></div>';
+    }
+    if (f.type === 'textarea') return '<div class="form-group"><label>' + E(f.label) + req + '</label><textarea id="bx_' + f.id + '" rows="3">' + E(v) + '</textarea></div>';
+    return '<div class="form-group"><label>' + E(f.label) + req + '</label><input type="' + (f.type||'text') + '" id="bx_' + f.id + '" value="' + E(v) + '"></div>';
+  }).join('');
+  const btn = $('bizExtSave');
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  fresh.addEventListener('click', async () => {
+    const data = {};
+    for (const f of fields) {
+      const el = $('bx_' + f.id); if (!el) continue;
+      let v = el.value;
+      if (f.type === 'number') v = N(v);
+      if (f.required && !v) { toast('Required: ' + f.label, 'error'); return; }
+      data[f.id] = v;
+    }
+    try { fresh.disabled = true; await onSubmit(data); host.classList.remove('active'); }
+    catch (e) { toast('Error: ' + e.message, 'error'); }
+    finally { fresh.disabled = false; }
+  });
+  host.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   11 · BOOT
+   ═══════════════════════════════════════════════════════════════════════ */
+function boot() {
+  /* Wait for Business Ledger v2.0 to exist */
+  const waitBiz = setInterval(() => {
+    if (!$('bizSidebarSection')) return;
+    clearInterval(waitBiz);
+    expandSidebar();
+    expandViews();
+    injectCategoryChips();
+    installHooks();
+    installChequeWatcher();
+    hookRenderAllCheques();
+    renderCatsExt();
+  }, 500);
+
+  /* Re-inject on load */
+  [2000, 4000, 7000].forEach(ms => setTimeout(() => {
+    expandSidebar();
+    expandViews();
+    injectCategoryChips();
+    installHooks();
+    renderCatsExt();
+  }, ms));
+
+  /* Periodic maintenance */
+  setInterval(() => {
+    expandSidebar();
+    if ($('allChequesView')?.classList.contains('active')) {
+      if (!$('ncCategoryChipsContainer')) injectCategoryChips();
+      tagAndFilterRows();
+    }
+    const catActions = $('biz-cats-actions');
+    if (catActions && !catActions.querySelector('.biz-bulk-cat-btn')) renderCatsExt();
+  }, 3000);
+
+  console.log('[Biz v2.1] ✅ Categories · Chips · Bulk · Bank Txns · Analytics loaded');
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 5500));
+else setTimeout(boot, 5500);
+
+})();
+</script>
 </body>
 </html>
