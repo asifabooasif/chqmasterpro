@@ -12489,6 +12489,731 @@ if (document.readyState === 'loading') {
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHANGE #9 — User Management & Permissions
+     • asifabooasif@gmail.com = hardcoded default admin
+     • Auto-seeds ncUsers/{uid} on first login
+     • Granular permissions per user
+     • Settings → Users & Permissions tab (admin only)
+     • Live permission updates (onSnapshot)
+     • UI enforcement (hide/disable buttons by permission)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__ncChange9) return;
+window.__ncChange9 = true;
+
+/* ══════════ CONSTANTS ══════════ */
+const DEFAULT_ADMIN_EMAIL = 'asifabooasif@gmail.com';
+
+const PERM_GROUPS = [
+  { group:'Cheques',    perms:['cheques.view','cheques.create','cheques.edit','cheques.delete'] },
+  { group:'Payments',   perms:['payments.view','payments.create','payments.edit','payments.delete'] },
+  { group:'Loans',      perms:['loans.view','loans.create','loans.edit','loans.delete'] },
+  { group:'Projects',   perms:['projects.view','projects.create','projects.edit','projects.delete'] },
+  { group:'Banks',      perms:['banks.view','banks.create','banks.edit','banks.delete'] },
+  { group:'Parties',    perms:['parties.view','parties.create','parties.edit','parties.delete'] },
+  { group:'Categories', perms:['categories.view','categories.manage'] },
+  { group:'Finance',    perms:['finance.view','finance.issue'] },
+  { group:'Personal',   perms:['personal.view','personal.issue'] },
+  { group:'Admin',      perms:['users.manage','settings.edit'] }
+];
+
+const ALL_PERMS = PERM_GROUPS.flatMap(g => g.perms);
+
+function buildPerms(map) {
+  const o = {};
+  ALL_PERMS.forEach(p => o[p] = map && map[p] ? 1 : 0);
+  return o;
+}
+
+const ROLE_TEMPLATES = {
+  admin:    buildPerms(Object.fromEntries(ALL_PERMS.map(p => [p,1]))),
+  manager:  buildPerms(Object.fromEntries(ALL_PERMS.filter(p => !['users.manage','settings.edit'].includes(p)).map(p => [p,1]))),
+  operator: buildPerms({
+    'cheques.view':1,'cheques.create':1,'cheques.edit':1,
+    'payments.view':1,'payments.create':1,'payments.edit':1,
+    'loans.view':1,'projects.view':1,'banks.view':1,'parties.view':1,
+    'categories.view':1,'finance.view':1,'personal.view':1
+  }),
+  viewer:   buildPerms(Object.fromEntries(ALL_PERMS.filter(p => p.endsWith('.view')).map(p => [p,1])))
+};
+
+/* ══════════ UTILS ══════════ */
+const $  = id => document.getElementById(id);
+const E  = s  => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const TS = () => { try { return firebase.firestore.FieldValue.serverTimestamp(); } catch(e){ return new Date(); } };
+const who= () => { try { return (currentUser && currentUser.email) || 'user'; } catch(e){ return 'system'; } };
+const DB = () => { try { return typeof db !== 'undefined' ? db : null; } catch(e){ return null; } };
+
+function toast(m, t) {
+  try { if (typeof showToast === 'function') return showToast(m, t||'info'); } catch(e){}
+  console.log('['+(t||'info')+']', m);
+}
+
+/* ══════════ STATE ══════════ */
+const U = {
+  me: null,          /* my ncUsers doc */
+  ready: false,
+  users: [],         /* for admin view */
+  unsubMe: null,
+  unsubUsers: null
+};
+
+/* ══════════ ENSURE USER DOC ══════════ */
+async function ensureMyUserDoc(user) {
+  const db = DB(); if (!db) return null;
+  const ref = db.collection('ncUsers').doc(user.uid);
+  const isDefaultAdmin = user.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+
+  let snap;
+  try { snap = await ref.get(); } catch (e) { return null; }
+
+  if (!snap.exists) {
+    const role = isDefaultAdmin ? 'admin' : 'viewer';
+    const data = {
+      uid: user.uid,
+      email: user.email,
+      name: user.displayName || user.email.split('@')[0],
+      photoURL: user.photoURL || '',
+      role: role,
+      permissions: ROLE_TEMPLATES[role],
+      active: true,
+      isDefaultAdmin: isDefaultAdmin,
+      createdAt: new Date().toISOString(),
+      createdBy: isDefaultAdmin ? 'system-default-admin' : 'system-auto',
+      lastSeen: new Date().toISOString()
+    };
+    try { await ref.set(data); } catch (e) { toast('Cannot seed user doc: ' + e.message, 'error'); return null; }
+    snap = await ref.get();
+  } else {
+    const data = snap.data();
+    const updates = { lastSeen: new Date().toISOString() };
+    /* Default admin always gets admin role — no lockout possible */
+    if (isDefaultAdmin && (data.role !== 'admin' || !data.permissions || !data.permissions['users.manage'])) {
+      updates.role = 'admin';
+      updates.permissions = ROLE_TEMPLATES.admin;
+      updates.isDefaultAdmin = true;
+      updates.active = true;
+    }
+    try { await ref.update(updates); } catch (e) {}
+    snap = await ref.get();
+  }
+  return Object.assign({ id: snap.id }, snap.data());
+}
+
+/* ══════════ SUBSCRIBE TO MY PERMISSIONS ══════════ */
+function subscribeToMe(user) {
+  const db = DB(); if (!db) return;
+  if (U.unsubMe) U.unsubMe();
+  U.unsubMe = db.collection('ncUsers').doc(user.uid).onSnapshot(snap => {
+    if (!snap.exists) return;
+    U.me = Object.assign({ id: snap.id }, snap.data());
+    U.ready = true;
+    enforcePermissions();
+    applyTabVisibility();
+  }, err => {
+    console.warn('[Change #9] onSnapshot error:', err.message);
+  });
+}
+
+/* ══════════ PERMISSION CHECK ══════════ */
+window.ncCan = function (perm) {
+  if (!U.me) return false;
+  if (U.me.isDefaultAdmin) return true;
+  if (U.me.role === 'admin') return true;
+  if (!U.me.permissions) return false;
+  return U.me.permissions[perm] === 1 || U.me.permissions[perm] === true;
+};
+
+/* ══════════ VIEW ↔ PERMISSION MAP ══════════ */
+const VIEW_PERM = {
+  dashboardView:       'cheques.view',
+  allChequesView:      'cheques.view',
+  inHandView:          'cheques.view',
+  returnedView:        'cheques.view',
+  recycleView:         'cheques.view',
+  payeesView:          'cheques.view',
+  issuersView:         'cheques.view',
+  kanbanView:          'cheques.view',
+  timelineView:        'cheques.view',
+  analyticsView:       'cheques.view',
+  booksView:           'cheques.view',
+  reportsView:         'cheques.view',
+  agingView:           'cheques.view',
+  auditView:           'cheques.view',
+  settingsView:        'settings.edit',
+  ncV10CatsView:       'categories.view',
+  ncV10ProjectsView:   'projects.view',
+  ncV10LoansView:      'loans.view',
+  ncV10InpView:        'payments.view',
+  ncV10OutView:        'payments.view',
+  ncV10BanksView:      'banks.view',
+  ncV10TxnsView:       'banks.view',
+  ncV10PartiesView:    'parties.view',
+  ncFinanceLedgerView: 'finance.view'
+};
+
+/* ══════════ ENFORCE — HIDE BUTTONS, DISABLE ACTIONS ══════════ */
+function enforcePermissions() {
+  if (!U.ready) return;
+
+  /* 1. Hide nav items whose target view requires a perm the user lacks */
+  document.querySelectorAll('.nav-item').forEach(el => {
+    const oc = el.getAttribute('onclick') || '';
+    const m1 = oc.match(/showView\('([^']+)'/);
+    const m2 = oc.match(/ncV10Route\('([^']+)'/);
+    const m3 = oc.match(/ncFinanceRoute\(/);
+
+    let viewId = null;
+    if (m1) {
+      const map = {
+        'dashboard':'dashboardView','all-cheques':'allChequesView','in-hand':'inHandView',
+        'returned':'returnedView','recycle':'recycleView','payees':'payeesView',
+        'issuers':'issuersView','kanban':'kanbanView','timeline':'timelineView',
+        'analytics':'analyticsView','books':'booksView','reports':'reportsView',
+        'aging':'agingView','audit':'auditView','settings':'settingsView'
+      };
+      viewId = map[m1[1]] || null;
+    } else if (m2) {
+      const vmap = {
+        'ncV10-projects':'ncV10ProjectsView','ncV10-loans':'ncV10LoansView',
+        'ncV10-out':'ncV10OutView','ncV10-inp':'ncV10InpView',
+        'ncV10-parties':'ncV10PartiesView','ncV10-banks':'ncV10BanksView',
+        'ncV10-txns':'ncV10TxnsView','ncV10-cats':'ncV10CatsView',
+        'ncAO-projects':'ncV10ProjectsView','ncAO-loans':'ncV10LoansView',
+        'ncAO-out':'ncV10OutView','ncAO-inp':'ncV10InpView',
+        'ncAO-parties':'ncV10PartiesView','ncAO-banks':'ncV10BanksView',
+        'ncAO-txns':'ncV10TxnsView','ncAO-cats':'ncV10CatsView'
+      };
+      viewId = vmap[m2[1]] || null;
+    } else if (m3) {
+      viewId = 'ncFinanceLedgerView';
+    }
+
+    if (viewId && VIEW_PERM[viewId]) {
+      const allowed = ncCan(VIEW_PERM[viewId]);
+      el.style.display = allowed ? '' : 'none';
+    }
+
+    /* Users & Permissions nav item — admin only */
+    if (el.id === 'ncNavUsersPerms') {
+      el.style.display = ncCan('users.manage') ? '' : 'none';
+    }
+  });
+
+  /* 2. Hide views entirely if user lacks perms */
+  Object.keys(VIEW_PERM).forEach(vid => {
+    const v = $(vid);
+    if (!v) return;
+    const allowed = ncCan(VIEW_PERM[vid]);
+    if (!allowed) {
+      v.style.display = 'none';
+    }
+  });
+
+  /* 3. Add/Remove "Add" buttons based on create permission */
+  const addPermMap = {
+    ncV10ProjectsView: 'projects.create',
+    ncV10LoansView:    'loans.create',
+    ncV10OutView:      'payments.create',
+    ncV10InpView:      'payments.create',
+    ncV10BanksView:    'banks.create',
+    ncV10TxnsView:     'banks.create',
+    ncV10PartiesView:  'parties.create',
+    ncV10CatsView:     'categories.manage'
+  };
+  Object.entries(addPermMap).forEach(([vid, perm]) => {
+    const v = $(vid); if (!v) return;
+    v.querySelectorAll('.btn-primary').forEach(btn => {
+      if (/Add|Assign|Bulk/.test(btn.textContent)) {
+        btn.style.display = ncCan(perm) ? '' : 'none';
+      }
+    });
+  });
+
+  /* 4. Settings — hide Users & Permissions tab from non-admins */
+  const settingsView = $('settingsView');
+  if (settingsView) {
+    const tabs = settingsView.querySelectorAll('.admin-tab');
+    tabs.forEach(t => {
+      if (t.textContent.trim() === 'Users & Permissions') {
+        t.style.display = ncCan('users.manage') ? '' : 'none';
+      }
+    });
+  }
+}
+
+/* ══════════ APPLY TAB VISIBILITY (3-tab sidebar integration) ══════════ */
+function applyTabVisibility() {
+  /* Hide entire tab sections if user has no permissions in that tab */
+  const canCheques = ncCan('cheques.view');
+  const canFinance = ncCan('loans.view') || ncCan('projects.view') || ncCan('finance.view');
+  const canPayments = ncCan('payments.view') || ncCan('banks.view') || ncCan('parties.view');
+
+  const tabs = {
+    cheques: canCheques,
+    finance: canFinance,
+    payments: canPayments
+  };
+
+  document.querySelectorAll('#ncMainTabs .nc-tab').forEach(btn => {
+    const t = btn.dataset.tab;
+    btn.style.display = tabs[t] ? '' : 'none';
+  });
+
+  Object.keys(tabs).forEach(t => {
+    const s = document.getElementById('ncSection-' + t);
+    if (s && !tabs[t]) s.style.display = 'none';
+  });
+
+  /* If active tab hidden, switch to a visible one */
+  const activeTab = (function(){ try { return localStorage.getItem('ncActiveTab') || 'cheques'; } catch(e){ return 'cheques'; } })();
+  if (!tabs[activeTab]) {
+    const fallback = Object.keys(tabs).find(t => tabs[t]);
+    if (fallback && typeof window.ncSwitchTab === 'function') {
+      window.ncSwitchTab(fallback);
+    }
+  }
+}
+
+/* ══════════ HOOK ROUTES TO BLOCK ACCESS ══════════ */
+function blockIfNoPerm(viewId) {
+  if (!U.ready) return false;
+  const perm = VIEW_PERM[viewId];
+  if (!perm) return false;
+  if (ncCan(perm)) return false;
+  toast('You don\'t have permission to open this view', 'error');
+  return true;
+}
+
+function hookRoutes() {
+  ['showView','ncV10Route','ncFinanceRoute'].forEach(name => {
+    if (typeof window[name] !== 'function') return;
+    if (window[name].__ncC9Hooked) return;
+    const orig = window[name];
+    const wrapped = function () {
+      const arg = arguments[0];
+      const map = {
+        'dashboard':'dashboardView','all-cheques':'allChequesView','in-hand':'inHandView',
+        'returned':'returnedView','recycle':'recycleView','payees':'payeesView',
+        'issuers':'issuersView','kanban':'kanbanView','timeline':'timelineView',
+        'analytics':'analyticsView','books':'booksView','reports':'reportsView',
+        'aging':'agingView','audit':'auditView','settings':'settingsView',
+        'ncV10-projects':'ncV10ProjectsView','ncV10-loans':'ncV10LoansView',
+        'ncV10-out':'ncV10OutView','ncV10-inp':'ncV10InpView',
+        'ncV10-parties':'ncV10PartiesView','ncV10-banks':'ncV10BanksView',
+        'ncV10-txns':'ncV10TxnsView','ncV10-cats':'ncV10CatsView',
+        'ncAO-projects':'ncV10ProjectsView','ncAO-loans':'ncV10LoansView',
+        'ncAO-out':'ncV10OutView','ncAO-inp':'ncV10InpView',
+        'ncAO-parties':'ncV10PartiesView','ncAO-banks':'ncV10BanksView',
+        'ncAO-txns':'ncV10TxnsView','ncAO-cats':'ncV10CatsView'
+      };
+      const viewId = map[arg] || (name === 'ncFinanceRoute' ? 'ncFinanceLedgerView' : null);
+      if (viewId && blockIfNoPerm(viewId)) return;
+      return orig.apply(this, arguments);
+    };
+    wrapped.__ncC9Hooked = true;
+    window[name] = wrapped;
+  });
+}
+
+/* ══════════ USER MANAGEMENT VIEW (ADMIN ONLY) ══════════ */
+function injectUserManagementTab() {
+  const settings = $('settingsView');
+  if (!settings || $('tab-usersperms')) return;
+
+  const tabsRow = settings.querySelector('.admin-tabs');
+  if (!tabsRow) return;
+
+  /* Add tab button */
+  if (!tabsRow.querySelector('[data-nc-tab="usersperms"]')) {
+    const btn = document.createElement('button');
+    btn.className = 'admin-tab';
+    btn.dataset.ncTab = 'usersperms';
+    btn.textContent = 'Users & Permissions';
+    btn.onclick = () => {
+      tabsRow.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      settings.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+      const panel = $('tab-usersperms');
+      if (panel) panel.classList.add('active');
+      renderUsersAdmin();
+    };
+    /* Insert before Branding if present */
+    const branding = Array.from(tabsRow.querySelectorAll('.admin-tab')).find(t => t.textContent.trim() === 'Branding');
+    if (branding) tabsRow.insertBefore(btn, branding);
+    else tabsRow.appendChild(btn);
+
+    if (!ncCan('users.manage')) btn.style.display = 'none';
+  }
+
+  /* Add panel */
+  if (!$('tab-usersperms')) {
+    const panel = document.createElement('div');
+    panel.id = 'tab-usersperms';
+    panel.className = 'admin-panel';
+    panel.innerHTML =
+      '<div class="admin-grid" style="grid-template-columns:1fr">' +
+        '<div class="admin-card">' +
+          '<h4><i class="fas fa-users-cog"></i> User Management' +
+            '<button class="btn btn-primary btn-sm" style="margin-left:auto;float:right" onclick="ncAddUser()"><i class="fas fa-user-plus"></i> Add User</button>' +
+          '</h4>' +
+          '<div style="clear:both;margin-bottom:14px;padding:10px;background:#dbeafe;border-radius:8px;font-size:12px;color:#1e40af">' +
+            '<i class="fas fa-info-circle"></i> Default admin: <strong>' + E(DEFAULT_ADMIN_EMAIL) + '</strong> (cannot be demoted or removed).' +
+          '</div>' +
+          '<div id="ncUsersAdminBody">Loading…</div>' +
+        '</div>' +
+      '</div>';
+    const adminGrid = settings.querySelector('#tab-users') || settings.querySelector('.admin-panel');
+    if (adminGrid && adminGrid.parentNode) adminGrid.parentNode.appendChild(panel);
+    else settings.appendChild(panel);
+  }
+}
+
+/* ══════════ ADMIN: LOAD & RENDER USERS ══════════ */
+async function loadUsers() {
+  const db = DB(); if (!db) return;
+  try {
+    const snap = await db.collection('ncUsers').orderBy('email').get();
+    U.users = snap.docs.map(d => Object.assign({id:d.id}, d.data()));
+  } catch (e) {
+    /* Fallback if no orderBy index */
+    try {
+      const snap = await db.collection('ncUsers').get();
+      U.users = snap.docs.map(d => Object.assign({id:d.id}, d.data()));
+      U.users.sort((a,b) => (a.email||'').localeCompare(b.email||''));
+    } catch (e2) {}
+  }
+}
+
+function renderUsersAdmin() {
+  if (!ncCan('users.manage')) {
+    const body = $('ncUsersAdminBody');
+    if (body) body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--danger)">' +
+      '<i class="fas fa-lock" style="font-size:40px;opacity:0.5"></i>' +
+      '<p style="margin-top:12px">Admin access required</p></div>';
+    return;
+  }
+  const body = $('ncUsersAdminBody');
+  if (!body) return;
+  if (U.users.length === 0) {
+    body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Loading…</div>';
+    loadUsers().then(renderUsersAdmin);
+    return;
+  }
+
+  const rows = U.users.map(u => {
+    const isDef = u.email && u.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+    const roleColor = {admin:'#dc2626', manager:'#f59e0b', operator:'#3b82f6', viewer:'#64748b'}[u.role] || '#94a3b8';
+    const permCount = u.permissions ? Object.values(u.permissions).filter(v => v === 1 || v === true).length : 0;
+    return '<tr>' +
+      '<td>' +
+        '<div style="font-weight:700">' + E(u.name || u.email) + '</div>' +
+        '<div style="font-size:11px;color:var(--gray)">' + E(u.email) + '</div>' +
+        (isDef ? '<span style="font-size:9px;background:#dc2626;color:white;padding:2px 6px;border-radius:8px;font-weight:700">DEFAULT ADMIN</span>' : '') +
+      '</td>' +
+      '<td><span class="status-badge" style="background:' + roleColor + '22;color:' + roleColor + ';font-weight:700">' + E(u.role || 'viewer') + '</span></td>' +
+      '<td>' + permCount + ' / ' + ALL_PERMS.length + '</td>' +
+      '<td>' + (u.active ? '<span style="color:var(--success)"><i class="fas fa-circle"></i> Active</span>' : '<span style="color:var(--danger)"><i class="fas fa-circle"></i> Inactive</span>') + '</td>' +
+      '<td style="font-size:11px;color:var(--gray)">' + E(u.lastSeen ? new Date(u.lastSeen).toLocaleString() : '-') + '</td>' +
+      '<td>' +
+        '<button class="btn btn-sm btn-secondary" onclick="ncEditUser(\'' + u.id + '\')"><i class="fas fa-edit"></i> Edit</button> ' +
+        (isDef ? '' : '<button class="btn btn-sm btn-secondary" onclick="ncToggleUserActive(\'' + u.id + '\')" title="Toggle active"><i class="fas fa-' + (u.active ? 'user-slash' : 'user-check') + '"></i></button>') +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  body.innerHTML =
+    '<div class="table-container"><table>' +
+      '<thead><tr><th>User</th><th>Role</th><th>Permissions</th><th>Status</th><th>Last Seen</th><th>Actions</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table></div>';
+}
+
+/* ══════════ EDIT USER MODAL ══════════ */
+window.ncEditUser = async function (uid) {
+  if (!ncCan('users.manage')) { toast('Admin access required', 'error'); return; }
+  const u = U.users.find(x => x.id === uid);
+  if (!u) return;
+  const isDef = u.email && u.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+
+  let host = $('ncUserEditModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ncUserEditModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:640px">' +
+        '<div class="modal-header">' +
+          '<h2 class="modal-title">Edit User Permissions</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'ncUserEditModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<div class="modal-body" id="ncUserEditBody"></div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" onclick="document.getElementById(\'ncUserEditModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="ncUserEditSave"><i class="fas fa-save"></i> Save Changes</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  const perms = u.permissions || ROLE_TEMPLATES[u.role] || ROLE_TEMPLATES.viewer;
+
+  let html = '';
+  html += '<div style="background:var(--light);padding:12px;border-radius:8px;margin-bottom:14px">' +
+    '<div style="font-weight:700">' + E(u.name || u.email) + '</div>' +
+    '<div style="font-size:12px;color:var(--gray)">' + E(u.email) + '</div>' +
+    '</div>';
+
+  if (isDef) {
+    html += '<div style="background:#fee2e2;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#991b1b">' +
+      '<i class="fas fa-lock"></i> Default admin — role and permissions are locked to full access.</div>';
+  }
+
+  html += '<div class="form-group"><label>Role</label>' +
+    '<select id="ncUserRole"' + (isDef ? ' disabled' : '') + '>' +
+      ['admin','manager','operator','viewer'].map(r => '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + r.charAt(0).toUpperCase() + r.slice(1) + '</option>').join('') +
+    '</select>' +
+    '<small style="color:var(--gray);font-size:11px">Changing the role resets permissions to the role template. You can fine-tune below.</small>' +
+  '</div>';
+
+  html += '<div style="margin-top:14px;margin-bottom:8px;font-weight:700;font-size:13px">Granular Permissions</div>';
+
+  PERM_GROUPS.forEach(g => {
+    html += '<div style="margin-bottom:12px;background:var(--light);padding:10px;border-radius:8px">' +
+      '<div style="font-weight:700;font-size:12px;color:var(--gray);text-transform:uppercase;margin-bottom:6px">' + E(g.group) + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
+    g.perms.forEach(p => {
+      const checked = perms[p] === 1 || perms[p] === true;
+      html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">' +
+        '<input type="checkbox" data-perm="' + p + '"' + (checked ? ' checked' : '') + (isDef ? ' disabled' : '') + ' style="width:auto;height:16px">' +
+        E(p.split('.')[1]) +
+      '</label>';
+    });
+    html += '</div></div>';
+  });
+
+  $('ncUserEditBody').innerHTML = html;
+
+  /* Role change → reset perms */
+  const roleSel = $('ncUserRole');
+  if (roleSel && !isDef) {
+    roleSel.addEventListener('change', () => {
+      const template = ROLE_TEMPLATES[roleSel.value];
+      document.querySelectorAll('#ncUserEditBody [data-perm]').forEach(cb => {
+        cb.checked = template[cb.dataset.perm] === 1;
+      });
+    });
+  }
+
+  const saveBtn = $('ncUserEditSave');
+  const fresh = saveBtn.cloneNode(true);
+  saveBtn.parentNode.replaceChild(fresh, saveBtn);
+  fresh.addEventListener('click', async () => {
+    if (isDef) { toast('Default admin cannot be modified', 'warning'); return; }
+    const newRole = $('ncUserRole').value;
+    const newPerms = {};
+    document.querySelectorAll('#ncUserEditBody [data-perm]').forEach(cb => {
+      newPerms[cb.dataset.perm] = cb.checked ? 1 : 0;
+    });
+    try {
+      await DB().collection('ncUsers').doc(uid).update({
+        role: newRole,
+        permissions: newPerms,
+        updatedAt: new Date().toISOString(),
+        updatedBy: who()
+      });
+      toast('User updated', 'success');
+      host.classList.remove('active');
+      await loadUsers();
+      renderUsersAdmin();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  });
+
+  host.classList.add('active');
+};
+
+/* ══════════ TOGGLE ACTIVE ══════════ */
+window.ncToggleUserActive = async function (uid) {
+  if (!ncCan('users.manage')) return;
+  const u = U.users.find(x => x.id === uid);
+  if (!u) return;
+  const isDef = u.email && u.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+  if (isDef) { toast('Default admin cannot be deactivated', 'warning'); return; }
+  if (!confirm((u.active ? 'Deactivate' : 'Reactivate') + ' ' + u.email + '?')) return;
+  try {
+    await DB().collection('ncUsers').doc(uid).update({ active: !u.active, updatedAt: new Date().toISOString() });
+    toast('User ' + (u.active ? 'deactivated' : 'reactivated'), 'success');
+    await loadUsers();
+    renderUsersAdmin();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+};
+
+/* ══════════ ADD USER ══════════ */
+window.ncAddUser = function () {
+  if (!ncCan('users.manage')) return;
+  let host = $('ncAddUserModal');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ncAddUserModal';
+    host.className = 'modal-overlay';
+    host.innerHTML =
+      '<div class="modal" style="max-width:440px">' +
+        '<div class="modal-header"><h2 class="modal-title">Pre-authorize User</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'ncAddUserModal\').classList.remove(\'active\')"><i class="fas fa-times"></i></button></div>' +
+        '<div class="modal-body">' +
+          '<div style="background:#dbeafe;padding:10px;border-radius:8px;margin-bottom:12px;font-size:12px;color:#1e40af">' +
+            '<i class="fas fa-info-circle"></i> The user must sign in with Google using this email to activate their account.' +
+          '</div>' +
+          '<div class="form-group"><label>Email *</label><input type="email" id="ncNewUserEmail" placeholder="user@example.com"></div>' +
+          '<div class="form-group"><label>Role</label><select id="ncNewUserRole">' +
+            '<option value="viewer">Viewer</option><option value="operator">Operator</option>' +
+            '<option value="manager">Manager</option><option value="admin">Admin</option>' +
+          '</select></div>' +
+        '</div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" onclick="document.getElementById(\'ncAddUserModal\').classList.remove(\'active\')">Cancel</button>' +
+          '<button class="btn btn-primary" id="ncAddUserSave"><i class="fas fa-save"></i> Pre-authorize</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', e => { if (e.target === host) host.classList.remove('active'); });
+  }
+
+  $('ncNewUserEmail').value = '';
+  $('ncNewUserRole').value = 'viewer';
+
+  const saveBtn = $('ncAddUserSave');
+  const fresh = saveBtn.cloneNode(true);
+  saveBtn.parentNode.replaceChild(fresh, saveBtn);
+  fresh.addEventListener('click', async () => {
+    const email = ($('ncNewUserEmail') || {}).value.trim().toLowerCase();
+    const role = ($('ncNewUserRole') || {}).value;
+    if (!email) { toast('Email required', 'error'); return; }
+    try {
+      /* Use a placeholder doc keyed by email until user signs in */
+      const tmpId = 'pending_' + email.replace(/[^a-z0-9]/g, '_');
+      await DB().collection('ncUsers').doc(tmpId).set({
+        email: email,
+        name: email.split('@')[0],
+        role: role,
+        permissions: ROLE_TEMPLATES[role],
+        active: true,
+        pending: true,
+        createdAt: new Date().toISOString(),
+        createdBy: who()
+      }, { merge: true });
+      toast('Pre-authorized: ' + email, 'success');
+      host.classList.remove('active');
+      await loadUsers();
+      renderUsersAdmin();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  });
+
+  host.classList.add('active');
+};
+
+/* ══════════ SIDEBAR SHORTCUT ══════════ */
+function injectSidebarShortcut() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return;
+  if ($('ncNavUsersPerms')) return;
+  const sect = document.createElement('div');
+  sect.className = 'nav-section';
+  sect.id = 'ncAdminSection';
+  sect.innerHTML =
+    '<div class="nav-title">Admin</div>' +
+    '<div class="nav-item" id="ncNavUsersPerms" onclick="ncOpenUsersPerms()">' +
+      '<i class="fas fa-users-cog"></i><span>Users &amp; Permissions</span>' +
+    '</div>';
+  const cont = document.getElementById('ncSectionsContainer') || nav;
+  /* Put inside cheques tab section so it appears next to Settings */
+  const chequesSec = document.getElementById('ncSection-cheques');
+  (chequesSec || cont).appendChild(sect);
+}
+
+window.ncOpenUsersPerms = function () {
+  if (!ncCan('users.manage')) { toast('Admin access required', 'error'); return; }
+  if (typeof window.showView === 'function') window.showView('settings');
+  setTimeout(() => {
+    const tabsRow = document.querySelector('#settingsView .admin-tabs');
+    const tabBtn = tabsRow ? tabsRow.querySelector('[data-nc-tab="usersperms"]') : null;
+    if (tabBtn) tabBtn.click();
+  }, 200);
+};
+
+/* ══════════ BOOT ══════════ */
+async function bootUser() {
+  const db = DB(); if (!db) return;
+
+  /* Wait for auth */
+  if (typeof auth === 'undefined' || !auth) return setTimeout(bootUser, 500);
+
+  auth.onAuthStateChanged(async user => {
+    if (!user) {
+      U.me = null; U.ready = false;
+      return;
+    }
+    const doc = await ensureMyUserDoc(user);
+    if (doc) {
+      U.me = doc;
+      U.ready = true;
+      subscribeToMe(user);
+      setTimeout(() => {
+        enforcePermissions();
+        applyTabVisibility();
+        injectUserManagementTab();
+        injectSidebarShortcut();
+      }, 400);
+    }
+  });
+}
+
+/* ══════════ PERIODIC RE-ENFORCE (in case new UI added later) ══════════ */
+setInterval(() => {
+  if (U.ready) enforcePermissions();
+}, 2500);
+
+/* ══════════ BOOT STRAP ══════════ */
+function boot() {
+  bootUser();
+  /* Also try once immediately in case auth already resolved */
+  setTimeout(() => {
+    try {
+      const u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+      if (u && !U.ready) {
+        ensureMyUserDoc(u).then(doc => {
+          if (doc) {
+            U.me = doc; U.ready = true;
+            subscribeToMe(u);
+            setTimeout(() => {
+              enforcePermissions();
+              applyTabVisibility();
+              injectUserManagementTab();
+              injectSidebarShortcut();
+            }, 400);
+          }
+        });
+      }
+    } catch (e) {}
+  }, 1500);
+
+  setInterval(() => {
+    injectUserManagementTab();
+    injectSidebarShortcut();
+  }, 4000);
+
+  console.log('[Change #9] ✅ User management + permissions active — default admin: ' + DEFAULT_ADMIN_EMAIL);
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 4000));
+else setTimeout(boot, 4000);
+
+})();
+</script>
 <!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
      Appended at end of file. Runs alongside the existing console blocker.
