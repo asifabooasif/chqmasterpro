@@ -14395,6 +14395,333 @@ if (document.readyState === 'loading') {
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
+     PART 11 — SIDEBAR FORCE-FIX + DIAGNOSTIC
+     • Auto-detects all registered views missing sidebar items
+     • Force-injects them into the correct tab
+     • Runs every 3 seconds to self-heal
+     • NC11.diagnose() to inspect state
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__NC11) return;
+window.__NC11 = true;
+
+if (!window.NCA) { console.warn('[NC11] NCA namespace not found — Parts 1-9 may not be loaded'); return; }
+const NCA = window.NCA;
+
+/* ═══════════════════════════════════════════════════════════════════
+   MASTER VIEW → SIDEBAR MAPPING
+   Every view we register, where it should live in the sidebar
+   ═══════════════════════════════════════════════════════════════════ */
+const SIDEBAR_MAP = [
+  /* Cheques tab */
+  { view:'nc2LiveDashboard', label:'Live Dashboard',   icon:'chart-pie',    tab:'cheques', sectionTitle:'Overview' },
+  { view:'nc3Categories',    label:'Cheque Categories', icon:'tags',         tab:'cheques', sectionTitle:'Organize' },
+  { view:'nc9Users',         label:'Users & Permissions', icon:'users-cog',  tab:'cheques', sectionTitle:'Administration' },
+  { view:'nc9Settings',      label:'Advanced Settings',  icon:'sliders-h',  tab:'cheques', sectionTitle:'Administration' },
+
+  /* Finance tab */
+  { view:'nc4Loans',         label:'Loans',              icon:'file-invoice-dollar', tab:'finance', sectionTitle:'Business Ledger' },
+  { view:'nc5Bridge',        label:'Cheque → Finance',   icon:'link',                tab:'finance', sectionTitle:'Business Ledger' },
+  { view:'nc8Overview',      label:'Business Overview',  icon:'chart-pie',           tab:'finance', sectionTitle:'Business Ledger' },
+  { view:'nc8Sources',       label:'Money Sources',      icon:'hand-holding-usd',    tab:'finance', sectionTitle:'Business Ledger' },
+  { view:'nc8Deployments',   label:'Deployments',        icon:'boxes',               tab:'finance', sectionTitle:'Business Ledger' },
+  { view:'nc8Projects',      label:'Projects',           icon:'project-diagram',     tab:'finance', sectionTitle:'Business Ledger' },
+  { view:'nc8Reports',       label:'Reports & P&L',      icon:'file-pdf',            tab:'finance', sectionTitle:'Business Ledger' },
+
+  /* Payments tab */
+  { view:'nc1InPayments',    label:'In Payments',        icon:'arrow-circle-down',   tab:'payments', sectionTitle:'Payments Tools' },
+  { view:'nc1OutPayments',   label:'Out Payments',       icon:'arrow-circle-up',     tab:'payments', sectionTitle:'Payments Tools' },
+  { view:'nc6BankTxns',      label:'Bank Transactions',  icon:'exchange-alt',        tab:'payments', sectionTitle:'Payments Tools' }
+];
+
+const TAB_META = {
+  cheques:  { label:'Cheques',  icon:'money-check-alt', color:'#6366f1' },
+  finance:  { label:'Finance',  icon:'chart-line',      color:'#0ea5e9' },
+  payments: { label:'Payments', icon:'exchange-alt',    color:'#10b981' }
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
+function getNav() { return document.querySelector('.sidebar nav'); }
+
+function getPane(tab) {
+  const nav = getNav();
+  if (!nav) return null;
+  let pane = document.getElementById('nc1Pane_' + tab);
+  if (pane) return pane;
+  pane = document.createElement('div');
+  pane.id = 'nc1Pane_' + tab;
+  pane.className = 'nc1-nav-pane';
+  pane.dataset.tab = tab;
+  /* Insert after the tab bar (if it exists) */
+  const bar = document.getElementById('nc1SidebarTabs');
+  if (bar && bar.nextSibling) nav.insertBefore(pane, bar.nextSibling);
+  else nav.appendChild(pane);
+  return pane;
+}
+
+function getSection(tab, sectionTitle) {
+  const pane = getPane(tab);
+  if (!pane) return null;
+  const sectionId = 'nc11Sec_' + tab + '_' + sectionTitle.replace(/[^a-zA-Z0-9]/g, '');
+  let section = document.getElementById(sectionId);
+  if (section) return section;
+
+  section = document.createElement('div');
+  section.className = 'nav-section';
+  section.id = sectionId;
+  section.dataset.ncaSection = '1';
+  section.innerHTML = '<div class="nav-title">' + NCA.E(sectionTitle) + '</div>';
+  pane.appendChild(section);
+  return section;
+}
+
+function itemExists(view) {
+  return !!document.querySelector('[data-nca-view="' + view + '"]');
+}
+
+function injectItem(spec) {
+  const section = getSection(spec.tab, spec.sectionTitle);
+  if (!section) return false;
+
+  /* Skip if already exists */
+  if (section.querySelector('[data-nca-view="' + spec.view + '"]')) return true;
+
+  const item = document.createElement('div');
+  item.className = 'nav-item';
+  item.dataset.ncaView = spec.view;
+  item.setAttribute('onclick', 'NCA.navigate(\'' + spec.view + '\')');
+  item.innerHTML = '<i class="fas fa-' + spec.icon + '"></i><span>' + NCA.E(spec.label) + '</span>';
+  section.appendChild(item);
+  return true;
+}
+
+/* Check if a view is registered (has a render function) */
+function viewIsRegistered(viewId) {
+  return !!(NCA.views && NCA.views[viewId]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CORE — ensure all sidebar items exist
+   ═══════════════════════════════════════════════════════════════════ */
+let _lastReport = {};
+
+function ensureAllItems(silent) {
+  const nav = getNav();
+  if (!nav) return { injected: 0, missing: [], registered: 0 };
+
+  const report = {
+    total: SIDEBAR_MAP.length,
+    registered: 0,
+    injected: 0,
+    alreadyPresent: 0,
+    viewsNotRegistered: [],
+    failed: []
+  };
+
+  SIDEBAR_MAP.forEach(spec => {
+    const registered = viewIsRegistered(spec.view);
+    if (registered) report.registered++;
+
+    if (itemExists(spec.view)) {
+      report.alreadyPresent++;
+      return;
+    }
+
+    /* Only inject if the view is registered (has a render fn) */
+    if (!registered) {
+      report.viewsNotRegistered.push(spec.view);
+      return;
+    }
+
+    try {
+      const ok = injectItem(spec);
+      if (ok) report.injected++;
+      else report.failed.push(spec.view);
+    } catch (e) {
+      console.warn('[NC11] inject failed:', spec.view, e);
+      report.failed.push(spec.view);
+    }
+  });
+
+  if (!silent && (report.injected > 0 || report.viewsNotRegistered.length > 0 || report.failed.length > 0)) {
+    console.log('[NC11] Sidebar check:', report);
+  }
+
+  return report;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   REORGANIZE — ensure tab bar + panes exist
+   ═══════════════════════════════════════════════════════════════════ */
+function ensureTabInfrastructure() {
+  const nav = getNav();
+  if (!nav) return;
+
+  /* Ensure tab bar exists */
+  if (!document.getElementById('nc1SidebarTabs')) {
+    const bar = document.createElement('div');
+    bar.id = 'nc1SidebarTabs';
+    bar.className = 'nc1-tab-bar';
+    Object.keys(TAB_META).forEach(key => {
+      const m = TAB_META[key];
+      const btn = document.createElement('button');
+      btn.className = 'nc1-tab-btn';
+      btn.dataset.tab = key;
+      btn.innerHTML = '<i class="fas fa-' + m.icon + '" style="font-size:14px"></i><span>' + m.label + '</span>';
+      btn.onclick = () => {
+        if (typeof NCA.showTab === 'function') NCA.showTab(key);
+        else {
+          document.querySelectorAll('.nc1-nav-pane').forEach(p => p.classList.toggle('active', p.dataset.tab === key));
+        }
+      };
+      bar.appendChild(btn);
+    });
+    nav.insertBefore(bar, nav.firstChild);
+  }
+
+  /* Ensure all 3 panes exist */
+  ['cheques', 'finance', 'payments'].forEach(t => getPane(t));
+
+  /* Set active state based on stored tab */
+  let active = 'cheques';
+  try { active = localStorage.getItem('nc1ActiveTab') || 'cheques'; } catch (e) {}
+  if (typeof NCA.showTab === 'function') {
+    try { NCA.showTab(active, true); } catch (e) {}
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DIAGNOSTIC
+   ═══════════════════════════════════════════════════════════════════ */
+window.NC11 = window.NC11 || {};
+
+window.NC11.diagnose = function () {
+  const nav = getNav();
+  if (!nav) { console.error('[NC11] No .sidebar nav element found'); return; }
+
+  const rows = SIDEBAR_MAP.map(spec => {
+    const registered = viewIsRegistered(spec.view);
+    const injected = itemExists(spec.view);
+    return {
+      view: spec.view,
+      label: spec.label,
+      tab: spec.tab,
+      registered,
+      injected,
+      status: registered && injected ? '✓ OK'
+            : !registered && !injected ? '✗ view missing'
+            : registered && !injected ? '⚠ view ok, item missing'
+            : '⚠ item ok, view missing'
+    };
+  });
+
+  console.group('%c🔍 NC11 SIDEBAR DIAGNOSTIC', 'color:#6366f1;font-weight:bold;font-size:13px');
+  console.table(rows);
+  console.log('%cNav element:', 'color:#0ea5e9;font-weight:bold', nav);
+  console.log('%cTab bar exists:', 'color:#0ea5e9;font-weight:bold', !!document.getElementById('nc1SidebarTabs'));
+  ['cheques','finance','payments'].forEach(t => {
+    const pane = document.getElementById('nc1Pane_' + t);
+    console.log('%cPane ' + t + ':', 'color:#0ea5e9;font-weight:bold', pane, pane ? 'display=' + pane.style.display : '');
+  });
+  console.log('%cRegistered views:', 'color:#0ea5e9;font-weight:bold', Object.keys(NCA.views || {}));
+  console.groupEnd();
+
+  return rows;
+};
+
+window.NC11.fix = function () {
+  console.log('[NC11] Force fixing sidebar...');
+  ensureTabInfrastructure();
+  const r = ensureAllItems(false);
+  console.log('[NC11] Result:', r);
+  return r;
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   AUTO-FIX LOOP
+   ═══════════════════════════════════════════════════════════════════ */
+let _autoFixCount = 0;
+function startAutoFix() {
+  const loop = () => {
+    try {
+      ensureTabInfrastructure();
+      const r = ensureAllItems(true);
+      if (r.injected > 0) {
+        _autoFixCount += r.injected;
+        console.log('%c[NC11] Auto-injected ' + r.injected + ' sidebar item(s) — total fixed: ' + _autoFixCount, 'color:#f59e0b;font-weight:bold');
+      }
+    } catch (e) {
+      console.warn('[NC11] Auto-fix error:', e);
+    }
+  };
+
+  /* Run immediately, then every 3s for a while, then every 8s */
+  loop();
+  setTimeout(loop, 1500);
+  setTimeout(loop, 4000);
+  setTimeout(loop, 8000);
+  setInterval(loop, 8000);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TAB SWITCHING (in case NCA.showTab is broken)
+   ═══════════════════════════════════════════════════════════════════ */
+function ensureTabSwitching() {
+  if (typeof NCA.showTab === 'function' && !NCA.showTab.__nc11Patched) {
+    const orig = NCA.showTab;
+    NCA.showTab = function (tab, silent) {
+      const r = orig.apply(this, arguments);
+      /* Belt-and-suspenders: force display state */
+      const nav = getNav();
+      if (nav) {
+        document.querySelectorAll('.nc1-nav-pane').forEach(p => {
+          const isActive = p.dataset.tab === tab;
+          p.classList.toggle('active', isActive);
+          p.style.display = isActive ? 'flex' : 'none';
+        });
+      }
+      return r;
+    };
+    NCA.showTab.__nc11Patched = true;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+function boot() {
+  /* Wait for nav to be present */
+  let tries = 0;
+  const wait = setInterval(() => {
+    tries++;
+    const nav = getNav();
+    if (nav) {
+      clearInterval(wait);
+      ensureTabInfrastructure();
+      ensureTabSwitching();
+      ensureAllItems(true);
+      startAutoFix();
+
+      console.log('%c[NC11 Part 11] ✅ Sidebar force-fix installed', 'color:#10b981;font-weight:bold');
+      console.log('%c[NC11] Run NC11.diagnose() to inspect — NC11.fix() to force fix now', 'color:#64748b');
+    }
+    if (tries > 60) clearInterval(wait);
+  }, 250);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 400));
+} else {
+  setTimeout(boot, 400);
+}
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
      PART 10 — FIXED DEVTOOLS BLOCKER
      Replaces the harsh false-positive blocker with a reliable one.
      • Only triggers when DevTools is REALLY open (debugger timing)
