@@ -12937,5 +12937,614 @@ console.log('%c[Part 13 — EMERGENCY FIX] ✅ Registered', 'color:#10b981;font-
 
 })();
 </script>
+<!-- ══════════════════════════════════════════════════════
+     PART 14 — BULK FILTER FIX + ADVANCED DEVTOOLS BLOCKER
+     ══════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__modFix14) return;
+window.__modFix14 = true;
+
+const $ = NC.$;
+const N = NC.N;
+const F = NC.fmt;
+const E = NC.E;
+
+/* ══════════════════════════════════════════════════════
+   PART A — BULK NUMBERS: SMART MATCHING
+     • No comma → substring match (typing "5" matches "533078")
+     • Has comma → exact match mode (paste list "123456, 123457")
+     • Handles partial comma lists too
+   ══════════════════════════════════════════════════════ */
+
+function patchBulkNumbers() {
+  /* Wait for CHEQ to be ready */
+  if (typeof window.CHEQ === 'undefined' || !window.CHEQ.applyFilters) {
+    return setTimeout(patchBulkNumbers, 500);
+  }
+
+  /* Grab the CHEQ.applyFilters reference */
+  const origApply = window.CHEQ.applyFilters;
+
+  /* We override the global "how bulk numbers filter" by re-defining it
+     through a MutationObserver patch on the input. */
+  const input = $('chqBulkNums');
+  if (!input) return setTimeout(patchBulkNumbers, 500);
+
+  if (input.__p14Bound) return;
+  input.__p14Bound = true;
+
+  /* Live filtering on input */
+  input.oninput = function () {
+    /* Normalise: lowercase, trim */
+    this.value = this.value.replace(/[^\d,\s]/g, '');
+    /* Immediate re-filter */
+    applySmartFilter();
+  };
+
+  /* Enter also triggers */
+  input.onkeydown = function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applySmartFilter();
+      NC.toast('Filter applied', 'info');
+    }
+  };
+
+  /* Make sure applyFilters doesn't clobber our logic — it re-reads the input,
+     so our patched value is what gets read. The KEY fix is below: we intercept
+     the row-rendering step in CHEQ's private functions by patching the
+     refresh function's understanding of "bulk numbers". */
+  installSmartFilter();
+}
+
+/* This function patches the CHEQ private refresh flow (refreshTable) by
+   overriding the window.CHEQ.applyFilters with a version that supports
+   substring matching when there's no comma. */
+function installSmartFilter() {
+  if (window.CHEQ.applyFilters.__p14) return;
+
+  const orig = window.CHEQ.applyFilters;
+  window.CHEQ.applyFilters = function () {
+    /* Call original first (it renders with its own exact-match logic) */
+    orig.apply(this, arguments);
+
+    /* Now RE-FILTER with our smarter logic on top */
+    applySmartFilter();
+  };
+  window.CHEQ.applyFilters.__p14 = true;
+
+  /* Replace the state holder too */
+  window.__p14SmartFilter = true;
+}
+
+/* Our custom filter pass: read the bulk input, apply smart matching to
+   the table body after CHEQ's render runs. */
+function applySmartFilter() {
+  const input = $('chqBulkNums');
+  const tbody = $('chqTableBody');
+  const empty = $('chqEmpty');
+  const bulkBar = $('chqBulkBar');
+  if (!input || !tbody) return;
+
+  const raw = (input.value || '').trim();
+  const hasComma = raw.indexOf(',') !== -1;
+
+  /* If no bulk filter → let CHEQ's own filters take over entirely */
+  if (!raw) {
+    /* Re-run CHEQ's regular filter with empty bulk field */
+    return;
+  }
+
+  /* Build match list */
+  const tokens = raw.split(/[\s,]+/).map(t => t.trim()).filter(Boolean);
+  if (tokens.length === 0) return;
+
+  const cheques = (NC.state.allCheques || []).filter(c => !c.deletedAt);
+  let matched;
+
+  if (hasComma || tokens.length > 1) {
+    /* LIST MODE — exact match against any token */
+    matched = cheques.filter(c => tokens.indexOf(String(c.number)) !== -1);
+  } else {
+    /* SUBSTRING MODE — single token, match numbers that CONTAIN it */
+    const t = tokens[0];
+    matched = cheques.filter(c => String(c.number).indexOf(t) !== -1);
+  }
+
+  /* Sort matched with the current sort */
+  const sortBy = ($('chqSortQuick') && $('chqSortQuick').value) || 'chequeDate-desc';
+  matched = smartSort(matched, sortBy);
+
+  /* Render rows ourselves — mimic CHEQ's row template */
+  if (matched.length === 0) {
+    tbody.innerHTML = '';
+    if (empty) empty.classList.remove('hidden');
+    if (bulkBar) bulkBar.style.display = 'none';
+    return;
+  }
+  if (empty) empty.classList.add('hidden');
+
+  /* Reuse CHEQ's row template by temporarily hijacking S.filtered.
+     Simpler: we just call CHEQ.setSort(force) which re-renders with our
+     already-filtered source. Instead, we directly render. */
+  tbody.innerHTML = matched.map(c => renderCheqRow(c)).join('');
+
+  /* Let CHEQ's own handlers manage selection etc. */
+  if (typeof window.CHEQ.updateSummary === 'function') window.CHEQ.updateSummary();
+}
+
+function smartSort(list, sortBy) {
+  const parts = (typeof sortBy === 'string' && sortBy.indexOf('-') !== -1)
+    ? sortBy.split('-')
+    : ['chequeDate', 'desc'];
+  const [field, dir] = parts;
+
+  const arr = list.slice();
+  arr.sort((a, b) => {
+    let va, vb;
+    if (field === 'chequeDate')      { va = new Date(a.date || 0); vb = new Date(b.date || 0); }
+    else if (field === 'createdAt')  {
+      va = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+      vb = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+    }
+    else if (field === 'amount')     { va = N(a.amount); vb = N(b.amount); }
+    else if (field === 'number')     { va = String(a.number || ''); vb = String(b.number || ''); }
+    else if (field === 'payee')      { va = String(a.payee || '').toLowerCase(); vb = String(b.payee || '').toLowerCase(); }
+    else                             { va = 0; vb = 0; }
+    return dir === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+  });
+  return arr;
+}
+
+/* Row renderer — mirrors Part 2's template */
+function renderCheqRow(c) {
+  const sel = (window.CHEQ && CHEQ.S && CHEQ.S.sel && CHEQ.S.sel.has(c.id)) ? ' checked' : '';
+  const catColor = (function () {
+    const cc = (NC.state.categories || []).find(x => x.name === c.category);
+    return (cc && cc.color) || '#6366f1';
+  })();
+  const catBadge = c.category
+    ? '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:' + catColor + '22;color:' + catColor + '">' + E(c.category) + '</span>'
+    : '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#f1f5f9;color:#94a3b8">UNCAT</span>';
+
+  const paymentInfo = c.status === 'returned' ? renderPayBar(c) : '—';
+
+  return '<tr>' +
+    '<td><input type="checkbox" class="chq-cb" data-id="' + c.id + '"' + sel + ' onchange="CHEQ.toggleSel(\'' + c.id + '\',this.checked)"></td>' +
+    '<td><strong>' + E(c.number) + '</strong></td>' +
+    '<td>' + E(c.payee) + '</td>' +
+    '<td>' + catBadge + '</td>' +
+    '<td>' + E(c.issuedTo || '-') + '</td>' +
+    '<td style="font-weight:700">' + F(c.amount) + '</td>' +
+    '<td>' + E(c.bank) + '</td>' +
+    '<td>' + NC.dateFmt(c.date) + '</td>' +
+    '<td><span class="status-badge status-' + c.status + '">' + c.status + '</span></td>' +
+    '<td>' + paymentInfo + '</td>' +
+    '<td><button class="btn btn-xs btn-secondary" onclick="CHEQ.openRowMenu(event,\'' + c.id + '\')" title="Actions"><i class="fas fa-ellipsis-v"></i></button></td>' +
+  '</tr>';
+}
+
+function renderPayBar(c) {
+  const paid = (c.payments || []).reduce((s, p) => s + N(p.amount), 0);
+  const total = N(c.amount);
+  const pct = total > 0 ? Math.min((paid / total) * 100, 100) : 0;
+  return '<div style="min-width:100px">' +
+    '<div style="font-size:11px">' +
+      '<span style="color:var(--success);font-weight:600">' + Math.round(paid).toLocaleString('en-IN') + '</span>' +
+      '<span style="color:var(--gray)"> / </span>' +
+      '<span>' + F(total) + '</span>' +
+    '</div>' +
+    '<div style="background:var(--border);height:6px;border-radius:3px;overflow:hidden;margin-top:3px">' +
+      '<div style="background:linear-gradient(90deg,var(--success),var(--primary));height:100%;width:' + pct + '%"></div>' +
+    '</div></div>';
+}
+
+/* Re-run smart filter whenever the table is re-rendered.
+   We observe the tbody for changes and re-apply. */
+function observeTbody() {
+  const tbody = $('chqTableBody');
+  if (!tbody || tbody.__p14Observed) return;
+  tbody.__p14Observed = true;
+
+  /* We must NOT re-run on our own renders. Use a flag. */
+  const obs = new MutationObserver(() => {
+    if (window.__p14Rendering) return;
+    const input = $('chqBulkNums');
+    if (input && input.value.trim()) {
+      window.__p14Rendering = true;
+      setTimeout(() => {
+        applySmartFilter();
+        window.__p14Rendering = false;
+      }, 30);
+    }
+  });
+  obs.observe(tbody, { childList: true });
+}
+
+/* ══════════════════════════════════════════════════════
+   PART B — ADVANCED DEVTOOLS BLOCKER
+   Aggressive, layered detection. ON by default.
+   Disable with:
+     • URL: ?safe=1  OR  #safe
+     • Console: localStorage.setItem('nc_devguard','0')
+     • Console: NC.devguardOff()
+   Enable with:
+     • URL: ?protect=1
+     • Console: NC.devguardOn()
+   ══════════════════════════════════════════════════════ */
+
+const DEVGUARD = window.NC_DEVGUARD = {
+  ENABLED: false,
+  TRIGGERED: false,
+  checkTimer: null,
+  overlay: null,
+  sizeThreshold: 160,
+  debuggerThreshold: 80,
+  consecutiveHits: 0,
+  HITS_TO_TRIGGER: 2,
+  overlayOnly: false
+};
+
+/* -------- Config check -------- */
+function isAllowed() {
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('safe') === '1') return true;
+    if (location.hash === '#safe') return true;
+    if (localStorage.getItem('nc_devguard') === '0') return true;
+    if (params.get('protect') === '0') return true;
+  } catch (e) {}
+  return false;
+}
+
+function shouldBeOn() {
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('protect') === '1') return true;
+    if (localStorage.getItem('nc_devguard') === '1') return true;
+    if (localStorage.getItem('nc_devguard') === '0') return false;
+  } catch (e) {}
+  /* Default: ON */
+  return true;
+}
+
+/* -------- Overlay UI -------- */
+function buildOverlay() {
+  if (DEVGUARD.overlay) return DEVGUARD.overlay;
+  const ov = document.createElement('div');
+  ov.id = 'ncDevGuardOverlay';
+  ov.style.cssText = [
+    'position:fixed','inset:0','z-index:2147483647',
+    'background:radial-gradient(circle at 50% 40%,#1a0b3d 0%,#050014 100%)',
+    'color:#fff','display:none','align-items:center','justify-content:center',
+    'padding:40px','text-align:center',
+    'font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif',
+    'backdrop-filter:blur(20px)'
+  ].join(';');
+  ov.innerHTML = ''
+    + '<div style="max-width:600px">'
+    +   '<div style="font-size:100px;margin-bottom:24px;filter:drop-shadow(0 0 40px rgba(168,85,247,.9));animation:ncPulse 2s ease-in-out infinite">🔒</div>'
+    +   '<h1 style="font-size:30px;font-weight:800;margin-bottom:14px;letter-spacing:-0.5px">Access Restricted</h1>'
+    +   '<p style="font-size:15px;line-height:1.7;color:rgba(255,255,255,.72);margin-bottom:28px">'
+    +     'Developer tools have been detected. This application is protected.<br>Close DevTools to continue.'
+    +   '</p>'
+    +   '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">'
+    +     '<button onclick="NC_DEVGUARD.retry()" style="padding:13px 28px;border-radius:11px;border:none;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit"><i class="fas fa-redo"></i> Retry</button>'
+    +     '<button onclick="NC_DEVGUARD.reload()" style="padding:13px 28px;border-radius:11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit">Reload Page</button>'
+    +   '</div>'
+    +   '<div style="margin-top:32px;font-size:11px;color:rgba(255,255,255,.35)">Error code: DG-403</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+
+  /* Add pulse animation once */
+  if (!document.getElementById('ncDevGuardStyle')) {
+    const st = document.createElement('style');
+    st.id = 'ncDevGuardStyle';
+    st.textContent = '@keyframes ncPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}';
+    document.head.appendChild(st);
+  }
+  DEVGUARD.overlay = ov;
+  return ov;
+}
+
+function showOverlay() {
+  const ov = buildOverlay();
+  ov.style.display = 'flex';
+  /* Pause main content to reduce leaks */
+  try {
+    document.querySelectorAll('.nc-main, .nc-sidebar').forEach(el => {
+      el.style.filter = 'blur(16px)';
+      el.style.pointerEvents = 'none';
+    });
+  } catch (e) {}
+}
+
+function hideOverlay() {
+  if (!DEVGUARD.overlay) return;
+  DEVGUARD.overlay.style.display = 'none';
+  try {
+    document.querySelectorAll('.nc-main, .nc-sidebar').forEach(el => {
+      el.style.filter = '';
+      el.style.pointerEvents = '';
+    });
+  } catch (e) {}
+  DEVGUARD.TRIGGERED = false;
+  DEVGUARD.consecutiveHits = 0;
+}
+
+/* -------- Detection layers -------- */
+function isSizeOpen() {
+  try {
+    const w = Math.abs((window.outerWidth || 0) - (window.innerWidth || 0));
+    const h = Math.abs((window.outerHeight || 0) - (window.innerHeight || 0));
+    return w > DEVGUARD.sizeThreshold || h > DEVGUARD.sizeThreshold;
+  } catch (e) { return false; }
+}
+
+function isDebuggerOpen() {
+  try {
+    const t1 = performance.now();
+    /* eslint-disable no-debugger */
+    (function(){ return false; }).constructor('debugger').call();
+    /* eslint-enable no-debugger */
+    const t2 = performance.now();
+    return (t2 - t1) > DEVGUARD.debuggerThreshold;
+  } catch (e) { return false; }
+}
+
+let _probeFired = false;
+try {
+  const probe = /./;
+  probe.toString = function () { _probeFired = true; return ''; };
+  window.__ncProbe = probe;
+} catch (e) {}
+
+function isConsoleOpen() {
+  try {
+    _probeFired = false;
+    const log = Function.prototype.bind.call(console.log, console);
+    log.call(console, '%c', window.__ncProbe);
+    return _probeFired;
+  } catch (e) { return false; }
+}
+
+function isFocused() {
+  return document.hasFocus();
+}
+
+/* -------- Master detection loop -------- */
+function startChecks() {
+  if (DEVGUARD.checkTimer) return;
+
+  DEVGUARD.checkTimer = setInterval(() => {
+    if (!DEVGUARD.ENABLED || DEVGUARD.TRIGGERED) return;
+    if (isAllowed()) return;
+
+    const sizeOpen = isSizeOpen();
+    const dbgOpen = isDebuggerOpen();
+    const consoleOpen = isConsoleOpen();
+    const focused = isFocused();
+
+    /* A hit is when a DETECTED condition is true AND window is focused.
+       This prevents false positives from tab switching. */
+    const hit = (sizeOpen || dbgOpen || consoleOpen) && focused;
+
+    if (hit) {
+      DEVGUARD.consecutiveHits++;
+      if (DEVGUARD.consecutiveHits >= DEVGUARD.HITS_TO_TRIGGER) {
+        trigger();
+      }
+    } else {
+      DEVGUARD.consecutiveHits = Math.max(0, DEVGUARD.consecutiveHits - 1);
+    }
+  }, 700);
+}
+
+function trigger() {
+  if (DEVGUARD.TRIGGERED) return;
+  DEVGUARD.TRIGGERED = true;
+
+  /* Show overlay */
+  showOverlay();
+
+  /* Track how many times the user has triggered it */
+  try {
+    const n = parseInt(localStorage.getItem('nc_dg_hits') || '0', 10) + 1;
+    localStorage.setItem('nc_dg_hits', String(n));
+    /* After 5 triggered events, navigate away */
+    if (n >= 5) {
+      setTimeout(() => {
+        try { window.location.replace('about:blank'); } catch (e) {}
+      }, 3000);
+    }
+  } catch (e) {}
+
+  console.warn('[DevGuard] Triggered — developer tools detected');
+}
+
+/* -------- Keyboard blocking -------- */
+function blockKeys(e) {
+  if (isAllowed()) return;
+  const k = String(e.key || '').toLowerCase();
+  const ctrl = e.ctrlKey || e.metaKey;
+  const shift = e.shiftKey;
+  const alt = e.altKey;
+
+  /* F12 */
+  if (e.key === 'F12' || e.keyCode === 123) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    trigger();
+    return false;
+  }
+
+  /* Ctrl+Shift+I/J/C/K/E/M */
+  if (ctrl && shift && ['i','j','c','k','e','m'].indexOf(k) !== -1) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    trigger();
+    return false;
+  }
+
+  /* Cmd+Opt+I/J/C/U (macOS) */
+  if (e.metaKey && alt && ['i','j','c','u'].indexOf(k) !== -1) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    trigger();
+    return false;
+  }
+
+  /* Ctrl+U (view source) */
+  if (ctrl && !shift && k === 'u') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return false;
+  }
+
+  /* Ctrl+S (save page) */
+  if (ctrl && !shift && k === 's') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return false;
+  }
+}
+
+/* -------- Context menu block -------- */
+function blockContext(e) {
+  if (isAllowed()) return;
+  /* Allow context menu on inputs and textareas for copy/paste */
+  const tag = (e.target.tagName || '').toUpperCase();
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+  e.preventDefault();
+  return false;
+}
+
+/* -------- Drag block -------- */
+function blockDrag(e) {
+  const tag = (e.target.tagName || '').toUpperCase();
+  if (tag === 'IMG') {
+    e.preventDefault();
+    return false;
+  }
+}
+
+/* -------- DevGuard public API -------- */
+DEVGUARD.retry = function () {
+  /* Re-run detection immediately */
+  if (!isSizeOpen() && !isDebuggerOpen() && !isConsoleOpen()) {
+    hideOverlay();
+    NC.toast('Access restored', 'success');
+  } else {
+    NC.toast('DevTools still open — close them first', 'warning');
+  }
+};
+
+DEVGUARD.reload = function () {
+  location.reload();
+};
+
+NC.devguardOn = function () {
+  try { localStorage.setItem('nc_devguard', '1'); } catch (e) {}
+  DEVGUARD.ENABLED = true;
+  DEVGUARD.TRIGGERED = false;
+  DEVGUARD.consecutiveHits = 0;
+  hideOverlay();
+  startChecks();
+  NC.toast('Dev guard ON', 'success');
+  console.log('[DevGuard] Enabled');
+};
+
+NC.devguardOff = function () {
+  try { localStorage.setItem('nc_devguard', '0'); } catch (e) {}
+  DEVGUARD.ENABLED = false;
+  if (DEVGUARD.checkTimer) clearInterval(DEVGUARD.checkTimer);
+  DEVGUARD.checkTimer = null;
+  hideOverlay();
+  NC.toast('Dev guard OFF — reload to apply fully', 'info');
+  console.log('[DevGuard] Disabled');
+};
+
+NC.devguardStatus = function () {
+  return {
+    enabled: DEVGUARD.ENABLED,
+    triggered: DEVGUARD.TRIGGERED,
+    hits: DEVGUARD.consecutiveHits,
+    sizeOpen: isSizeOpen(),
+    debuggerOpen: isDebuggerOpen(),
+    consoleOpen: isConsoleOpen()
+  };
+};
+
+/* -------- Install DevGuard -------- */
+function installDevGuard() {
+  if (isAllowed()) {
+    console.log('%c[DevGuard] Skipped — safe mode active (?safe=1 or localStorage)', 'color:#64748b');
+    return;
+  }
+  if (!shouldBeOn()) {
+    console.log('%c[DevGuard] OFF (localStorage nc_devguard=0)', 'color:#64748b');
+    return;
+  }
+
+  DEVGUARD.ENABLED = true;
+  buildOverlay();
+  startChecks();
+
+  document.addEventListener('keydown',  blockKeys, true);
+  document.addEventListener('keyup',    blockKeys, true);
+  document.addEventListener('keypress', blockKeys, true);
+  document.addEventListener('contextmenu', blockContext, true);
+  document.addEventListener('dragstart', blockDrag, true);
+
+  /* Block F12 even when the page isn't focused (edge case) */
+  window.addEventListener('keydown', e => {
+    if (e.key === 'F12' || e.keyCode === 123) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return false;
+    }
+  }, true);
+
+  console.log('%c[DevGuard] ✅ ARMED — 5 detection layers active', 'color:#ef4444;font-weight:bold;font-size:13px');
+  console.log('%c[DevGuard] Disable with: NC.devguardOff() then reload', 'color:#64748b');
+  console.log('%c[DevGuard] Or open with: ?safe=1', 'color:#64748b');
+}
+
+/* ══════════════════════════════════════════════════════
+   BOOT
+   ══════════════════════════════════════════════════════ */
+
+function boot() {
+  /* Wait for CHEQ + views to be ready */
+  setTimeout(patchBulkNumbers, 500);
+  setTimeout(patchBulkNumbers, 1500);
+  setTimeout(observeTbody, 1000);
+
+  /* Re-apply patches on route change to All Cheques */
+  NC.on('route:changed', e => {
+    if (e && e.viewId === 'all-cheques') {
+      setTimeout(() => {
+        patchBulkNumbers();
+        observeTbody();
+      }, 200);
+    }
+  });
+
+  /* Install the DevGuard at the end */
+  setTimeout(installDevGuard, 800);
+
+  console.log('%c[Part 14 — Filter Fix + DevGuard] ✅ Registered', 'color:#10b981;font-weight:bold');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+
+})();
+</script>
 </body>
 </html>
