@@ -13862,5 +13862,513 @@ if (document.readyState === 'loading') {
 
 })();
 </script>
+<!-- ══════════════════════════════════════════════════════
+     PART 16 — ADVANCED DEVTOOLS DETECTION ENGINE
+     5 detection layers · live status · auto-recovery
+     ══════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__modFix16) return;
+window.__modFix16 = true;
+
+const $ = NC.$;
+const E = NC.E;
+
+/* ══════════════════════════════════════════════════════
+   STEP 1 — Clean up any previous guards
+   ══════════════════════════════════════════════════════ */
+
+function cleanupOldGuards() {
+  if (window.NC_DEVGUARD && window.NC_DEVGUARD.checkTimer) {
+    clearInterval(window.NC_DEVGUARD.checkTimer);
+  }
+  if (window.NC_GUARD && window.NC_GUARD.checkTimer) {
+    clearInterval(window.NC_GUARD.checkTimer);
+  }
+  ['ncDevGuardOverlay', 'ncGuardOverlayV2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+  try {
+    document.querySelectorAll('.nc-main, .nc-sidebar').forEach(el => {
+      el.style.filter = '';
+      el.style.pointerEvents = '';
+    });
+  } catch (e) {}
+}
+cleanupOldGuards();
+setTimeout(cleanupOldGuards, 800);
+
+/* ══════════════════════════════════════════════════════
+   STEP 2 — DETECTION ENGINE
+   ══════════════════════════════════════════════════════ */
+
+const DT = window.NC_DT = {
+  enabled: false,
+  overlay: null,
+  tickTimer: null,
+  lastTick: 0,
+  hits: 0,
+  HITS_TO_TRIGGER: 3,          // consecutive hits needed
+  DEBUGGER_THRESHOLD: 250,     // ms pause to count as debugger hit
+  LOG_TIMING_THRESHOLD: 150,   // ms for 50 logs when DevTools open
+  SIZE_THRESHOLD: 260,         // px delta (high to avoid false positives)
+  verbose: false,              // set NC_DT.verbose = true in console to see live logs
+  triggered: false,
+  lastDetectionMethod: null,
+  detectionCounts: { debugger: 0, logSpeed: 0, size: 0, consoleTrap: 0, keyboard: 0 }
+};
+
+/* ─────────────────────────────────────────────────────
+   LAYER 1 — Debugger timing
+   Only fires when DevTools is actually paused in a debugger session
+   ───────────────────────────────────────────────────── */
+function detectDebugger() {
+  try {
+    const t1 = performance.now();
+    // eslint-disable-next-line no-debugger
+    (function(){ return false; }).constructor('debugger').call();
+    const t2 = performance.now();
+    const delta = t2 - t1;
+    if (DT.verbose) console.log('[DT] debugger delta:', delta.toFixed(2), 'ms');
+    return delta > DT.DEBUGGER_THRESHOLD;
+  } catch (e) { return false; }
+}
+
+/* ─────────────────────────────────────────────────────
+   LAYER 2 — Console log speed test
+   When DevTools console is open, console.log calls are ~100x slower
+   ───────────────────────────────────────────────────── */
+let _logProbeFired = false;
+try {
+  const _probe = /./;
+  _probe.toString = function(){ _logProbeFired = true; return 'nc'; };
+  window.__ncLogProbe = _probe;
+} catch (e) {}
+
+function detectLogSpeed() {
+  try {
+    /* Send 50 log lines — very fast normally, very slow with console open */
+    const t1 = performance.now();
+    for (let i = 0; i < 50; i++) {
+      console.log('%c', window.__ncLogProbe);
+    }
+    const t2 = performance.now();
+    const delta = t2 - t1;
+    if (DT.verbose) console.log('[DT] log speed delta:', delta.toFixed(2), 'ms');
+    return delta > DT.LOG_TIMING_THRESHOLD;
+  } catch (e) { return false; }
+}
+
+/* ─────────────────────────────────────────────────────
+   LAYER 3 — Console getter trap
+   When DevTools console is open, it eagerly evaluates logged objects
+   ───────────────────────────────────────────────────── */
+function detectConsoleTrap() {
+  try {
+    let fired = false;
+    const trap = document.createElement('div');
+    Object.defineProperty(trap, 'id', {
+      get() { fired = true; return 'trap'; },
+      configurable: true
+    });
+    console.log(trap);
+    // Don't wait — the getter runs synchronously if console is open
+    if (DT.verbose) console.log('[DT] console trap fired:', fired);
+    return fired;
+  } catch (e) { return false; }
+}
+
+/* ─────────────────────────────────────────────────────
+   LAYER 4 — Window size delta (docked DevTools)
+   Threshold 260px is high enough to ignore browser toolbars
+   ───────────────────────────────────────────────────── */
+function detectSize() {
+  try {
+    const wDiff = Math.abs(window.outerWidth - window.innerWidth);
+    const hDiff = Math.abs(window.outerHeight - window.innerHeight);
+
+    /* Zoom-adjusted threshold: at 125% zoom, browser chrome is ~200px */
+    const zoom = window.devicePixelRatio || 1;
+    const threshold = DT.SIZE_THRESHOLD * Math.max(1, zoom * 0.8);
+
+    if (DT.verbose) console.log('[DT] size delta:', wDiff, 'x', hDiff, '(threshold', threshold + ')');
+    return wDiff > threshold || hDiff > threshold;
+  } catch (e) { return false; }
+}
+
+/* ─────────────────────────────────────────────────────
+   LAYER 5 — Keyboard interception (instant trigger)
+   F12, Ctrl+Shift+I/J/C, Ctrl+U
+   ───────────────────────────────────────────────────── */
+let _keyboardTrigger = false;
+
+function installKeyboardDetection() {
+  document.addEventListener('keydown', e => {
+    if (!DT.enabled) return;
+
+    const k = String(e.key || '').toLowerCase();
+    const ctrl = e.ctrlKey || e.metaKey;
+    const shift = e.shiftKey;
+    const alt = e.altKey;
+
+    /* F12 */
+    if (e.key === 'F12' || e.keyCode === 123) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      _keyboardTrigger = true;
+      DT.detectionCounts.keyboard++;
+      if (DT.verbose) console.warn('[DT] F12 pressed');
+      return false;
+    }
+
+    /* Ctrl+Shift+I/J/C/K/E/M */
+    if (ctrl && shift && ['i','j','c','k','e','m'].indexOf(k) !== -1) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      _keyboardTrigger = true;
+      DT.detectionCounts.keyboard++;
+      if (DT.verbose) console.warn('[DT] Ctrl+Shift+' + k.toUpperCase() + ' pressed');
+      return false;
+    }
+
+    /* Cmd+Opt+I/J/C (macOS) */
+    if (e.metaKey && alt && ['i','j','c'].indexOf(k) !== -1) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      _keyboardTrigger = true;
+      DT.detectionCounts.keyboard++;
+      if (DT.verbose) console.warn('[DT] Cmd+Opt+' + k.toUpperCase() + ' pressed');
+      return false;
+    }
+
+    /* Ctrl+U (view source) */
+    if (ctrl && !shift && k === 'u') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      DT.detectionCounts.keyboard++;
+      _keyboardTrigger = true;
+      return false;
+    }
+  }, true);
+}
+
+/* ─────────────────────────────────────────────────────
+   MASTER LOOP — combines all layers
+   ───────────────────────────────────────────────────── */
+function runDetection() {
+  if (!DT.enabled) return;
+  if (DT.triggered) return;   /* already showing overlay */
+  if (!document.hasFocus()) return;   /* skip when tab inactive */
+
+  /* Check pause delta (queue starvation detection) */
+  const now = Date.now();
+  const pauseDelta = now - DT.lastTick;
+  DT.lastTick = now;
+
+  let hit = false;
+  let method = null;
+
+  /* Priority 1: Keyboard (instant) */
+  if (_keyboardTrigger) {
+    _keyboardTrigger = false;
+    hit = true;
+    method = 'keyboard';
+  }
+
+  /* Priority 2: Debugger */
+  if (!hit && detectDebugger()) {
+    hit = true;
+    method = 'debugger';
+    DT.detectionCounts.debugger++;
+  }
+
+  /* Priority 3: Console log speed */
+  if (!hit && detectLogSpeed()) {
+    hit = true;
+    method = 'logSpeed';
+    DT.detectionCounts.logSpeed++;
+  }
+
+  /* Priority 4: Console trap */
+  if (!hit && detectConsoleTrap()) {
+    hit = true;
+    method = 'consoleTrap';
+    DT.detectionCounts.consoleTrap++;
+  }
+
+  /* Priority 5: Window size delta */
+  if (!hit && detectSize()) {
+    hit = true;
+    method = 'size';
+    DT.detectionCounts.size++;
+  }
+
+  if (hit) {
+    DT.hits++;
+    DT.lastDetectionMethod = method;
+    if (DT.verbose) console.warn('[DT] Hit #' + DT.hits + ' via ' + method);
+    if (DT.hits >= DT.HITS_TO_TRIGGER) {
+      trigger();
+    }
+  } else {
+    DT.hits = Math.max(0, DT.hits - 1);
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   STEP 3 — OVERLAY (blur + message)
+   ══════════════════════════════════════════════════════ */
+
+function buildOverlay() {
+  if (DT.overlay) return DT.overlay;
+  const ov = document.createElement('div');
+  ov.id = 'ncDTOverlay';
+  ov.style.cssText = [
+    'position:fixed','inset:0','z-index:2147483647',
+    'background:rgba(5,0,20,.96)',
+    'color:#fff','display:none','align-items:center','justify-content:center',
+    'padding:40px','text-align:center',
+    'font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif',
+    'backdrop-filter:blur(20px)'
+  ].join(';');
+  ov.innerHTML = ''
+    + '<div style="max-width:640px">'
+    +   '<div style="font-size:100px;margin-bottom:20px;filter:drop-shadow(0 0 40px rgba(168,85,247,.9))">🔒</div>'
+    +   '<h1 style="font-size:30px;font-weight:800;margin-bottom:14px;letter-spacing:-0.5px">Access Restricted</h1>'
+    +   '<p style="font-size:15px;line-height:1.7;color:rgba(255,255,255,.75);margin-bottom:8px">'
+    +     'Developer tools detected. Close them to continue.'
+    +   '</p>'
+    +   '<p id="ncDTMethod" style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:26px"></p>'
+    +   '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">'
+    +     '<button onclick="NC_DT.recheck()" style="padding:13px 26px;border-radius:11px;border:none;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit"><i class="fas fa-sync"></i> Recheck</button>'
+    +     '<button onclick="NC_DT.disable()" style="padding:13px 26px;border-radius:11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit">Disable Guard</button>'
+    +   '</div>'
+    +   '<div style="margin-top:28px;font-size:11px;color:rgba(255,255,255,.35)">Ctrl+Shift+Alt+U ×3 for emergency unlock</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  DT.overlay = ov;
+  return ov;
+}
+
+function trigger() {
+  if (DT.triggered) return;
+  DT.triggered = true;
+
+  const ov = buildOverlay();
+  ov.style.display = 'flex';
+  const methodEl = document.getElementById('ncDTMethod');
+  if (methodEl) {
+    methodEl.textContent = 'Detected via: ' + (DT.lastDetectionMethod || 'unknown') +
+      ' · hits: ' + DT.hits +
+      ' · total triggers: ' + (DT.detectionCounts.debugger + DT.detectionCounts.logSpeed + DT.detectionCounts.size + DT.detectionCounts.consoleTrap + DT.detectionCounts.keyboard);
+  }
+
+  /* Start a fast re-check loop to auto-hide when DevTools closes */
+  const autoHide = setInterval(() => {
+    const stillDetected = detectDebugger() || detectLogSpeed() || detectSize() || detectConsoleTrap();
+    if (!stillDetected) {
+      clearInterval(autoHide);
+      hideOverlay();
+      NC.toast('Access restored', 'success');
+    }
+  }, 1000);
+
+  console.warn('[DT] Triggered — method: ' + DT.lastDetectionMethod);
+}
+
+function hideOverlay() {
+  if (!DT.overlay) return;
+  DT.overlay.style.display = 'none';
+  DT.triggered = false;
+  DT.hits = 0;
+  DT.lastTick = Date.now();
+}
+
+/* ══════════════════════════════════════════════════════
+   STEP 4 — Public API
+   ══════════════════════════════════════════════════════ */
+
+DT.enable = function () {
+  DT.enabled = true;
+  DT.hits = 0;
+  DT.lastTick = Date.now();
+  try { localStorage.setItem('nc_dt_enabled', '1'); } catch (e) {}
+
+  if (DT.tickTimer) clearInterval(DT.tickTimer);
+  DT.tickTimer = setInterval(runDetection, 700);
+
+  /* Also run on window resize (immediate size detection) */
+  window.addEventListener('resize', () => {
+    if (!DT.enabled) return;
+    if (detectSize()) { DT.hits++; if (DT.hits >= DT.HITS_TO_TRIGGER) trigger(); }
+  });
+
+  updateShieldIcon();
+  NC.toast('🛡️ DevTools guard ENABLED', 'success');
+  console.log('%c[DT] ✅ Enabled — checking every 700ms', 'color:#10b981;font-weight:bold');
+  console.log('%c[DT] Enable verbose: NC_DT.verbose = true', 'color:#64748b');
+  console.log('%c[DT] Check status: NC_DT.status()', 'color:#64748b');
+};
+
+DT.disable = function () {
+  DT.enabled = false;
+  if (DT.tickTimer) clearInterval(DT.tickTimer);
+  DT.tickTimer = null;
+  DT.triggered = false;
+  DT.hits = 0;
+  hideOverlay();
+  try { localStorage.setItem('nc_dt_enabled', '0'); } catch (e) {}
+  updateShieldIcon();
+  NC.toast('🛡️ DevTools guard DISABLED', 'info');
+  console.log('%c[DT] ✗ Disabled', 'color:#64748b;font-weight:bold');
+};
+
+DT.toggle = function () {
+  if (DT.enabled) DT.disable();
+  else DT.enable();
+};
+
+DT.recheck = function () {
+  const dbg = detectDebugger();
+  const log = detectLogSpeed();
+  const size = detectSize();
+  const trap = detectConsoleTrap();
+  const any = dbg || log || size || trap;
+  console.log('[DT] Recheck:', { debugger: dbg, logSpeed: log, size: size, consoleTrap: trap });
+  if (!any) {
+    hideOverlay();
+    NC.toast('No DevTools detected', 'success');
+  } else {
+    NC.toast('DevTools still open', 'warning');
+  }
+};
+
+DT.status = function () {
+  const s = {
+    enabled: DT.enabled,
+    triggered: DT.triggered,
+    consecutiveHits: DT.hits,
+    detectionCounts: DT.detectionCounts,
+    lastMethod: DT.lastDetectionMethod,
+    liveChecks: {
+      debugger: detectDebugger(),
+      logSpeed: detectLogSpeed(),
+      size: detectSize(),
+      consoleTrap: detectConsoleTrap()
+    },
+    threshold: {
+      debuggerMs: DT.DEBUGGER_THRESHOLD,
+      logSpeedMs: DT.LOG_TIMING_THRESHOLD,
+      sizePx: DT.SIZE_THRESHOLD
+    }
+  };
+  console.log('%c[DT] Status', 'color:#0ea5e9;font-weight:bold', s);
+  return s;
+};
+
+/* Emergency hotkey: Ctrl+Shift+Alt+U ×3 */
+(function(){
+  let count = 0, timer = null;
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.altKey && String(e.key).toLowerCase() === 'u') {
+      e.preventDefault();
+      count++;
+      clearTimeout(timer);
+      timer = setTimeout(() => { count = 0; }, 3000);
+      if (count >= 3) {
+        count = 0;
+        DT.disable();
+      }
+    }
+  }, true);
+})();
+
+/* Global aliases */
+window.NC_guardOn = DT.enable;
+window.NC_guardOff = DT.disable;
+window.NC_guardToggle = DT.toggle;
+window.NC_guardStatus = DT.status;
+
+/* ══════════════════════════════════════════════════════
+   STEP 5 — Shield icon in the top bar
+   ══════════════════════════════════════════════════════ */
+
+function injectShieldIcon() {
+  const host = document.querySelector('.nc-topbar-right');
+  if (!host) return setTimeout(injectShieldIcon, 400);
+
+  /* Remove old shields from Parts 14/15 */
+  ['ncShieldBtn', 'ncGuardBtn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+
+  if ($('ncDTBtn')) { updateShieldIcon(); return; }
+
+  const btn = document.createElement('button');
+  btn.id = 'ncDTBtn';
+  btn.title = 'Toggle DevTools guard';
+  btn.style.cssText = 'width:42px;height:42px;border:none;border-radius:12px;cursor:pointer;font-size:15px;transition:all .2s;display:flex;align-items:center;justify-content:center;position:relative';
+  btn.onclick = () => DT.toggle();
+  btn.innerHTML = '<i class="fas fa-shield"></i>';
+
+  const bell = document.getElementById('ncBellWrap');
+  if (bell && bell.parentElement === host) {
+    host.insertBefore(btn, bell);
+  } else {
+    host.insertBefore(btn, host.firstChild);
+  }
+  updateShieldIcon();
+}
+
+function updateShieldIcon() {
+  const btn = $('ncDTBtn');
+  if (!btn) return;
+  if (DT.enabled) {
+    btn.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
+    btn.style.color = 'white';
+    btn.style.boxShadow = '0 2px 8px rgba(239,68,68,.4)';
+    btn.title = 'DevTools guard ON — click to disable';
+    btn.innerHTML = '<i class="fas fa-shield-alt"></i>';
+  } else {
+    btn.style.background = 'var(--light)';
+    btn.style.color = 'var(--gray)';
+    btn.style.boxShadow = 'none';
+    btn.title = 'DevTools guard OFF — click to enable';
+    btn.innerHTML = '<i class="fas fa-shield"></i>';
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   STEP 6 — Boot
+   ══════════════════════════════════════════════════════ */
+
+function boot() {
+  installKeyboardDetection();
+  injectShieldIcon();
+  setTimeout(injectShieldIcon, 1000);
+  setTimeout(injectShieldIcon, 3000);
+
+  /* Restore enabled state from localStorage (default: OFF) */
+  let wasEnabled = false;
+  try { wasEnabled = localStorage.getItem('nc_dt_enabled') === '1'; } catch (e) {}
+  if (wasEnabled) {
+    setTimeout(() => DT.enable(), 800);
+  } else {
+    console.log('%c[Part 16 — ADVANCED DEVTOOLS DETECTOR] ✅ Ready (OFF by default)', 'color:#10b981;font-weight:bold');
+    console.log('%c[DT] Click the 🛡 shield icon in the top bar to enable', 'color:#64748b;font-style:italic');
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+
+})();
+</script>
 </body>
 </html>
