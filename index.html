@@ -11606,118 +11606,180 @@ if (document.readyState === 'loading') {
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
-     PART 7 — MASTER SIDEBAR REBUILD (root fix)
-     Guarantees every item lives in the right tab with a working onclick.
+     PART 7 MASTER FIX — Self-healing sidebar with all items
+     Guarantees: Cheques / Finance / Payments tabs · User Management item
+     Defeats: Message 3's hideOldDuplicates that hides p5Route/ncV10Route items
      ═══════════════════════════════════════════════════════════════════════ -->
-<style id="__p7FixStyles">
-  #ncTabsContainer { display: flex !important; flex-direction: column !important; }
-  #ncTabsContainer > div[data-nctab] {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex-shrink: 0;
-  }
-  #ncTabsContainer > div[data-nctab] .nav-item {
+<style id="__p7MasterStyles">
+  /* Force nav-items inside tabs to always be visible — cannot be overridden */
+  #ncTabsContainer .nav-item,
+  #ncTabsContainer .nav-item[style],
+  #ncTabsContainer .nav-item[style*="display"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
+    height: auto !important;
+    overflow: visible !important;
   }
+  #ncTabsContainer { display: flex !important; flex-direction: column !important; }
+  #ncTabsContainer > div[data-nctab] {
+    flex-direction: column !important;
+    flex-shrink: 0 !important;
+  }
+  #ncMainTabs .nc-main-tab { display: flex !important; }
 </style>
 <script>
 (function(){
 'use strict';
-if (window.__p7Fix) return;
-window.__p7Fix = true;
+if (window.__p7Master) return;
+window.__p7Master = true;
 
-/* ─── MASTER LIST — every item, where it goes, what it does ─── */
+/* ─── MASTER LIST — everything, where it goes ─── */
 const MASTER_LIST = [
-  /* ============ CHEQUES TAB ============ */
-  { tab:'cheques',  text:'Dashboard',          icon:'th-large',            onclick:"showView('dashboard',this)" },
-  { tab:'cheques',  text:'All Cheques',        icon:'list',                onclick:"showView('all-cheques',this)" },
-  { tab:'cheques',  text:'In Hand',            icon:'hand-holding',        onclick:"showView('in-hand',this)" },
-  { tab:'cheques',  text:'Returned',           icon:'undo',                onclick:"showView('returned',this)" },
-  { tab:'cheques',  text:'Recycle',            icon:'trash-restore',       onclick:"showView('recycle',this)" },
-  { tab:'cheques',  text:'Payees',             icon:'users',               onclick:"showView('payees',this)" },
-  { tab:'cheques',  text:'Issuing Parties',    icon:'user-tie',            onclick:"showView('issuers',this)" },
-  { tab:'cheques',  text:'Kanban',             icon:'columns',             onclick:"showView('kanban',this)" },
-  { tab:'cheques',  text:'Timeline',           icon:'stream',              onclick:"showView('timeline',this)" },
-  { tab:'cheques',  text:'Analytics',          icon:'chart-line',          onclick:"showView('analytics',this)" },
-  { tab:'cheques',  text:'Books',              icon:'book',                onclick:"showView('books',this)" },
-  { tab:'cheques',  text:'Reports',            icon:'file-alt',            onclick:"showView('reports',this)" },
-  { tab:'cheques',  text:'Aging',              icon:'clock',               onclick:"showView('aging',this)" },
-  { tab:'cheques',  text:'Audit',              icon:'history',             onclick:"showView('audit',this)" },
-  { tab:'cheques',  text:'Cheque Categories',  icon:'tags',                onclick:"bizRoute('biz-cats',this)" },
-  { tab:'cheques',  text:'Settings',           icon:'cog',                 onclick:"showView('settings',this)" },
-  { tab:'cheques',  text:'Logout',             icon:'sign-out-alt',        onclick:"logout()" },
+  /* ===== CHEQUES ===== */
+  { tab:'cheques',  text:'Dashboard',           icon:'th-large',            onclick:"showView('dashboard',this)",          fn:'showView' },
+  { tab:'cheques',  text:'All Cheques',         icon:'list',                onclick:"showView('all-cheques',this)",        fn:'showView' },
+  { tab:'cheques',  text:'In Hand',             icon:'hand-holding',        onclick:"showView('in-hand',this)",            fn:'showView' },
+  { tab:'cheques',  text:'Returned',            icon:'undo',                onclick:"showView('returned',this)",           fn:'showView' },
+  { tab:'cheques',  text:'Recycle',             icon:'trash-restore',       onclick:"showView('recycle',this)",            fn:'showView' },
+  { tab:'cheques',  text:'Payees',              icon:'users',               onclick:"showView('payees',this)",             fn:'showView' },
+  { tab:'cheques',  text:'Issuing Parties',     icon:'user-tie',            onclick:"showView('issuers',this)",            fn:'showView' },
+  { tab:'cheques',  text:'Kanban',              icon:'columns',             onclick:"showView('kanban',this)",             fn:'showView' },
+  { tab:'cheques',  text:'Timeline',            icon:'stream',              onclick:"showView('timeline',this)",           fn:'showView' },
+  { tab:'cheques',  text:'Analytics',           icon:'chart-line',          onclick:"showView('analytics',this)",          fn:'showView' },
+  { tab:'cheques',  text:'Books',               icon:'book',                onclick:"showView('books',this)",              fn:'showView' },
+  { tab:'cheques',  text:'Reports',             icon:'file-alt',            onclick:"showView('reports',this)",            fn:'showView' },
+  { tab:'cheques',  text:'Aging',               icon:'clock',               onclick:"showView('aging',this)",              fn:'showView' },
+  { tab:'cheques',  text:'Audit',               icon:'history',             onclick:"showView('audit',this)",              fn:'showView' },
+  { tab:'cheques',  text:'Cheque Categories',   icon:'tags',                onclick:"p7Go('biz-cats')",                    fn:'p7Go' },
+  { tab:'cheques',  text:'Users & Permissions', icon:'users-cog',           onclick:"p7Users()",                           fn:'p7Users' },
+  { tab:'cheques',  text:'Settings',            icon:'cog',                 onclick:"showView('settings',this)",           fn:'showView' },
+  { tab:'cheques',  text:'Logout',              icon:'sign-out-alt',        onclick:"logout()",                            fn:'logout' },
 
-  /* ============ FINANCE TAB ============ */
-  { tab:'finance',  text:'Business Overview',  icon:'chart-pie',           onclick:"bizRoute('biz-overview',this)" },
-  { tab:'finance',  text:'Finance Manager',    icon:'coins',               onclick:"finShowFinance(this)" },
-  { tab:'finance',  text:'Cheque → Finance',   icon:'link',                onclick:"p5Route(this)" },
-  { tab:'finance',  text:'Money Sources',      icon:'hand-holding-usd',    onclick:"bizRoute('biz-sources',this)" },
-  { tab:'finance',  text:'Deployments',        icon:'boxes',               onclick:"bizRoute('biz-deployments',this)" },
-  { tab:'finance',  text:'Projects',           icon:'project-diagram',     onclick:"bizRoute('biz-projects',this)" },
-  { tab:'finance',  text:'Loans',              icon:'file-invoice-dollar', onclick:"bizRoute('biz-loans',this)" },
-  { tab:'finance',  text:'Reports & P&L',      icon:'file-pdf',            onclick:"bizRoute('biz-reports',this)" },
+  /* ===== FINANCE ===== */
+  { tab:'finance',  text:'Business Overview',   icon:'chart-pie',           onclick:"p7Go('biz-overview')",                fn:'p7Go' },
+  { tab:'finance',  text:'Finance Manager',     icon:'coins',               onclick:"p7Finance()",                         fn:'p7Finance' },
+  { tab:'finance',  text:'Cheque → Finance',    icon:'link',                onclick:"p7Bridge()",                          fn:'p7Bridge' },
+  { tab:'finance',  text:'Money Sources',       icon:'hand-holding-usd',    onclick:"p7Go('biz-sources')",                 fn:'p7Go' },
+  { tab:'finance',  text:'Deployments',         icon:'boxes',               onclick:"p7Go('biz-deployments')",             fn:'p7Go' },
+  { tab:'finance',  text:'Projects',            icon:'project-diagram',     onclick:"p7Go('biz-projects')",                fn:'p7Go' },
+  { tab:'finance',  text:'Loans',               icon:'file-invoice-dollar', onclick:"p7Go('biz-loans')",                   fn:'p7Go' },
+  { tab:'finance',  text:'Reports & P&L',       icon:'file-pdf',            onclick:"p7Go('biz-reports')",                 fn:'p7Go' },
 
-  /* ============ PAYMENTS TAB ============ */
-  { tab:'payments', text:'Shop Payments',      icon:'store',               onclick:"bizRoute('biz-shop',this)" },
-  { tab:'payments', text:'In Payments',        icon:'arrow-circle-down',   onclick:"bizRoute('biz-inp',this)" },
-  { tab:'payments', text:'Out Payments',       icon:'arrow-circle-up',     onclick:"bizRoute('biz-out',this)" },
-  { tab:'payments', text:'Cash in Hand',       icon:'coins',               onclick:"bizRoute('biz-cash',this)" },
-  { tab:'payments', text:'Bank Accounts',      icon:'university',          onclick:"bizRoute('biz-banks',this)" },
-  { tab:'payments', text:'Bank Transactions',  icon:'exchange-alt',        onclick:"bizRoute('biz-txns',this)" },
-  { tab:'payments', text:'Parties',            icon:'address-book',        onclick:"bizRoute('biz-parties',this)" },
-  { tab:'payments', text:'Bank Analytics',     icon:'chart-bar',           onclick:"bizRoute('biz-analytics',this)" }
+  /* ===== PAYMENTS ===== */
+  { tab:'payments', text:'Shop Payments',       icon:'store',               onclick:"p7Go('biz-shop')",                    fn:'p7Go' },
+  { tab:'payments', text:'In Payments',         icon:'arrow-circle-down',   onclick:"p7Go('biz-inp')",                     fn:'p7Go' },
+  { tab:'payments', text:'Out Payments',        icon:'arrow-circle-up',     onclick:"p7Go('biz-out')",                     fn:'p7Go' },
+  { tab:'payments', text:'Cash in Hand',        icon:'coins',               onclick:"p7Go('biz-cash')",                    fn:'p7Go' },
+  { tab:'payments', text:'Bank Accounts',       icon:'university',          onclick:"p7Go('biz-banks')",                   fn:'p7Go' },
+  { tab:'payments', text:'Bank Transactions',   icon:'exchange-alt',        onclick:"p7Go('biz-txns')",                    fn:'p7Go' },
+  { tab:'payments', text:'Parties',             icon:'address-book',        onclick:"p7Go('biz-parties')",                 fn:'p7Go' },
+  { tab:'payments', text:'Bank Analytics',      icon:'chart-bar',           onclick:"p7Go('biz-analytics')",               fn:'p7Go' }
 ];
 
-/* ─── Ensure the three tab containers exist ─── */
-function ensureTabContainers(nav) {
-  let container = document.getElementById('ncTabsContainer');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'ncTabsContainer';
-    nav.appendChild(container);
+/* ══════════════════════════════════════════════════════════════
+   WRAPPER FUNCTIONS — so we never depend on external fn names
+   ══════════════════════════════════════════════════════════════ */
+
+/* Navigate to a biz-* view */
+window.p7Go = function (viewId) {
+  /* Find the tab this view belongs to and switch first */
+  const tabFor = {
+    'biz-overview':'finance','biz-bridge':'finance','biz-sources':'finance',
+    'biz-deployments':'finance','biz-projects':'finance','biz-loans':'finance',
+    'biz-reports':'finance','biz-cats':'cheques',
+    'biz-shop':'payments','biz-inp':'payments','biz-out':'payments',
+    'biz-cash':'payments','biz-banks':'payments','biz-txns':'payments',
+    'biz-parties':'payments','biz-analytics':'payments'
+  };
+  const tab = tabFor[viewId];
+  if (tab) window.ncSwitchTab(tab);
+
+  /* Use bizRoute if available, otherwise fall back to showView */
+  if (typeof window.bizRoute === 'function') {
+    try { window.bizRoute(viewId, null); return; } catch(e){}
   }
 
-  const meta = {
-    cheques:  { label:'Cheques',  color:'#6366f1' },
-    finance:  { label:'Finance',  color:'#0ea5e9' },
-    payments: { label:'Payments', color:'#10b981' }
+  /* Manual fallback: activate the view div */
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById(viewId);
+  if (el) { el.classList.add('active'); el.style.display = 'block'; }
+  const titleMap = {
+    'biz-overview':'Business Overview','biz-sources':'Money Sources','biz-deployments':'Deployments',
+    'biz-projects':'Projects','biz-loans':'Loans','biz-reports':'Reports & P&L',
+    'biz-shop':'Shop Payments','biz-inp':'In Payments','biz-out':'Out Payments',
+    'biz-cash':'Cash in Hand','biz-banks':'Bank Accounts','biz-txns':'Bank Transactions',
+    'biz-parties':'Parties','biz-cats':'Cheque Categories','biz-analytics':'Analytics'
   };
+  const t = document.getElementById('pageTitle');
+  if (t) t.textContent = titleMap[viewId] || 'View';
+  if (window.innerWidth <= 768) {
+    const sb = document.getElementById('sidebar'), ov = document.getElementById('sidebarOverlay');
+    if (sb) sb.classList.remove('active');
+    if (ov) ov.classList.remove('active');
+  }
+};
 
-  Object.keys(meta).forEach(tab => {
-    let c = document.getElementById('ncTab-' + tab);
-    if (!c) {
-      c = document.createElement('div');
-      c.id = 'ncTab-' + tab;
-      c.dataset.nctab = tab;
-      c.style.cssText = 'display:flex;flex-direction:column;gap:2px';
-      container.appendChild(c);
-    }
-    /* Ensure header exists */
-    if (!c.querySelector('.nav-title')) {
-      const h = document.createElement('div');
-      h.className = 'nav-title';
-      h.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px';
-      h.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' +
-        meta[tab].color + '"></span>' + meta[tab].label;
-      c.insertBefore(h, c.firstChild);
-    }
-  });
+/* Open Finance Manager */
+window.p7Finance = function () {
+  window.ncSwitchTab('finance');
+  if (typeof window.finShowFinance === 'function') { window.finShowFinance(null); return; }
+  /* Fallback: activate financeView directly */
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById('financeView');
+  if (el) el.classList.add('active');
+  const t = document.getElementById('pageTitle');
+  if (t) t.textContent = 'Finance Manager';
+};
 
-  return container;
+/* Open Cheque → Finance bridge */
+window.p7Bridge = function () {
+  window.ncSwitchTab('finance');
+  if (typeof window.p5Route === 'function') { window.p5Route(null); return; }
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById('p5BridgeView');
+  if (el) el.classList.add('active');
+  const t = document.getElementById('pageTitle');
+  if (t) t.textContent = 'Cheque → Finance Bridge';
+};
+
+/* Open Users & Permissions */
+window.p7Users = function () {
+  /* Try the dedicated opener */
+  if (typeof window.ncOpenUsersPerms === 'function') { window.ncOpenUsersPerms(); return; }
+  /* Fallback: open settings and click the tab */
+  if (typeof window.showView === 'function') window.showView('settings');
+  setTimeout(() => {
+    const tabsRow = document.querySelector('#settingsView .admin-tabs');
+    const tabBtn = tabsRow ? tabsRow.querySelector('[data-nc-tab="usersperms"]') : null;
+    if (tabBtn) tabBtn.click();
+    else {
+      /* Show a helpful toast if the tab isn't there */
+      try { if (typeof showToast === 'function') showToast('Users & Permissions tab is loading — try again in a moment','info'); } catch(e){}
+    }
+  }, 250);
+};
+
+/* ══════════════════════════════════════════════════════════════
+   CSS-CHECK: functions must be available before we render items
+   ══════════════════════════════════════════════════════════════ */
+const REQUIRED_FNS = ['showView', 'logout', 'p7Go', 'p7Finance', 'p7Bridge', 'p7Users'];
+function allReady() {
+  return REQUIRED_FNS.every(fn => typeof window[fn] === 'function');
 }
 
-/* ─── Ensure the tab bar exists ─── */
+/* ══════════════════════════════════════════════════════════════
+   BUILD TAB BAR
+   ══════════════════════════════════════════════════════════════ */
 function ensureTabBar(nav) {
-  if (document.getElementById('ncMainTabs')) return;
+  let bar = document.getElementById('ncMainTabs');
+  if (bar) { bar.remove(); }
   const meta = {
     cheques:  { label:'Cheques',  icon:'fa-money-check-alt', color:'#6366f1' },
     finance:  { label:'Finance',  icon:'fa-chart-line',      color:'#0ea5e9' },
     payments: { label:'Payments', icon:'fa-exchange-alt',    color:'#10b981' }
   };
-  const bar = document.createElement('div');
+  bar = document.createElement('div');
   bar.id = 'ncMainTabs';
   bar.style.cssText = 'display:flex;gap:4px;margin-bottom:16px;padding:4px;background:var(--light);border-radius:12px';
   Object.keys(meta).forEach(key => {
@@ -11733,8 +11795,38 @@ function ensureTabBar(nav) {
   nav.insertBefore(bar, nav.firstChild);
 }
 
-/* ─── Force the correct tab visible ─── */
-window.ncSwitchTab = function(tab) {
+/* ══════════════════════════════════════════════════════════════
+   ENSURE 3 TAB CONTAINERS
+   ══════════════════════════════════════════════════════════════ */
+function ensureTabContainers(nav) {
+  let container = document.getElementById('ncTabsContainer');
+  if (container) { container.remove(); }
+  container = document.createElement('div');
+  container.id = 'ncTabsContainer';
+  container.style.cssText = 'display:flex;flex-direction:column;gap:0';
+  const meta = {
+    cheques:  { label:'Cheques',  color:'#6366f1' },
+    finance:  { label:'Finance',  color:'#0ea5e9' },
+    payments: { label:'Payments', color:'#10b981' }
+  };
+  Object.keys(meta).forEach(tab => {
+    const c = document.createElement('div');
+    c.id = 'ncTab-' + tab;
+    c.dataset.nctab = tab;
+    c.style.cssText = 'flex-direction:column;gap:2px;flex-shrink:0';
+    c.innerHTML = '<div class="nav-title" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+      '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + meta[tab].color + '"></span>' +
+      meta[tab].label + '</div>';
+    container.appendChild(c);
+  });
+  nav.appendChild(container);
+  return container;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TAB SWITCH
+   ══════════════════════════════════════════════════════════════ */
+window.ncSwitchTab = function (tab) {
   if (['cheques','finance','payments'].indexOf(tab) === -1) tab = 'cheques';
   try {
     localStorage.setItem('ncActiveTab_v7', tab);
@@ -11743,7 +11835,6 @@ window.ncSwitchTab = function(tab) {
   window.__p7ManualAt = Date.now();
 
   const meta = { cheques:{color:'#6366f1'}, finance:{color:'#0ea5e9'}, payments:{color:'#10b981'} };
-
   document.querySelectorAll('#ncMainTabs .nc-main-tab').forEach(b => {
     const active = b.dataset.tab === tab;
     b.style.background = active ? 'white' : 'transparent';
@@ -11758,146 +11849,173 @@ window.ncSwitchTab = function(tab) {
       c.style.display = (c.dataset.nctab === tab) ? 'flex' : 'none';
     });
   }
-
   const sb = document.getElementById('sidebar');
   if (sb) sb.scrollTop = 0;
-  console.log('[P7 Fix] Tab → ' + tab);
+  console.log('[P7 Master] Tab → ' + tab);
 };
 
-/* ─── THE REBUILD ─── */
+/* ══════════════════════════════════════════════════════════════
+   REBUILD
+   ══════════════════════════════════════════════════════════════ */
 function rebuild() {
   const nav = document.querySelector('.sidebar nav');
-  if (!nav) return;
+  if (!nav) return false;
+  if (!allReady()) return false;
 
-  ensureTabBar(nav);
-  const container = ensureTabContainers(nav);
-
-  /* Preserve the Personal YTD widget if it exists */
+  /* Preserve Personal YTD widget if it exists */
   const personalWidget = document.getElementById('ncPersonalWidget');
   if (personalWidget && personalWidget.parentNode) personalWidget.parentNode.removeChild(personalWidget);
 
-  /* Remove every nav-item that is NOT inside the tab bar itself */
-  nav.querySelectorAll('.nav-item').forEach(el => {
-    if (el.closest('#ncMainTabs')) return;
-    el.remove();
-  });
+  ensureTabBar(nav);
+  ensureTabContainers(nav);
 
-  /* Remove any leftover sections outside the tabs container (they're now empty) */
-  nav.querySelectorAll('.nav-section').forEach(s => {
-    if (s.id === 'ncPersonalWidget') return;
-    if (s.closest('#ncTabsContainer')) return;
-    if (s.id.startsWith('ncTab-')) return;
-    s.remove();
-  });
+  let added = 0;
 
-  /* Attach the personal widget back into finance tab (if it existed) */
-  if (personalWidget) {
-    const financeTab = document.getElementById('ncTab-finance');
-    if (financeTab) financeTab.appendChild(personalWidget);
-  }
-
-  /* Verify each onclick function exists before creating the item */
-  function safeToAdd(onclick) {
-    const m = String(onclick || '').match(/([A-Za-z_$][\w$]*)\s*\(/);
-    if (!m) return true;
-    const fn = m[1];
-    if (fn === 'logout') return true;
-    return typeof window[fn] === 'function';
-  }
-
-  let added = 0, skipped = 0;
   MASTER_LIST.forEach(spec => {
-    const tabContainer = document.getElementById('ncTab-' + spec.tab);
-    if (!tabContainer) return;
-    if (!safeToAdd(spec.onclick)) {
-      console.warn('[P7 Fix] Skipped ' + spec.text + ' — ' + spec.onclick + ' handler missing');
-      skipped++;
-      return;
-    }
+    const container = document.getElementById('ncTab-' + spec.tab);
+    if (!container) return;
+
+    /* Skip if handler isn't defined yet */
+    const handlerExists = (function(){
+      const fnName = spec.fn;
+      if (fnName === 'logout') return typeof window.logout === 'function';
+      return typeof window[fnName] === 'function';
+    })();
+    if (!handlerExists) return;
+
     const el = document.createElement('div');
     el.className = 'nav-item';
     el.setAttribute('onclick', spec.onclick);
     el.dataset.nctab = spec.tab;
+    el.dataset.p7Protected = '1';   /* marker so hideOldDuplicates can't touch it */
     el.innerHTML = '<i class="fas fa-' + spec.icon + '"></i><span>' + spec.text + '</span>';
-    tabContainer.appendChild(el);
+    container.appendChild(el);
     added++;
   });
 
-  /* Re-apply the active tab */
+  /* Attach Personal YTD widget into finance tab */
+  if (personalWidget) {
+    const fTab = document.getElementById('ncTab-finance');
+    if (fTab) fTab.appendChild(personalWidget);
+  }
+
+  /* Re-apply active tab */
   let active = 'cheques';
   try { active = localStorage.getItem('ncActiveTab_v7') || 'cheques'; } catch(e){}
   window.ncSwitchTab(active);
 
-  console.log('[P7 Fix] Rebuild done — ' + added + ' items added, ' + skipped + ' skipped');
+  console.log('[P7 Master] ✅ Rebuilt sidebar — ' + added + ' items across 3 tabs');
+  return true;
 }
-
-/* ─── Expose as a manual command ─── */
 window.p7Fix = rebuild;
 
-/* ─── Diagnostic ─── */
-window.p7Diag = function() {
-  console.log('%c=== P7 Diagnostic ===', 'color:#6366f1;font-weight:bold');
-  const container = document.getElementById('ncTabsContainer');
-  if (!container) { console.warn('❌ #ncTabsContainer missing'); return; }
-  container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
-    const items = c.querySelectorAll('.nav-item');
-    const visible = window.getComputedStyle(c).display !== 'none';
-    console.log(c.id + ' — display=' + window.getComputedStyle(c).display +
-      ' · ' + items.length + ' items' + (visible ? ' [VISIBLE]' : ' [hidden]'));
-    if (visible) items.forEach(el => console.log('  ✓ ' + el.textContent.trim()));
+/* ══════════════════════════════════════════════════════════════
+   FIGHT BACK — Message 3's hideOldDuplicates keeps hiding our items
+   This runs every 1.5s and un-hides any protected item
+   ══════════════════════════════════════════════════════════════ */
+function defend() {
+  document.querySelectorAll('#ncTabsContainer .nav-item[data-p7-protected="1"]').forEach(el => {
+    if (el.style.display === 'none') el.style.display = '';
+    if (el.style.visibility === 'hidden') el.style.visibility = '';
+    if (el.style.opacity === '0') el.style.opacity = '';
   });
-  const outside = Array.from(document.querySelectorAll('.sidebar nav .nav-item')).filter(el =>
-    !el.closest('#ncTabsContainer') && !el.closest('#ncMainTabs')
-  );
-  console.log('Outside tabs:', outside.length);
-  console.log('Stored tab:', localStorage.getItem('ncActiveTab_v7'));
+  /* Also if items got removed entirely, rebuild */
+  const cheques = document.querySelectorAll('#ncTab-cheques .nav-item').length;
+  const finance = document.querySelectorAll('#ncTab-finance .nav-item').length;
+  const payments = document.querySelectorAll('#ncTab-payments .nav-item').length;
+  if (cheques < 15 || finance < 6 || payments < 6) {
+    /* Only rebuild if handlers are ready */
+    if (allReady()) rebuild();
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DIAGNOSTIC
+   ══════════════════════════════════════════════════════════════ */
+window.p7Check = function() {
+  console.log('%c══════════ P7 SIDEBAR DIAGNOSTIC ══════════', 'color:#6366f1;font-weight:bold;font-size:13px');
+
+  const checks = [
+    { name:'showView',         exists: typeof window.showView === 'function' },
+    { name:'logout',           exists: typeof window.logout === 'function' },
+    { name:'bizRoute',         exists: typeof window.bizRoute === 'function' },
+    { name:'finShowFinance',   exists: typeof window.finShowFinance === 'function' },
+    { name:'p5Route',          exists: typeof window.p5Route === 'function' },
+    { name:'ncOpenUsersPerms', exists: typeof window.ncOpenUsersPerms === 'function' },
+    { name:'ncSwitchTab',      exists: typeof window.ncSwitchTab === 'function' },
+    { name:'p7Go',             exists: typeof window.p7Go === 'function' },
+    { name:'p7Finance',        exists: typeof window.p7Finance === 'function' },
+    { name:'p7Bridge',         exists: typeof window.p7Bridge === 'function' },
+    { name:'p7Users',          exists: typeof window.p7Users === 'function' }
+  ];
+  console.log('%c── Loaded functions:', 'color:#0ea5e9;font-weight:bold');
+  checks.forEach(c => console.log('  ' + (c.exists ? '✓' : '✗') + ' ' + c.name));
+
+  const cheques  = document.querySelectorAll('#ncTab-cheques .nav-item').length;
+  const finance  = document.querySelectorAll('#ncTab-finance .nav-item').length;
+  const payments = document.querySelectorAll('#ncTab-payments .nav-item').length;
+
+  console.log('%c── Tab item counts:', 'color:#0ea5e9;font-weight:bold');
+  console.log('  Cheques tab:  ' + cheques + ' items');
+  console.log('  Finance tab:  ' + finance + ' items');
+  console.log('  Payments tab: ' + payments + ' items');
+
+  const container = document.getElementById('ncTabsContainer');
+  if (container) {
+    console.log('%c── Visibility:', 'color:#0ea5e9;font-weight:bold');
+    container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
+      console.log('  ' + c.id + ' → ' + window.getComputedStyle(c).display);
+    });
+  } else {
+    console.log('❌ #ncTabsContainer is MISSING');
+  }
+
+  console.log('%c── Stored tab:', 'color:#0ea5e9;font-weight:bold', localStorage.getItem('ncActiveTab_v7'));
+  console.log('%c── To force rebuild: p7Fix()', 'color:#10b981;font-weight:bold');
 };
 
-/* ─── Boot: rebuild, then keep an eye on the sidebar ─── */
+/* ══════════════════════════════════════════════════════════════
+   BOOT — retry until all functions are ready
+   ══════════════════════════════════════════════════════════════ */
 function boot() {
-  rebuild();
+  let attempts = 0;
+  const maxAttempts = 120;   /* 60 seconds max */
 
-  /* Re-run periodically in case some module strips items */
-  setInterval(() => {
-    /* If the tab containers are missing items, rebuild */
-    const cheques  = document.querySelectorAll('#ncTab-cheques .nav-item').length;
-    const finance  = document.querySelectorAll('#ncTab-finance .nav-item').length;
-    const payments = document.querySelectorAll('#ncTab-payments .nav-item').length;
-    if (cheques < 10 || finance < 5 || payments < 5) {
-      console.log('[P7 Fix] Missing items detected — rebuilding');
-      rebuild();
-    }
-    /* Also make sure only one tab container is visible */
-    const container = document.getElementById('ncTabsContainer');
-    if (container) {
-      let visible = 0;
-      container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
-        if (window.getComputedStyle(c).display !== 'none') visible++;
-      });
-      if (visible !== 1) {
-        let active = 'cheques';
-        try { active = localStorage.getItem('ncActiveTab_v7') || 'cheques'; } catch(e){}
-        window.ncSwitchTab(active);
+  const tryBuild = setInterval(() => {
+    attempts++;
+    if (allReady()) {
+      const ok = rebuild();
+      if (ok) {
+        clearInterval(tryBuild);
+        console.log('%c[P7 Master] ✅ Sidebar built after ' + attempts + ' attempt(s)', 'color:#10b981;font-weight:bold');
       }
     }
-  }, 3000);
+    if (attempts >= maxAttempts) {
+      clearInterval(tryBuild);
+      console.warn('[P7 Master] ⚠ Some handlers still missing — run p7Check() to see what');
+      rebuild();   /* Build whatever we can */
+    }
+  }, 500);
 
+  /* Defense loop — un-hide protected items every 1.5 seconds */
+  setInterval(defend, 1500);
+
+  /* Rebuild on auth change */
   try {
     if (typeof auth !== 'undefined' && auth && auth.onAuthStateChanged) {
       auth.onAuthStateChanged(u => {
-        if (u) setTimeout(rebuild, 800);
+        if (u) setTimeout(() => { if (allReady()) rebuild(); }, 2000);
       });
     }
   } catch (e) {}
 
-  console.log('%c[P7 Fix] ✅ Sidebar rebuilt — Cheques / Finance / Payments', 'color:#10b981;font-weight:bold');
-  console.log('Tip: type p7Fix() in the console to force a rebuild, p7Diag() to inspect.');
+  console.log('%c[P7 Master] ✅ Loaded — run p7Check() to see status, p7Fix() to rebuild', 'color:#10b981;font-weight:bold');
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 500));
+  document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 300));
 } else {
-  setTimeout(boot, 500);
+  setTimeout(boot, 300);
 }
 
 })();
