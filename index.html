@@ -11606,80 +11606,259 @@ if (document.readyState === 'loading') {
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
-     PART 7 HOTFIX — Stop hide-logic from hiding tab items
-     • Forces nav-items inside tabs to display (CSS !important overrides
-       any inline display:none set by Message 3's hideOldDuplicates)
-     • Diagnostic tool: p7Diag() in console shows what's where
+     PART 7 HOTFIX v2 — Correct tab switching
+     • Fixes broken tab visibility (previous hotfix overrode display:none)
+     • Diagnostic helper: p7Diag() in console
      ═══════════════════════════════════════════════════════════════════════ -->
-<style id="__p7HotfixStyles">
-  /* Force every nav item inside a tab to be visible */
+<style id="__p7HotfixStylesV2">
+  /* Force nav-items inside tabs to be visible (parent container controls visibility) */
   #ncTabsContainer .nav-item {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  /* Force the tab containers themselves to be tall enough */
-  #ncTabsContainer > div {
-    flex-shrink: 0 !important;
-    min-height: auto !important;
+  /* Force the tab bar buttons visible */
+  #ncMainTabs .nc-main-tab {
     display: flex !important;
-    flex-direction: column !important;
   }
-  /* Ensure the tabs container itself never collapses */
+  /* Ensure containers stack vertically when shown */
   #ncTabsContainer {
     display: flex !important;
     flex-direction: column !important;
   }
-  /* Also force tab-bar buttons visible */
-  #ncMainTabs .nc-main-tab {
-    display: flex !important;
+  #ncTabsContainer > div[data-nctab] {
+    flex-direction: column !important;
+    flex-shrink: 0 !important;
   }
 </style>
 <script>
 (function(){
 'use strict';
-if (window.__p7Hotfix) return;
-window.__p7Hotfix = true;
+if (window.__p7HotfixV2) return;
+window.__p7HotfixV2 = true;
 
-/* ── Belt-and-suspenders: also strip any inline display:none ── */
-setInterval(() => {
-  document.querySelectorAll('#ncTabsContainer .nav-item').forEach(el => {
-    if (el.style.display === 'none') el.style.display = '';
-    if (el.style.visibility === 'hidden') el.style.visibility = '';
-    if (el.style.opacity === '0') el.style.opacity = '';
+/* ─── Force-apply the correct tab on boot and after reorg ─── */
+function enforceActiveTab() {
+  const container = document.getElementById('ncTabsContainer');
+  if (!container) return;
+
+  /* Which tab should be active? */
+  let active = 'cheques';
+  try {
+    active = localStorage.getItem('ncActiveTab_v7') || 'cheques';
+  } catch(e){}
+
+  /* Also make sure the tab-bar highlight matches */
+  document.querySelectorAll('#ncMainTabs .nc-main-tab').forEach(btn => {
+    const t = btn.dataset.tab;
+    btn.dataset.active = (t === active) ? '1' : '0';
+    btn.style.background = (t === active) ? 'white' : 'transparent';
+    btn.style.color = (t === active) ?
+      ({cheques:'#6366f1', finance:'#0ea5e9', payments:'#10b981'}[t] || '#6366f1') :
+      'var(--gray)';
+    btn.style.boxShadow = (t === active) ? '0 2px 8px rgba(99,102,241,0.18)' : 'none';
+    btn.style.transform = (t === active) ? 'translateY(-1px)' : 'none';
   });
-}, 300);
 
-/* Also unhide the tab containers themselves if something hid them */
-setInterval(() => {
-  document.querySelectorAll('#ncTabsContainer > div').forEach(el => {
-    if (el.style.display === 'none' && !el.dataset.nctab) {
-      el.style.display = '';
+  /* Show only the active tab container */
+  container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
+    const t = c.dataset.nctab;
+    if (t === active) {
+      c.style.display = 'flex';
+      c.style.flexDirection = 'column';
+    } else {
+      c.style.display = 'none';
     }
-    /* Don't unhide tab containers that are hidden by applyTab — that's intentional */
   });
-}, 500);
 
-/* ── Diagnostic tool ── */
+  /* Show any non-tab children (e.g. personal widget if it's still there) */
+  container.querySelectorAll(':scope > div:not([data-nctab])').forEach(c => {
+    c.style.display = '';
+  });
+}
+
+/* Override ncSwitchTab completely with a version that works */
+window.ncSwitchTab = function (tab) {
+  if (!['cheques','finance','payments'].includes(tab)) tab = 'cheques';
+  try { localStorage.setItem('ncActiveTab_v7', tab); } catch(e){}
+  try { localStorage.setItem('ncActiveTab', tab); } catch(e){}
+  /* Suppress auto-switch for 15 seconds */
+  window.__p7ManualAt = Date.now();
+  enforceActiveTab();
+  const sb = document.getElementById('sidebar');
+  if (sb) sb.scrollTop = 0;
+  console.log('[P7] Manual tab → ' + tab);
+};
+
+/* ─── Correct the previous broken applyTab if it's still firing ─── */
+const _origApplyTab = window.__p7ApplyTab;
+if (typeof _origApplyTab === 'function') {
+  /* Wrap it so it always uses enforceActiveTab's logic */
+  window.__p7ApplyTab = function(tab) { enforceActiveTab(); };
+}
+
+/* ─── Repair the reorg: make sure every nav-item is inside a tab ─── */
+function repairReorg() {
+  const container = document.getElementById('ncTabsContainer');
+  const nav = document.querySelector('.sidebar nav');
+  if (!container || !nav) return;
+
+  /* Get a fresh map of view → tab */
+  const getTab = (el) => {
+    if (el.dataset.nctab) return el.dataset.nctab;
+    const oc = (el.getAttribute('onclick') || '').toLowerCase();
+    const txt = (el.textContent || '').toLowerCase().trim();
+
+    /* Extract target view/route from onclick */
+    let target = null;
+    let m;
+    if ((m = oc.match(/showview\('([^']+)'/)))        target = m[1];
+    else if ((m = oc.match(/bizroute\('([^']+)'/)))   target = m[1];
+    else if ((m = oc.match(/ncv10route\('([^']+)'/))) target = m[1];
+    else if (/p5route\(/.test(oc))                     target = 'p5BridgeView';
+    else if (/finopenplandetail/.test(oc))             target = 'financePlanDetailView';
+    else if (/finshowfinance/.test(oc))                target = 'financeView';
+
+    if (target) {
+      /* Route-name → tab */
+      if (/^biz-(shop|cash|banks|txns|parties|analytics)/.test(target))   return 'payments';
+      if (/^biz-(overview|bridge|sources|deployments|projects|loans|reports)/.test(target)) return 'finance';
+      if (/^biz-cats/.test(target))                                       return 'cheques';
+      if (/^(financeView|financePlanDetailView|p5BridgeView)/.test(target)) return 'finance';
+
+      const routeMap = {
+        'dashboard':'cheques', 'all-cheques':'cheques', 'in-hand':'cheques',
+        'returned':'cheques', 'recycle':'cheques', 'payees':'cheques',
+        'issuers':'cheques', 'kanban':'cheques', 'timeline':'cheques',
+        'analytics':'cheques', 'books':'cheques', 'reports':'cheques',
+        'aging':'cheques', 'audit':'cheques', 'settings':'cheques'
+      };
+      if (routeMap[target]) return routeMap[target];
+    }
+
+    /* Text-based fallback */
+    if (/^(finance|cheque → finance|money sources|deployments|projects|loans|reports & p&l|business overview)$/.test(txt)) return 'finance';
+    if (/^(shop payments|in payments|out payments|cash in hand|bank accounts|bank transactions|parties)$/.test(txt)) return 'payments';
+    if (/^personal \(ytd\)$/.test(txt)) return 'finance';
+
+    return 'cheques';
+  };
+
+  const tabs = {
+    cheques:  document.getElementById('ncTab-cheques'),
+    finance:  document.getElementById('ncTab-finance'),
+    payments: document.getElementById('ncTab-payments')
+  };
+  if (!tabs.cheques || !tabs.finance || !tabs.payments) return;
+
+  /* Move every nav-item that's outside tabs into the correct tab */
+  let moved = 0;
+  nav.querySelectorAll('.nav-item').forEach(el => {
+    if (el.closest('#ncMainTabs')) return;
+    if (el.closest('#ncTabsContainer')) return;
+
+    const tab = getTab(el);
+    tabs[tab].appendChild(el);
+    moved++;
+  });
+
+  /* Move any Business Ledger section items */
+  const bizSection = document.getElementById('bizSidebarSection');
+  if (bizSection && !bizSection.closest('#ncTabsContainer')) {
+    bizSection.querySelectorAll('.nav-item').forEach(el => {
+      const tab = getTab(el);
+      tabs[tab].appendChild(el);
+      moved++;
+    });
+    bizSection.remove();
+  }
+
+  /* Move finNavSection items */
+  const finSection = document.getElementById('finNavSection');
+  if (finSection && !finSection.closest('#ncTabsContainer')) {
+    finSection.querySelectorAll('.nav-item').forEach(el => {
+      const tab = getTab(el);
+      tabs[tab].appendChild(el);
+      moved++;
+    });
+    finSection.remove();
+  }
+
+  /* Move Personal YTD widget into Finance tab */
+  const personal = document.getElementById('ncPersonalWidget');
+  if (personal && !personal.closest('#ncTabsContainer')) {
+    tabs.finance.appendChild(personal);
+    moved++;
+  }
+
+  if (moved > 0) console.log('[P7 Hotfix] Repaired — moved ' + moved + ' item(s)');
+}
+
+/* ─── Boot: repair + enforce on every mutation ─── */
+function boot() {
+  repairReorg();
+  enforceActiveTab();
+
+  /* Watch the sidebar for re-injections and re-repair */
+  const nav = document.querySelector('.sidebar nav');
+  if (nav) {
+    const obs = new MutationObserver(() => {
+      /* If anything appears outside the container → re-repair */
+      const outside = Array.from(nav.querySelectorAll('.nav-item')).filter(el =>
+        !el.closest('#ncTabsContainer') && !el.closest('#ncMainTabs')
+      );
+      if (outside.length > 0) setTimeout(repairReorg, 100);
+    });
+    obs.observe(nav, { childList: true, subtree: true });
+  }
+
+  /* Periodic enforcement */
+  setInterval(() => {
+    /* If we're on a manual grace period, keep enforcing the manual tab */
+    if (window.__p7ManualAt && (Date.now() - window.__p7ManualAt < 15000)) {
+      enforceActiveTab();
+      return;
+    }
+    /* Otherwise, if something changed tab containers' visibility wrongly, fix */
+    const container = document.getElementById('ncTabsContainer');
+    if (!container) return;
+    let visible = 0;
+    container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
+      if (window.getComputedStyle(c).display !== 'none') visible++;
+    });
+    /* Exactly one should be visible */
+    if (visible !== 1) enforceActiveTab();
+  }, 800);
+
+  /* Re-enforce on auth */
+  try {
+    if (typeof auth !== 'undefined' && auth && auth.onAuthStateChanged) {
+      auth.onAuthStateChanged(u => {
+        if (u) setTimeout(() => { repairReorg(); enforceActiveTab(); }, 800);
+      });
+    }
+  } catch (e) {}
+
+  console.log('[P7 Hotfix v2] ✅ Active — run p7Diag() for details');
+}
+
+/* ─── Diagnostic tool ─── */
 window.p7Diag = function() {
   console.log('%c=== Part 7 Diagnostic ===', 'color:#6366f1;font-weight:bold');
   const container = document.getElementById('ncTabsContainer');
   if (!container) { console.warn('❌ #ncTabsContainer not found'); return; }
 
-  const tabs = container.querySelectorAll(':scope > div');
+  const tabs = container.querySelectorAll(':scope > div[data-nctab]');
   console.log('Tab containers:', tabs.length);
 
   tabs.forEach(t => {
     const items = t.querySelectorAll('.nav-item');
-    const visible = Array.from(items).filter(el => {
-      const s = window.getComputedStyle(el);
-      return s.display !== 'none' && s.visibility !== 'hidden';
-    });
-    console.log('  ' + t.id + ': ' + items.length + ' items, ' + visible.length + ' visible');
-    visible.forEach(el => console.log('    ✓ ' + el.textContent.trim()));
-    Array.from(items).filter(el => !visible.includes(el)).forEach(el => {
-      console.log('    ✗ HIDDEN: ' + el.textContent.trim() + ' (display=' + el.style.display + ')');
-    });
+    const visible = window.getComputedStyle(t).display !== 'none';
+    console.log('  ' + t.id + ' (nctab=' + t.dataset.nctab + ') — display=' +
+      window.getComputedStyle(t).display + ' · ' + items.length + ' items');
+    if (visible) {
+      items.forEach(el => console.log('    ✓ ' + el.textContent.trim()));
+    }
   });
 
   const outside = Array.from(document.querySelectorAll('.sidebar nav .nav-item')).filter(el =>
@@ -11688,12 +11867,15 @@ window.p7Diag = function() {
   console.log('Items outside tabs:', outside.length);
   outside.forEach(el => console.log('    · ' + el.textContent.trim()));
 
-  /* Which tab is active? */
-  const active = Array.from(tabs).find(t => window.getComputedStyle(t).display !== 'none');
-  console.log('Active tab (visual):', active ? active.id : 'none');
+  console.log('Storage activeTab:', localStorage.getItem('ncActiveTab_v7'));
 };
 
-console.log('%c[P7 Hotfix] ✅ Loaded — run p7Diag() in console for a report', 'color:#10b981;font-weight:bold');
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 300));
+} else {
+  setTimeout(boot, 300);
+}
+
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
