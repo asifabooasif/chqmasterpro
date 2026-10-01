@@ -11606,274 +11606,298 @@ if (document.readyState === 'loading') {
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════
-     PART 7 HOTFIX v2 — Correct tab switching
-     • Fixes broken tab visibility (previous hotfix overrode display:none)
-     • Diagnostic helper: p7Diag() in console
+     PART 7 — MASTER SIDEBAR REBUILD (root fix)
+     Guarantees every item lives in the right tab with a working onclick.
      ═══════════════════════════════════════════════════════════════════════ -->
-<style id="__p7HotfixStylesV2">
-  /* Force nav-items inside tabs to be visible (parent container controls visibility) */
-  #ncTabsContainer .nav-item {
+<style id="__p7FixStyles">
+  #ncTabsContainer { display: flex !important; flex-direction: column !important; }
+  #ncTabsContainer > div[data-nctab] {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  #ncTabsContainer > div[data-nctab] .nav-item {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
-  }
-  /* Force the tab bar buttons visible */
-  #ncMainTabs .nc-main-tab {
-    display: flex !important;
-  }
-  /* Ensure containers stack vertically when shown */
-  #ncTabsContainer {
-    display: flex !important;
-    flex-direction: column !important;
-  }
-  #ncTabsContainer > div[data-nctab] {
-    flex-direction: column !important;
-    flex-shrink: 0 !important;
   }
 </style>
 <script>
 (function(){
 'use strict';
-if (window.__p7HotfixV2) return;
-window.__p7HotfixV2 = true;
+if (window.__p7Fix) return;
+window.__p7Fix = true;
 
-/* ─── Force-apply the correct tab on boot and after reorg ─── */
-function enforceActiveTab() {
-  const container = document.getElementById('ncTabsContainer');
-  if (!container) return;
+/* ─── MASTER LIST — every item, where it goes, what it does ─── */
+const MASTER_LIST = [
+  /* ============ CHEQUES TAB ============ */
+  { tab:'cheques',  text:'Dashboard',          icon:'th-large',            onclick:"showView('dashboard',this)" },
+  { tab:'cheques',  text:'All Cheques',        icon:'list',                onclick:"showView('all-cheques',this)" },
+  { tab:'cheques',  text:'In Hand',            icon:'hand-holding',        onclick:"showView('in-hand',this)" },
+  { tab:'cheques',  text:'Returned',           icon:'undo',                onclick:"showView('returned',this)" },
+  { tab:'cheques',  text:'Recycle',            icon:'trash-restore',       onclick:"showView('recycle',this)" },
+  { tab:'cheques',  text:'Payees',             icon:'users',               onclick:"showView('payees',this)" },
+  { tab:'cheques',  text:'Issuing Parties',    icon:'user-tie',            onclick:"showView('issuers',this)" },
+  { tab:'cheques',  text:'Kanban',             icon:'columns',             onclick:"showView('kanban',this)" },
+  { tab:'cheques',  text:'Timeline',           icon:'stream',              onclick:"showView('timeline',this)" },
+  { tab:'cheques',  text:'Analytics',          icon:'chart-line',          onclick:"showView('analytics',this)" },
+  { tab:'cheques',  text:'Books',              icon:'book',                onclick:"showView('books',this)" },
+  { tab:'cheques',  text:'Reports',            icon:'file-alt',            onclick:"showView('reports',this)" },
+  { tab:'cheques',  text:'Aging',              icon:'clock',               onclick:"showView('aging',this)" },
+  { tab:'cheques',  text:'Audit',              icon:'history',             onclick:"showView('audit',this)" },
+  { tab:'cheques',  text:'Cheque Categories',  icon:'tags',                onclick:"bizRoute('biz-cats',this)" },
+  { tab:'cheques',  text:'Settings',           icon:'cog',                 onclick:"showView('settings',this)" },
+  { tab:'cheques',  text:'Logout',             icon:'sign-out-alt',        onclick:"logout()" },
 
-  /* Which tab should be active? */
-  let active = 'cheques';
-  try {
-    active = localStorage.getItem('ncActiveTab_v7') || 'cheques';
-  } catch(e){}
+  /* ============ FINANCE TAB ============ */
+  { tab:'finance',  text:'Business Overview',  icon:'chart-pie',           onclick:"bizRoute('biz-overview',this)" },
+  { tab:'finance',  text:'Finance Manager',    icon:'coins',               onclick:"finShowFinance(this)" },
+  { tab:'finance',  text:'Cheque → Finance',   icon:'link',                onclick:"p5Route(this)" },
+  { tab:'finance',  text:'Money Sources',      icon:'hand-holding-usd',    onclick:"bizRoute('biz-sources',this)" },
+  { tab:'finance',  text:'Deployments',        icon:'boxes',               onclick:"bizRoute('biz-deployments',this)" },
+  { tab:'finance',  text:'Projects',           icon:'project-diagram',     onclick:"bizRoute('biz-projects',this)" },
+  { tab:'finance',  text:'Loans',              icon:'file-invoice-dollar', onclick:"bizRoute('biz-loans',this)" },
+  { tab:'finance',  text:'Reports & P&L',      icon:'file-pdf',            onclick:"bizRoute('biz-reports',this)" },
 
-  /* Also make sure the tab-bar highlight matches */
-  document.querySelectorAll('#ncMainTabs .nc-main-tab').forEach(btn => {
-    const t = btn.dataset.tab;
-    btn.dataset.active = (t === active) ? '1' : '0';
-    btn.style.background = (t === active) ? 'white' : 'transparent';
-    btn.style.color = (t === active) ?
-      ({cheques:'#6366f1', finance:'#0ea5e9', payments:'#10b981'}[t] || '#6366f1') :
-      'var(--gray)';
-    btn.style.boxShadow = (t === active) ? '0 2px 8px rgba(99,102,241,0.18)' : 'none';
-    btn.style.transform = (t === active) ? 'translateY(-1px)' : 'none';
-  });
+  /* ============ PAYMENTS TAB ============ */
+  { tab:'payments', text:'Shop Payments',      icon:'store',               onclick:"bizRoute('biz-shop',this)" },
+  { tab:'payments', text:'In Payments',        icon:'arrow-circle-down',   onclick:"bizRoute('biz-inp',this)" },
+  { tab:'payments', text:'Out Payments',       icon:'arrow-circle-up',     onclick:"bizRoute('biz-out',this)" },
+  { tab:'payments', text:'Cash in Hand',       icon:'coins',               onclick:"bizRoute('biz-cash',this)" },
+  { tab:'payments', text:'Bank Accounts',      icon:'university',          onclick:"bizRoute('biz-banks',this)" },
+  { tab:'payments', text:'Bank Transactions',  icon:'exchange-alt',        onclick:"bizRoute('biz-txns',this)" },
+  { tab:'payments', text:'Parties',            icon:'address-book',        onclick:"bizRoute('biz-parties',this)" },
+  { tab:'payments', text:'Bank Analytics',     icon:'chart-bar',           onclick:"bizRoute('biz-analytics',this)" }
+];
 
-  /* Show only the active tab container */
-  container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
-    const t = c.dataset.nctab;
-    if (t === active) {
-      c.style.display = 'flex';
-      c.style.flexDirection = 'column';
-    } else {
-      c.style.display = 'none';
+/* ─── Ensure the three tab containers exist ─── */
+function ensureTabContainers(nav) {
+  let container = document.getElementById('ncTabsContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'ncTabsContainer';
+    nav.appendChild(container);
+  }
+
+  const meta = {
+    cheques:  { label:'Cheques',  color:'#6366f1' },
+    finance:  { label:'Finance',  color:'#0ea5e9' },
+    payments: { label:'Payments', color:'#10b981' }
+  };
+
+  Object.keys(meta).forEach(tab => {
+    let c = document.getElementById('ncTab-' + tab);
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'ncTab-' + tab;
+      c.dataset.nctab = tab;
+      c.style.cssText = 'display:flex;flex-direction:column;gap:2px';
+      container.appendChild(c);
+    }
+    /* Ensure header exists */
+    if (!c.querySelector('.nav-title')) {
+      const h = document.createElement('div');
+      h.className = 'nav-title';
+      h.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px';
+      h.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' +
+        meta[tab].color + '"></span>' + meta[tab].label;
+      c.insertBefore(h, c.firstChild);
     }
   });
 
-  /* Show any non-tab children (e.g. personal widget if it's still there) */
-  container.querySelectorAll(':scope > div:not([data-nctab])').forEach(c => {
-    c.style.display = '';
-  });
+  return container;
 }
 
-/* Override ncSwitchTab completely with a version that works */
-window.ncSwitchTab = function (tab) {
-  if (!['cheques','finance','payments'].includes(tab)) tab = 'cheques';
-  try { localStorage.setItem('ncActiveTab_v7', tab); } catch(e){}
-  try { localStorage.setItem('ncActiveTab', tab); } catch(e){}
-  /* Suppress auto-switch for 15 seconds */
+/* ─── Ensure the tab bar exists ─── */
+function ensureTabBar(nav) {
+  if (document.getElementById('ncMainTabs')) return;
+  const meta = {
+    cheques:  { label:'Cheques',  icon:'fa-money-check-alt', color:'#6366f1' },
+    finance:  { label:'Finance',  icon:'fa-chart-line',      color:'#0ea5e9' },
+    payments: { label:'Payments', icon:'fa-exchange-alt',    color:'#10b981' }
+  };
+  const bar = document.createElement('div');
+  bar.id = 'ncMainTabs';
+  bar.style.cssText = 'display:flex;gap:4px;margin-bottom:16px;padding:4px;background:var(--light);border-radius:12px';
+  Object.keys(meta).forEach(key => {
+    const m = meta[key];
+    const btn = document.createElement('button');
+    btn.className = 'nc-main-tab';
+    btn.dataset.tab = key;
+    btn.onclick = () => window.ncSwitchTab(key);
+    btn.style.cssText = 'flex:1;padding:9px 4px;border:none;background:transparent;border-radius:9px;font-weight:700;font-size:11px;cursor:pointer;color:var(--gray);display:flex;flex-direction:column;align-items:center;gap:4px;transition:all .18s ease;font-family:inherit';
+    btn.innerHTML = '<i class="fas ' + m.icon + '" style="font-size:15px"></i><span>' + m.label + '</span>';
+    bar.appendChild(btn);
+  });
+  nav.insertBefore(bar, nav.firstChild);
+}
+
+/* ─── Force the correct tab visible ─── */
+window.ncSwitchTab = function(tab) {
+  if (['cheques','finance','payments'].indexOf(tab) === -1) tab = 'cheques';
+  try {
+    localStorage.setItem('ncActiveTab_v7', tab);
+    localStorage.setItem('ncActiveTab', tab);
+  } catch(e){}
   window.__p7ManualAt = Date.now();
-  enforceActiveTab();
+
+  const meta = { cheques:{color:'#6366f1'}, finance:{color:'#0ea5e9'}, payments:{color:'#10b981'} };
+
+  document.querySelectorAll('#ncMainTabs .nc-main-tab').forEach(b => {
+    const active = b.dataset.tab === tab;
+    b.style.background = active ? 'white' : 'transparent';
+    b.style.color      = active ? (meta[b.dataset.tab] || {color:'#6366f1'}).color : 'var(--gray)';
+    b.style.boxShadow  = active ? '0 2px 8px rgba(99,102,241,0.18)' : 'none';
+    b.style.transform  = active ? 'translateY(-1px)' : 'none';
+  });
+
+  const container = document.getElementById('ncTabsContainer');
+  if (container) {
+    container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
+      c.style.display = (c.dataset.nctab === tab) ? 'flex' : 'none';
+    });
+  }
+
   const sb = document.getElementById('sidebar');
   if (sb) sb.scrollTop = 0;
-  console.log('[P7] Manual tab → ' + tab);
+  console.log('[P7 Fix] Tab → ' + tab);
 };
 
-/* ─── Correct the previous broken applyTab if it's still firing ─── */
-const _origApplyTab = window.__p7ApplyTab;
-if (typeof _origApplyTab === 'function') {
-  /* Wrap it so it always uses enforceActiveTab's logic */
-  window.__p7ApplyTab = function(tab) { enforceActiveTab(); };
-}
-
-/* ─── Repair the reorg: make sure every nav-item is inside a tab ─── */
-function repairReorg() {
-  const container = document.getElementById('ncTabsContainer');
+/* ─── THE REBUILD ─── */
+function rebuild() {
   const nav = document.querySelector('.sidebar nav');
-  if (!container || !nav) return;
+  if (!nav) return;
 
-  /* Get a fresh map of view → tab */
-  const getTab = (el) => {
-    if (el.dataset.nctab) return el.dataset.nctab;
-    const oc = (el.getAttribute('onclick') || '').toLowerCase();
-    const txt = (el.textContent || '').toLowerCase().trim();
+  ensureTabBar(nav);
+  const container = ensureTabContainers(nav);
 
-    /* Extract target view/route from onclick */
-    let target = null;
-    let m;
-    if ((m = oc.match(/showview\('([^']+)'/)))        target = m[1];
-    else if ((m = oc.match(/bizroute\('([^']+)'/)))   target = m[1];
-    else if ((m = oc.match(/ncv10route\('([^']+)'/))) target = m[1];
-    else if (/p5route\(/.test(oc))                     target = 'p5BridgeView';
-    else if (/finopenplandetail/.test(oc))             target = 'financePlanDetailView';
-    else if (/finshowfinance/.test(oc))                target = 'financeView';
+  /* Preserve the Personal YTD widget if it exists */
+  const personalWidget = document.getElementById('ncPersonalWidget');
+  if (personalWidget && personalWidget.parentNode) personalWidget.parentNode.removeChild(personalWidget);
 
-    if (target) {
-      /* Route-name → tab */
-      if (/^biz-(shop|cash|banks|txns|parties|analytics)/.test(target))   return 'payments';
-      if (/^biz-(overview|bridge|sources|deployments|projects|loans|reports)/.test(target)) return 'finance';
-      if (/^biz-cats/.test(target))                                       return 'cheques';
-      if (/^(financeView|financePlanDetailView|p5BridgeView)/.test(target)) return 'finance';
-
-      const routeMap = {
-        'dashboard':'cheques', 'all-cheques':'cheques', 'in-hand':'cheques',
-        'returned':'cheques', 'recycle':'cheques', 'payees':'cheques',
-        'issuers':'cheques', 'kanban':'cheques', 'timeline':'cheques',
-        'analytics':'cheques', 'books':'cheques', 'reports':'cheques',
-        'aging':'cheques', 'audit':'cheques', 'settings':'cheques'
-      };
-      if (routeMap[target]) return routeMap[target];
-    }
-
-    /* Text-based fallback */
-    if (/^(finance|cheque → finance|money sources|deployments|projects|loans|reports & p&l|business overview)$/.test(txt)) return 'finance';
-    if (/^(shop payments|in payments|out payments|cash in hand|bank accounts|bank transactions|parties)$/.test(txt)) return 'payments';
-    if (/^personal \(ytd\)$/.test(txt)) return 'finance';
-
-    return 'cheques';
-  };
-
-  const tabs = {
-    cheques:  document.getElementById('ncTab-cheques'),
-    finance:  document.getElementById('ncTab-finance'),
-    payments: document.getElementById('ncTab-payments')
-  };
-  if (!tabs.cheques || !tabs.finance || !tabs.payments) return;
-
-  /* Move every nav-item that's outside tabs into the correct tab */
-  let moved = 0;
+  /* Remove every nav-item that is NOT inside the tab bar itself */
   nav.querySelectorAll('.nav-item').forEach(el => {
     if (el.closest('#ncMainTabs')) return;
-    if (el.closest('#ncTabsContainer')) return;
-
-    const tab = getTab(el);
-    tabs[tab].appendChild(el);
-    moved++;
+    el.remove();
   });
 
-  /* Move any Business Ledger section items */
-  const bizSection = document.getElementById('bizSidebarSection');
-  if (bizSection && !bizSection.closest('#ncTabsContainer')) {
-    bizSection.querySelectorAll('.nav-item').forEach(el => {
-      const tab = getTab(el);
-      tabs[tab].appendChild(el);
-      moved++;
-    });
-    bizSection.remove();
+  /* Remove any leftover sections outside the tabs container (they're now empty) */
+  nav.querySelectorAll('.nav-section').forEach(s => {
+    if (s.id === 'ncPersonalWidget') return;
+    if (s.closest('#ncTabsContainer')) return;
+    if (s.id.startsWith('ncTab-')) return;
+    s.remove();
+  });
+
+  /* Attach the personal widget back into finance tab (if it existed) */
+  if (personalWidget) {
+    const financeTab = document.getElementById('ncTab-finance');
+    if (financeTab) financeTab.appendChild(personalWidget);
   }
 
-  /* Move finNavSection items */
-  const finSection = document.getElementById('finNavSection');
-  if (finSection && !finSection.closest('#ncTabsContainer')) {
-    finSection.querySelectorAll('.nav-item').forEach(el => {
-      const tab = getTab(el);
-      tabs[tab].appendChild(el);
-      moved++;
-    });
-    finSection.remove();
+  /* Verify each onclick function exists before creating the item */
+  function safeToAdd(onclick) {
+    const m = String(onclick || '').match(/([A-Za-z_$][\w$]*)\s*\(/);
+    if (!m) return true;
+    const fn = m[1];
+    if (fn === 'logout') return true;
+    return typeof window[fn] === 'function';
   }
 
-  /* Move Personal YTD widget into Finance tab */
-  const personal = document.getElementById('ncPersonalWidget');
-  if (personal && !personal.closest('#ncTabsContainer')) {
-    tabs.finance.appendChild(personal);
-    moved++;
-  }
-
-  if (moved > 0) console.log('[P7 Hotfix] Repaired — moved ' + moved + ' item(s)');
-}
-
-/* ─── Boot: repair + enforce on every mutation ─── */
-function boot() {
-  repairReorg();
-  enforceActiveTab();
-
-  /* Watch the sidebar for re-injections and re-repair */
-  const nav = document.querySelector('.sidebar nav');
-  if (nav) {
-    const obs = new MutationObserver(() => {
-      /* If anything appears outside the container → re-repair */
-      const outside = Array.from(nav.querySelectorAll('.nav-item')).filter(el =>
-        !el.closest('#ncTabsContainer') && !el.closest('#ncMainTabs')
-      );
-      if (outside.length > 0) setTimeout(repairReorg, 100);
-    });
-    obs.observe(nav, { childList: true, subtree: true });
-  }
-
-  /* Periodic enforcement */
-  setInterval(() => {
-    /* If we're on a manual grace period, keep enforcing the manual tab */
-    if (window.__p7ManualAt && (Date.now() - window.__p7ManualAt < 15000)) {
-      enforceActiveTab();
+  let added = 0, skipped = 0;
+  MASTER_LIST.forEach(spec => {
+    const tabContainer = document.getElementById('ncTab-' + spec.tab);
+    if (!tabContainer) return;
+    if (!safeToAdd(spec.onclick)) {
+      console.warn('[P7 Fix] Skipped ' + spec.text + ' — ' + spec.onclick + ' handler missing');
+      skipped++;
       return;
     }
-    /* Otherwise, if something changed tab containers' visibility wrongly, fix */
-    const container = document.getElementById('ncTabsContainer');
-    if (!container) return;
-    let visible = 0;
-    container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
-      if (window.getComputedStyle(c).display !== 'none') visible++;
-    });
-    /* Exactly one should be visible */
-    if (visible !== 1) enforceActiveTab();
-  }, 800);
+    const el = document.createElement('div');
+    el.className = 'nav-item';
+    el.setAttribute('onclick', spec.onclick);
+    el.dataset.nctab = spec.tab;
+    el.innerHTML = '<i class="fas fa-' + spec.icon + '"></i><span>' + spec.text + '</span>';
+    tabContainer.appendChild(el);
+    added++;
+  });
 
-  /* Re-enforce on auth */
+  /* Re-apply the active tab */
+  let active = 'cheques';
+  try { active = localStorage.getItem('ncActiveTab_v7') || 'cheques'; } catch(e){}
+  window.ncSwitchTab(active);
+
+  console.log('[P7 Fix] Rebuild done — ' + added + ' items added, ' + skipped + ' skipped');
+}
+
+/* ─── Expose as a manual command ─── */
+window.p7Fix = rebuild;
+
+/* ─── Diagnostic ─── */
+window.p7Diag = function() {
+  console.log('%c=== P7 Diagnostic ===', 'color:#6366f1;font-weight:bold');
+  const container = document.getElementById('ncTabsContainer');
+  if (!container) { console.warn('❌ #ncTabsContainer missing'); return; }
+  container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
+    const items = c.querySelectorAll('.nav-item');
+    const visible = window.getComputedStyle(c).display !== 'none';
+    console.log(c.id + ' — display=' + window.getComputedStyle(c).display +
+      ' · ' + items.length + ' items' + (visible ? ' [VISIBLE]' : ' [hidden]'));
+    if (visible) items.forEach(el => console.log('  ✓ ' + el.textContent.trim()));
+  });
+  const outside = Array.from(document.querySelectorAll('.sidebar nav .nav-item')).filter(el =>
+    !el.closest('#ncTabsContainer') && !el.closest('#ncMainTabs')
+  );
+  console.log('Outside tabs:', outside.length);
+  console.log('Stored tab:', localStorage.getItem('ncActiveTab_v7'));
+};
+
+/* ─── Boot: rebuild, then keep an eye on the sidebar ─── */
+function boot() {
+  rebuild();
+
+  /* Re-run periodically in case some module strips items */
+  setInterval(() => {
+    /* If the tab containers are missing items, rebuild */
+    const cheques  = document.querySelectorAll('#ncTab-cheques .nav-item').length;
+    const finance  = document.querySelectorAll('#ncTab-finance .nav-item').length;
+    const payments = document.querySelectorAll('#ncTab-payments .nav-item').length;
+    if (cheques < 10 || finance < 5 || payments < 5) {
+      console.log('[P7 Fix] Missing items detected — rebuilding');
+      rebuild();
+    }
+    /* Also make sure only one tab container is visible */
+    const container = document.getElementById('ncTabsContainer');
+    if (container) {
+      let visible = 0;
+      container.querySelectorAll(':scope > div[data-nctab]').forEach(c => {
+        if (window.getComputedStyle(c).display !== 'none') visible++;
+      });
+      if (visible !== 1) {
+        let active = 'cheques';
+        try { active = localStorage.getItem('ncActiveTab_v7') || 'cheques'; } catch(e){}
+        window.ncSwitchTab(active);
+      }
+    }
+  }, 3000);
+
   try {
     if (typeof auth !== 'undefined' && auth && auth.onAuthStateChanged) {
       auth.onAuthStateChanged(u => {
-        if (u) setTimeout(() => { repairReorg(); enforceActiveTab(); }, 800);
+        if (u) setTimeout(rebuild, 800);
       });
     }
   } catch (e) {}
 
-  console.log('[P7 Hotfix v2] ✅ Active — run p7Diag() for details');
+  console.log('%c[P7 Fix] ✅ Sidebar rebuilt — Cheques / Finance / Payments', 'color:#10b981;font-weight:bold');
+  console.log('Tip: type p7Fix() in the console to force a rebuild, p7Diag() to inspect.');
 }
 
-/* ─── Diagnostic tool ─── */
-window.p7Diag = function() {
-  console.log('%c=== Part 7 Diagnostic ===', 'color:#6366f1;font-weight:bold');
-  const container = document.getElementById('ncTabsContainer');
-  if (!container) { console.warn('❌ #ncTabsContainer not found'); return; }
-
-  const tabs = container.querySelectorAll(':scope > div[data-nctab]');
-  console.log('Tab containers:', tabs.length);
-
-  tabs.forEach(t => {
-    const items = t.querySelectorAll('.nav-item');
-    const visible = window.getComputedStyle(t).display !== 'none';
-    console.log('  ' + t.id + ' (nctab=' + t.dataset.nctab + ') — display=' +
-      window.getComputedStyle(t).display + ' · ' + items.length + ' items');
-    if (visible) {
-      items.forEach(el => console.log('    ✓ ' + el.textContent.trim()));
-    }
-  });
-
-  const outside = Array.from(document.querySelectorAll('.sidebar nav .nav-item')).filter(el =>
-    !el.closest('#ncTabsContainer') && !el.closest('#ncMainTabs')
-  );
-  console.log('Items outside tabs:', outside.length);
-  outside.forEach(el => console.log('    · ' + el.textContent.trim()));
-
-  console.log('Storage activeTab:', localStorage.getItem('ncActiveTab_v7'));
-};
-
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 300));
+  document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 500));
 } else {
-  setTimeout(boot, 300);
+  setTimeout(boot, 500);
 }
 
 })();
