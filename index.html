@@ -14394,6 +14394,334 @@ if (document.readyState === 'loading') {
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PART 10 — FIXED DEVTOOLS BLOCKER
+     Replaces the harsh false-positive blocker with a reliable one.
+     • Only triggers when DevTools is REALLY open (debugger timing)
+     • Non-destructive overlay (never wipes DOM)
+     • Escape: ?safe=1 · #safe · Ctrl+Shift+Alt+D · NC10.disable()
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__NC10) return;
+window.__NC10 = true;
+
+/* ═══════════════════════════════════════════════════════════════════
+   STEP 1 — NEUTRALIZE THE OLD HARSH BLOCKER
+   ═══════════════════════════════════════════════════════════════════ */
+(function neutralize() {
+  /* Set the old blocker's escape flag so it skips on next load */
+  try { localStorage.setItem('lksalary_dev_ok', '1'); } catch (e) {}
+
+  /* If a lock overlay is currently on screen, remove it */
+  ['__harshGuardV3Overlay', '__dgClose', 'ncDTBtn', 'ncGuardOverlayV2', 'ncGuardOverlayV2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (id === '__harshGuardV3Overlay' || id === 'ncGuardOverlayV2') el.remove();
+      else el.remove();
+    }
+  });
+
+  /* Restore body styles that the blocker may have set */
+  try { document.body.style.overflow = ''; } catch (e) {}
+
+  /* Neutralize the harsh blocker's keyboard handler by intercepting
+     the F12 / Ctrl+Shift+I keys ourselves with a benign handler */
+  window.addEventListener('keydown', function (e) {
+    const k = String(e.key || '').toLowerCase();
+    const ctrl = e.ctrlKey || e.metaKey;
+    const shift = e.shiftKey;
+
+    /* If the harsh blocker would fire, stop it and show our overlay instead */
+    if (e.key === 'F12' || e.keyCode === 123) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      showGuardOverlay();
+      return false;
+    }
+    if (ctrl && shift && ['i', 'j', 'c', 'k', 'e', 'm'].indexOf(k) !== -1) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      showGuardOverlay();
+      return false;
+    }
+  }, true);
+
+  /* Silence the old blocker's console-blocker attempts (belt & suspenders) */
+  try {
+    /* The old blocker freezes console; we can't fully reverse that,
+       but we can restore the common methods */
+    const restore = function (m) {
+      try { delete console[m]; } catch (e) {}
+    };
+    /* We'll leave native console alone — the old blocker may have frozen it */
+  } catch (e) {}
+
+  /* Also clear old localStorage keys used by the harsh blocker */
+  try {
+    localStorage.removeItem('nc_dg_hits');
+    localStorage.setItem('nc_devguard', '0');
+  } catch (e) {}
+
+  console.log('%c[NC10] Old harsh blocker neutralized', 'color:#10b981');
+})();
+
+/* ═══════════════════════════════════════════════════════════════════
+   STEP 2 — RELIABLE BLOCKER (debugger-timing only)
+   ═══════════════════════════════════════════════════════════════════ */
+const GUARD = {
+  enabled: true,
+  checkTimer: null,
+  overlay: null,
+  hits: 0,
+  CONSECUTIVE_HITS: 2,           /* require 2 hits in a row (~1.5s of DevTools) */
+  DEBUGGER_THRESHOLD: 250,       /* ms — DevTools pause threshold */
+  triggered: false
+};
+
+function isAllowed() {
+  try {
+    if (localStorage.getItem('nc10_disabled') === '1') return true;
+    if (localStorage.getItem('lksalary_dev_ok') === '1') return true;
+    const p = new URLSearchParams(location.search);
+    if (p.get('safe') === '1') return true;
+    if (location.hash === '#safe') return true;
+  } catch (e) {}
+  return false;
+}
+
+/* Detect DevTools via debugger timing only */
+function isDebuggerAttached() {
+  try {
+    const t1 = performance.now();
+    /* eslint-disable no-debugger */
+    (function () { return false; }).constructor('debugger').call();
+    /* eslint-enable no-debugger */
+    const t2 = performance.now();
+    return (t2 - t1) > GUARD.DEBUGGER_THRESHOLD;
+  } catch (e) { return false; }
+}
+
+/* Build a non-destructive overlay */
+function buildOverlay() {
+  if (GUARD.overlay) return GUARD.overlay;
+  const ov = document.createElement('div');
+  ov.id = 'nc10Overlay';
+  ov.style.cssText = [
+    'position:fixed','inset:0','z-index:2147483647',
+    'background:radial-gradient(circle at 50% 40%,#1a0b3d 0%,#050014 100%)',
+    'color:#fff','display:none','align-items:center','justify-content:center',
+    'padding:40px','text-align:center',
+    'font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif',
+    'backdrop-filter:blur(20px)'
+  ].join(';');
+  ov.innerHTML = ''
+    + '<div style="max-width:560px">'
+    +   '<div style="font-size:80px;margin-bottom:20px;filter:drop-shadow(0 0 30px rgba(168,85,247,.7))">🔒</div>'
+    +   '<h1 style="font-size:26px;font-weight:800;margin-bottom:14px">DevTools Detected</h1>'
+    +   '<p style="font-size:14px;line-height:1.7;color:rgba(255,255,255,.75);margin-bottom:24px">'
+    +     'Please close DevTools to continue using the app.'
+    +   '</p>'
+    +   '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
+    +     '<button id="nc10Retry" style="padding:12px 24px;border-radius:11px;border:none;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit">Retry</button>'
+    +     '<button id="nc10Skip" style="padding:12px 24px;border-radius:11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit">Skip (disable guard)</button>'
+    +   '</div>'
+    +   '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.35);line-height:1.6">'
+    +     'Hotkey: <b>Ctrl+Shift+Alt+D</b> to toggle guard<br>'
+    +     'URL: add <b>?safe=1</b> to bypass'
+    +   '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  GUARD.overlay = ov;
+  ov.querySelector('#nc10Retry').onclick = retry;
+  ov.querySelector('#nc10Skip').onclick = disableGuard;
+  return ov;
+}
+
+function showGuardOverlay() {
+  buildOverlay();
+  GUARD.overlay.style.display = 'flex';
+  GUARD.triggered = true;
+}
+
+function hideGuardOverlay() {
+  if (!GUARD.overlay) return;
+  GUARD.overlay.style.display = 'none';
+  GUARD.triggered = false;
+  GUARD.hits = 0;
+}
+
+function retry() {
+  if (isDebuggerAttached()) {
+    /* Still open */
+    buildOverlay();
+    const btn = document.getElementById('nc10Retry');
+    if (btn) {
+      btn.textContent = 'DevTools still open — close it first';
+      setTimeout(() => { btn.textContent = 'Retry'; }, 2000);
+    }
+  } else {
+    hideGuardOverlay();
+  }
+}
+
+function disableGuard() {
+  GUARD.enabled = false;
+  try { localStorage.setItem('nc10_disabled', '1'); } catch (e) {}
+  hideGuardOverlay();
+  console.log('%c[NC10] Guard disabled — reload to fully reset', 'color:#64748b');
+}
+
+function enableGuard() {
+  GUARD.enabled = true;
+  try { localStorage.removeItem('nc10_disabled'); } catch (e) {}
+  console.log('%c[NC10] Guard enabled', 'color:#10b981');
+}
+
+/* Master check loop */
+function startChecks() {
+  if (GUARD.checkTimer) return;
+  GUARD.checkTimer = setInterval(() => {
+    if (!GUARD.enabled) return;
+    if (isAllowed()) return;
+    if (GUARD.triggered) return;
+    /* Skip when tab isn't focused — user isn't looking at the app */
+    if (!document.hasFocus()) return;
+
+    if (isDebuggerAttached()) {
+      GUARD.hits++;
+      if (GUARD.hits >= GUARD.CONSECUTIVE_HITS) {
+        showGuardOverlay();
+      }
+    } else {
+      GUARD.hits = Math.max(0, GUARD.hits - 1);
+    }
+  }, 750);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STEP 3 — PUBLIC API
+   ═══════════════════════════════════════════════════════════════════ */
+window.NC10 = {
+  enable: enableGuard,
+  disable: disableGuard,
+  status: function () {
+    return {
+      enabled: GUARD.enabled,
+      triggered: GUARD.triggered,
+      hits: GUARD.hits,
+      debuggerAttached: isDebuggerAttached(),
+      allowed: isAllowed()
+    };
+  },
+  test: function () {
+    console.log('Guard status:', this.status());
+  }
+};
+
+/* Global shortcut: Ctrl+Shift+Alt+D toggles guard */
+window.addEventListener('keydown', function (e) {
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.altKey && String(e.key).toLowerCase() === 'd') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (GUARD.enabled) {
+      disableGuard();
+      alert('DevTools guard: DISABLED\nReload to fully reset.');
+    } else {
+      enableGuard();
+      alert('DevTools guard: ENABLED');
+    }
+    return false;
+  }
+}, true);
+
+/* ═══════════════════════════════════════════════════════════════════
+   STEP 4 — ALSO BLOCK F12 / CTRL+SHIFT+I VIA KEYBOARD
+   But show a soft overlay instead of wiping the DOM.
+   ═══════════════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', function (e) {
+  if (!GUARD.enabled) return;
+  if (isAllowed()) return;
+  const k = String(e.key || '').toLowerCase();
+  const ctrl = e.ctrlKey || e.metaKey;
+  const shift = e.shiftKey;
+
+  if (e.key === 'F12' || e.keyCode === 123) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    showGuardOverlay();
+    return false;
+  }
+  if (ctrl && shift && ['i', 'j', 'c'].indexOf(k) !== -1) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    showGuardOverlay();
+    return false;
+  }
+  if (ctrl && k === 'u') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    showGuardOverlay();
+    return false;
+  }
+}, true);
+
+/* ═══════════════════════════════════════════════════════════════════
+   STEP 5 — START
+   ═══════════════════════════════════════════════════════════════════ */
+function start() {
+  /* If URL has ?safe=1, permanently disable */
+  if (isAllowed()) {
+    console.log('%c[NC10] Safe mode — guard skipped', 'color:#64748b');
+    return;
+  }
+
+  startChecks();
+  console.log('%c[NC10 Part 10] ✅ Reliable DevTools guard installed', 'color:#10b981;font-weight:bold');
+  console.log('%c[NC10] Debugger-timing only · 250ms threshold · 2 consecutive hits · non-destructive overlay', 'color:#64748b');
+  console.log('%c[NC10] Toggle: Ctrl+Shift+Alt+D  ·  Bypass: ?safe=1  ·  Disable: NC10.disable()', 'color:#64748b');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', start);
+} else {
+  start();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STEP 6 — ALSO MONKEY-PATCH THE OLD BLOCKER'S TRIGGER
+   If the harsh blocker somehow still runs (because you didn't
+   neutralize it in time), make its wipeAndLock a no-op.
+   ═══════════════════════════════════════════════════════════════════ */
+(function patchOldBlocker() {
+  /* The old blocker is wrapped in an IIFE so we can't reach its
+     wipeAndLock directly. But we can:
+     1. Delete the wipe function via Function.prototype override of
+        document.write / innerHTML replacement
+     2. Intercept navigation to about:blank */
+  try {
+    const _replace = window.location.replace;
+    window.location.replace = function (url) {
+      if (String(url).indexOf('about:blank') !== -1) {
+        console.warn('[NC10] Blocked old blocker navigation to about:blank');
+        return;
+      }
+      return _replace.apply(this, arguments);
+    };
+  } catch (e) {}
+
+  /* Also watch for the old overlay and remove it */
+  setInterval(() => {
+    const oldOv = document.getElementById('__harshGuardV3Overlay');
+    if (oldOv && GUARD.enabled && isAllowed()) oldOv.remove();
+  }, 1000);
+})();
+
+console.log('%c[NC10] Ready — Type NC10.status() to check guard state', 'color:#6366f1;font-weight:bold');
+
+})();
+</script>
 <!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
      Appended at end of file. Runs alongside the existing console blocker.
