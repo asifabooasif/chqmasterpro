@@ -11605,6 +11605,97 @@ if (document.readyState === 'loading') {
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PART 7 HOTFIX — Stop hide-logic from hiding tab items
+     • Forces nav-items inside tabs to display (CSS !important overrides
+       any inline display:none set by Message 3's hideOldDuplicates)
+     • Diagnostic tool: p7Diag() in console shows what's where
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style id="__p7HotfixStyles">
+  /* Force every nav item inside a tab to be visible */
+  #ncTabsContainer .nav-item {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  /* Force the tab containers themselves to be tall enough */
+  #ncTabsContainer > div {
+    flex-shrink: 0 !important;
+    min-height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  /* Ensure the tabs container itself never collapses */
+  #ncTabsContainer {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  /* Also force tab-bar buttons visible */
+  #ncMainTabs .nc-main-tab {
+    display: flex !important;
+  }
+</style>
+<script>
+(function(){
+'use strict';
+if (window.__p7Hotfix) return;
+window.__p7Hotfix = true;
+
+/* ── Belt-and-suspenders: also strip any inline display:none ── */
+setInterval(() => {
+  document.querySelectorAll('#ncTabsContainer .nav-item').forEach(el => {
+    if (el.style.display === 'none') el.style.display = '';
+    if (el.style.visibility === 'hidden') el.style.visibility = '';
+    if (el.style.opacity === '0') el.style.opacity = '';
+  });
+}, 300);
+
+/* Also unhide the tab containers themselves if something hid them */
+setInterval(() => {
+  document.querySelectorAll('#ncTabsContainer > div').forEach(el => {
+    if (el.style.display === 'none' && !el.dataset.nctab) {
+      el.style.display = '';
+    }
+    /* Don't unhide tab containers that are hidden by applyTab — that's intentional */
+  });
+}, 500);
+
+/* ── Diagnostic tool ── */
+window.p7Diag = function() {
+  console.log('%c=== Part 7 Diagnostic ===', 'color:#6366f1;font-weight:bold');
+  const container = document.getElementById('ncTabsContainer');
+  if (!container) { console.warn('❌ #ncTabsContainer not found'); return; }
+
+  const tabs = container.querySelectorAll(':scope > div');
+  console.log('Tab containers:', tabs.length);
+
+  tabs.forEach(t => {
+    const items = t.querySelectorAll('.nav-item');
+    const visible = Array.from(items).filter(el => {
+      const s = window.getComputedStyle(el);
+      return s.display !== 'none' && s.visibility !== 'hidden';
+    });
+    console.log('  ' + t.id + ': ' + items.length + ' items, ' + visible.length + ' visible');
+    visible.forEach(el => console.log('    ✓ ' + el.textContent.trim()));
+    Array.from(items).filter(el => !visible.includes(el)).forEach(el => {
+      console.log('    ✗ HIDDEN: ' + el.textContent.trim() + ' (display=' + el.style.display + ')');
+    });
+  });
+
+  const outside = Array.from(document.querySelectorAll('.sidebar nav .nav-item')).filter(el =>
+    !el.closest('#ncTabsContainer') && !el.closest('#ncMainTabs')
+  );
+  console.log('Items outside tabs:', outside.length);
+  outside.forEach(el => console.log('    · ' + el.textContent.trim()));
+
+  /* Which tab is active? */
+  const active = Array.from(tabs).find(t => window.getComputedStyle(t).display !== 'none');
+  console.log('Active tab (visual):', active ? active.id : 'none');
+};
+
+console.log('%c[P7 Hotfix] ✅ Loaded — run p7Diag() in console for a report', 'color:#10b981;font-weight:bold');
+})();
+</script>
 <!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
      Appended at end of file. Runs alongside the existing console blocker.
