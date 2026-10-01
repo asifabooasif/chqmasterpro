@@ -13546,5 +13546,321 @@ if (document.readyState === 'loading') {
 
 })();
 </script>
+<!-- ══════════════════════════════════════════════════════
+     PART 15 — DEVGUARD FIX (default OFF, reliable toggle)
+     ══════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (window.__modFix15) return;
+window.__modFix15 = true;
+
+const $ = NC.$;
+const E = NC.E;
+
+/* ══════════════════════════════════════════════════════
+   STEP 1 — DESTROY the aggressive Part 14 DevGuard
+   ══════════════════════════════════════════════════════ */
+
+function destroyOldGuard() {
+  /* Kill old interval timer */
+  if (window.NC_DEVGUARD) {
+    if (window.NC_DEVGUARD.checkTimer) {
+      clearInterval(window.NC_DEVGUARD.checkTimer);
+      window.NC_DEVGUARD.checkTimer = null;
+    }
+    window.NC_DEVGUARD.ENABLED = false;
+    window.NC_DEVGUARD.TRIGGERED = false;
+  }
+
+  /* Remove any overlay currently on screen */
+  const ov = document.getElementById('ncDevGuardOverlay');
+  if (ov) ov.remove();
+  const oldOv = document.getElementById('__dgClose') && document.getElementById('__dgClose').closest('div[style*="2147483647"]');
+  if (oldOv) oldOv.remove();
+
+  /* Restore blur on main */
+  try {
+    document.querySelectorAll('.nc-main, .nc-sidebar').forEach(el => {
+      el.style.filter = '';
+      el.style.pointerEvents = '';
+    });
+  } catch (e) {}
+
+  /* Force-clear localStorage guard flags */
+  try {
+    localStorage.setItem('nc_devguard', '0');
+    localStorage.removeItem('nc_dg_hits');
+  } catch (e) {}
+
+  console.log('%c[P15] Old DevGuard destroyed', 'color:#64748b');
+}
+
+/* Run immediately and again in case old guard rebuilt itself */
+destroyOldGuard();
+setTimeout(destroyOldGuard, 500);
+setTimeout(destroyOldGuard, 2000);
+
+/* ══════════════════════════════════════════════════════
+   STEP 2 — New, RELIABLE DevGuard (opt-in, no false positives)
+   ══════════════════════════════════════════════════════ */
+
+const GUARD = window.NC_GUARD = {
+  enabled: false,
+  checkTimer: null,
+  overlay: null,
+  triggers: 0,
+  DEBUGGER_THRESHOLD: 400,   /* ms — high enough to avoid false positives */
+  HITS_TO_TRIGGER: 3,        /* needs 3 consecutive hits to fire */
+  consecutiveHits: 0
+};
+
+/* Read persisted preference */
+function readGuardPref() {
+  try {
+    const v = localStorage.getItem('nc_devguard_v2');
+    return v === '1';
+  } catch (e) { return false; }
+}
+
+function writeGuardPref(on) {
+  try { localStorage.setItem('nc_devguard_v2', on ? '1' : '0'); } catch (e) {}
+}
+
+/* -------- Overlay -------- */
+function buildOverlay() {
+  if (GUARD.overlay) return GUARD.overlay;
+  const ov = document.createElement('div');
+  ov.id = 'ncGuardOverlayV2';
+  ov.style.cssText = [
+    'position:fixed','inset:0','z-index:2147483647',
+    'background:radial-gradient(circle at 50% 40%,#1a0b3d 0%,#050014 100%)',
+    'color:#fff','display:none','align-items:center','justify-content:center',
+    'padding:40px','text-align:center',
+    'font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif'
+  ].join(';');
+  ov.innerHTML = ''
+    + '<div style="max-width:600px">'
+    +   '<div style="font-size:96px;margin-bottom:20px;filter:drop-shadow(0 0 40px rgba(168,85,247,.8))">🔒</div>'
+    +   '<h1 style="font-size:28px;font-weight:800;margin-bottom:12px">Access Restricted</h1>'
+    +   '<p style="font-size:14px;line-height:1.7;color:rgba(255,255,255,.7);margin-bottom:26px">'
+    +     'Developer tools detected. Close them and click Retry.<br>'
+    +     '<span style="font-size:12px;opacity:.6">Tip: press <b>Ctrl+Shift+Alt+U</b> 3 times to force-unlock.</span>'
+    +   '</p>'
+    +   '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">'
+    +     '<button onclick="NC_GUARD.retry()" style="padding:12px 24px;border-radius:11px;border:none;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit">Retry</button>'
+    +     '<button onclick="NC_GUARD.forceUnlock()" style="padding:12px 24px;border-radius:11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit">Force Unlock</button>'
+    +   '</div>'
+    +   '<div style="margin-top:26px;font-size:11px;color:rgba(255,255,255,.35)">Guard v2 · trigger #' + (GUARD.triggers + 1) + '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  GUARD.overlay = ov;
+  return ov;
+}
+
+function showOverlay() {
+  const ov = buildOverlay();
+  ov.style.display = 'flex';
+}
+
+function hideOverlay() {
+  if (!GUARD.overlay) return;
+  GUARD.overlay.style.display = 'none';
+  GUARD.consecutiveHits = 0;
+}
+
+/* -------- ONLY reliable detection: debugger timing -------- */
+function isDebuggerAttached() {
+  try {
+    const t1 = performance.now();
+    /* eslint-disable no-debugger */
+    (function(){ return false; }).constructor('debugger').call();
+    /* eslint-enable no-debugger */
+    const t2 = performance.now();
+    return (t2 - t1) > GUARD.DEBUGGER_THRESHOLD;
+  } catch (e) { return false; }
+}
+
+/* -------- Master check loop -------- */
+function startChecks() {
+  stopChecks();
+  GUARD.checkTimer = setInterval(() => {
+    if (!GUARD.enabled) return;
+    if (document.hasFocus() === false) return;  /* skip when tab inactive */
+
+    if (isDebuggerAttached()) {
+      GUARD.consecutiveHits++;
+      if (GUARD.consecutiveHits >= GUARD.HITS_TO_TRIGGER) {
+        trigger();
+      }
+    } else {
+      GUARD.consecutiveHits = Math.max(0, GUARD.consecutiveHits - 1);
+    }
+  }, 900);
+}
+
+function stopChecks() {
+  if (GUARD.checkTimer) {
+    clearInterval(GUARD.checkTimer);
+    GUARD.checkTimer = null;
+  }
+}
+
+function trigger() {
+  GUARD.triggers++;
+  showOverlay();
+  console.warn('[Guard v2] Triggered by debugger detection');
+}
+
+/* -------- Public API -------- */
+GUARD.retry = function () {
+  if (!isDebuggerAttached()) {
+    hideOverlay();
+    GUARD.consecutiveHits = 0;
+    NC.toast('Access restored', 'success');
+  } else {
+    NC.toast('DevTools still open — close them first', 'warning');
+  }
+};
+
+GUARD.forceUnlock = function () {
+  GUARD.enabled = false;
+  writeGuardPref(false);
+  hideOverlay();
+  stopChecks();
+  updateShieldButton();
+  NC.toast('Guard force-disabled. Reload for a clean state.', 'success');
+};
+
+GUARD.enable = function () {
+  GUARD.enabled = true;
+  writeGuardPref(true);
+  GUARD.consecutiveHits = 0;
+  startChecks();
+  updateShieldButton();
+  NC.toast('Dev guard ENABLED', 'success');
+  console.log('[Guard v2] Enabled');
+};
+
+GUARD.disable = function () {
+  GUARD.enabled = false;
+  writeGuardPref(false);
+  hideOverlay();
+  stopChecks();
+  updateShieldButton();
+  NC.toast('Dev guard DISABLED', 'info');
+  console.log('[Guard v2] Disabled');
+};
+
+GUARD.toggle = function () {
+  if (GUARD.enabled) GUARD.disable(); else GUARD.enable();
+};
+
+GUARD.status = function () {
+  return {
+    enabled: GUARD.enabled,
+    triggers: GUARD.triggers,
+    consecutiveHits: GUARD.consecutiveHits,
+    debuggerOpen: isDebuggerAttached()
+  };
+};
+
+/* Global shortcuts */
+NC.guardOn  = GUARD.enable;
+NC.guardOff = GUARD.disable;
+
+/* -------- Rescue hotkey: Ctrl+Shift+Alt+U 3 times in 3 seconds -------- */
+(function(){
+  let count = 0;
+  let timer = null;
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.altKey && String(e.key).toLowerCase() === 'u') {
+      e.preventDefault();
+      count++;
+      clearTimeout(timer);
+      timer = setTimeout(() => { count = 0; }, 3000);
+      if (count >= 3) {
+        count = 0;
+        GUARD.forceUnlock();
+      }
+    }
+  }, true);
+})();
+
+/* ══════════════════════════════════════════════════════
+   STEP 3 — Visible shield toggle in the top bar
+   ══════════════════════════════════════════════════════ */
+
+function injectShieldButton() {
+  const host = document.querySelector('.nc-topbar-right');
+  if (!host) return setTimeout(injectShieldButton, 500);
+  if ($('ncShieldBtn')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'ncShieldBtn';
+  btn.title = 'Toggle DevTools guard';
+  btn.style.cssText = 'width:42px;height:42px;border:none;background:var(--light);border-radius:12px;cursor:pointer;font-size:15px;transition:all .2s;color:var(--gray);display:flex;align-items:center;justify-content:center;position:relative';
+  btn.innerHTML = '<i class="fas fa-shield-alt"></i>';
+  btn.onclick = () => GUARD.toggle();
+
+  /* Insert before the bell (or as first child) */
+  const bell = $('ncBellWrap');
+  if (bell && bell.parentElement === host) {
+    host.insertBefore(btn, bell);
+  } else {
+    host.insertBefore(btn, host.firstChild);
+  }
+  updateShieldButton();
+}
+
+function updateShieldButton() {
+  const btn = $('ncShieldBtn');
+  if (!btn) return;
+  if (GUARD.enabled) {
+    btn.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
+    btn.style.color = 'white';
+    btn.title = 'DevTools guard is ON — click to disable';
+    btn.innerHTML = '<i class="fas fa-shield-alt"></i>';
+  } else {
+    btn.style.background = 'var(--light)';
+    btn.style.color = 'var(--gray)';
+    btn.title = 'DevTools guard is OFF — click to enable';
+    btn.innerHTML = '<i class="fas fa-shield"></i>';
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   STEP 4 — Boot
+   ══════════════════════════════════════════════════════ */
+
+function boot() {
+  /* Always start disabled unless user explicitly enabled */
+  GUARD.enabled = readGuardPref();
+  if (GUARD.enabled) {
+    startChecks();
+    console.log('[Guard v2] Restored enabled state from localStorage');
+  } else {
+    console.log('%c[Guard v2] OFF by default — click the shield icon in the top bar to enable', 'color:#64748b');
+  }
+
+  /* Inject shield button (retry until topbar exists) */
+  injectShieldButton();
+  setTimeout(injectShieldButton, 800);
+  setTimeout(injectShieldButton, 2500);
+
+  console.log('%c[Part 15 — DevGuard Fix] ✅ Registered · DevGuard OFF by default', 'color:#10b981;font-weight:bold');
+  console.log('%c  • Click the shield icon in the top bar to toggle', 'color:#64748b');
+  console.log('%c  • Or use NC.guardOn() / NC.guardOff()', 'color:#64748b');
+  console.log('%c  • Emergency unlock: Ctrl+Shift+Alt+U ×3', 'color:#64748b');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+
+})();
+</script>
 </body>
 </html>
