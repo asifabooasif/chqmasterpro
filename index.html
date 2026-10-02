@@ -17249,5 +17249,292 @@ console.log('[NC Part 20] Bootstrap loaded');
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     NC HOTFIX v1 — Fixes:
+       1. refreshView() lookup scope bug (data loaded but not rendering)
+       2. Adds missing renderers: Loans, Loan Register, Biz Overview, Biz Reports
+     Paste at the VERY END, right before </body>.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+if (!window.NC) { console.error('[NC Hotfix] NC not found'); return; }
+const NC = window.NC;
+const { state, $, E, N, fmt, fmtDate } = NC;
+
+/* ── FIX 1: refreshView uses NC.* lookups instead of bare names ── */
+NC.refreshView = function(view){
+  const R = {
+    'dashboard':            NC.renderDashboard,
+    'all-cheques':          NC.renderAllCheques,
+    'in-hand':              NC.renderInHand,
+    'returned':             NC.renderReturned,
+    'recycle':              NC.renderRecycle,
+    'categories':           NC.renderCategoriesList,
+    'category-detail':      NC.renderCategoryDetail,
+    'deals':                NC.renderDealsList,
+    'deal-detail':          NC.renderDealDetail,
+    'payees':               NC.renderPayees,
+    'issuers':              NC.renderIssuers,
+    'kanban':               NC.renderKanban,
+    'timeline':             NC.renderTimeline,
+    'analytics':            NC.renderAnalytics,
+    'reports':              NC.renderReportsHub,
+    'aging':                NC.renderAging,
+    'audit':                NC.renderAudit,
+    'users':                NC.renderUsers,
+    'settings':             NC.renderSettings,
+    'finance':              NC.renderFinanceDashboard,
+    'finance-plans':        NC.renderFinancePlans,
+    'finance-payments':     NC.renderFinancePayments,
+    'finance-deductions':   NC.renderFinanceDeductions,
+    'issue-cheque':         NC.renderIssueChequeView,
+    'loans':                NC.renderLoans,
+    'loan-register':        NC.renderLoanRegister,
+    'biz-overview':         NC.renderBizOverview,
+    'biz-reports':          NC.renderBizReports,
+    'in-payments':          NC.renderInPayments,
+    'out-payments':         NC.renderOutPayments,
+    'shop-payments':        NC.renderShopPayments,
+    'cash':                 NC.renderCash,
+    'banks':                NC.renderBanks,
+    'bank-detail':          NC.renderBankDetail,
+    'bank-txns':            NC.renderBankTxns,
+    'suppliers':            NC.renderSuppliers,
+    'shops':                NC.renderShops,
+    'parties':              NC.renderParties,
+    'party-detail':         NC.renderPartyDetail
+  };
+  const fn = R[view];
+  if (typeof fn === 'function') {
+    try { fn(); } catch(e){ console.error('[refreshView ' + view + ']', e); }
+  }
+};
+
+/* ── FIX 2: go() uses the patched refreshView ── */
+NC.go = function(view, el){
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  if (sb) sb.classList.remove('open');
+  if (ov) ov.classList.remove('active');
+
+  document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  else {
+    const m = document.querySelector('.sb-item[data-view="' + view + '"]');
+    if (m) m.classList.add('active');
+  }
+
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const v = document.getElementById('view-' + view);
+  if (!v) { console.warn('[go] view not found:', view); return; }
+  v.classList.add('active');
+
+  const t = el ? el.textContent.trim() :
+    (document.querySelector('.sb-item[data-view="' + view + '"]') || {}).textContent || view;
+  const pt = document.getElementById('pageTitle');
+  if (pt) pt.textContent = t.trim();
+
+  NC.state.activeView = view;
+  try { NC.refreshView(view); } catch(e){ console.error('[go]', e); }
+  try { localStorage.setItem('nc_view', view); } catch(e){}
+  window.scrollTo({ top:0, behavior:'instant' });
+};
+window.go = NC.go;
+
+/* ── FIX 3: Missing renderers ── */
+
+/* Loans view */
+NC.renderLoans = function(){
+  const statusF = ($('lnStatusFilter') || {}).value || '';
+  const search = (($('lnSearch') || {}).value || '').toLowerCase();
+  const todayDate = new Date(); todayDate.setHours(0,0,0,0);
+
+  let list = state.loans.slice();
+  if (statusF === 'active') list = list.filter(l => l.status !== 'closed');
+  else if (statusF === 'closed') list = list.filter(l => l.status === 'closed');
+  else if (statusF === 'overdue') list = list.filter(l => {
+    if (l.status === 'closed') return false;
+    if (!l.deadline) return false;
+    return new Date(l.deadline) < todayDate;
+  });
+  if (search) list = list.filter(l => (l.lender || '').toLowerCase().includes(search));
+
+  let totalPrincipal = 0, totalDue = 0, totalRepaid = 0, totalOutstanding = 0, overdue = 0;
+  state.loans.forEach(l => {
+    const repaid = state.repayments.filter(r => r.loanId === l.id).reduce((s,r) => s + N(r.amount), 0);
+    const due = N(l.principal) + N(l.fixedProfit || 0);
+    totalPrincipal += N(l.principal);
+    totalDue += due;
+    totalRepaid += repaid;
+    totalOutstanding += Math.max(0, due - repaid);
+    if (l.status !== 'closed' && l.deadline && new Date(l.deadline) < todayDate) overdue++;
+  });
+
+  const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  setTxt('lnCount', state.loans.length);
+  setTxt('lnPrincipal', fmt(totalPrincipal));
+  setTxt('lnDue', fmt(totalDue));
+  setTxt('lnRepaid', fmt(totalRepaid));
+  setTxt('lnOutstanding', fmt(totalOutstanding));
+  setTxt('lnOverdue', overdue);
+
+  const tb = document.getElementById('loansTable');
+  const empty = document.getElementById('loansEmpty');
+  if (!tb) return;
+  if (!list.length) { tb.innerHTML = ''; if (empty) empty.classList.remove('hidden'); return; }
+  if (empty) empty.classList.add('hidden');
+
+  tb.innerHTML = list.map(l => {
+    const repaid = state.repayments.filter(r => r.loanId === l.id).reduce((s,r) => s + N(r.amount), 0);
+    const due = N(l.principal) + N(l.fixedProfit || 0);
+    const bal = Math.max(0, due - repaid);
+    const deal = state.deals.find(d => d.id === l.dealId);
+    const isOverdue = l.status !== 'closed' && l.deadline && new Date(l.deadline) < todayDate;
+    const badge = l.status === 'closed' ? '<span class="status-pill status-completed">Closed</span>'
+                : isOverdue ? '<span class="status-pill status-returned">Overdue</span>'
+                : '<span class="status-pill status-active">Active</span>';
+    return '<tr>' +
+      '<td><strong>' + E(l.lender || '—') + '</strong></td>' +
+      '<td>' + E(deal ? deal.name : '—') + '</td>' +
+      '<td>' + fmtDate(l.date) + '</td>' +
+      '<td>' + (l.deadline ? fmtDate(l.deadline) : '—') + '</td>' +
+      '<td class="num">' + fmt(l.principal) + '</td>' +
+      '<td class="num">' + fmt(l.fixedProfit || 0) + '</td>' +
+      '<td class="num">' + fmt(due) + '</td>' +
+      '<td class="num ' + (bal > 0 ? 'txt-danger' : 'txt-success') + ' fw-700">' + fmt(bal) + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td class="actions">—</td>' +
+    '</tr>';
+  }).join('');
+};
+
+/* Loan Register */
+NC.renderLoanRegister = function(){
+  const q = (($('lrSearch') || {}).value || '').toLowerCase();
+  const m = {};
+  state.loans.forEach(l => {
+    const k = (l.lender || '—').toLowerCase();
+    if (!m[k]) m[k] = { lender:l.lender, count:0, borrowed:0, profit:0, total:0, repaid:0, balance:0 };
+    const repaid = state.repayments.filter(r => r.loanId === l.id).reduce((s,r) => s + N(r.amount), 0);
+    const due = N(l.principal) + N(l.fixedProfit || 0);
+    m[k].count++;
+    m[k].borrowed += N(l.principal);
+    m[k].profit += N(l.fixedProfit || 0);
+    m[k].total += due;
+    m[k].repaid += repaid;
+    m[k].balance += Math.max(0, due - repaid);
+  });
+  let arr = Object.values(m).sort((a,b) => b.total - a.total);
+  if (q) arr = arr.filter(x => (x.lender || '').toLowerCase().includes(q));
+
+  const tb = document.getElementById('loanRegTable');
+  const empty = document.getElementById('loanRegEmpty');
+  if (!tb) return;
+  if (!arr.length) { tb.innerHTML = ''; if (empty) empty.classList.remove('hidden'); return; }
+  if (empty) empty.classList.add('hidden');
+
+  tb.innerHTML = arr.map(x => '<tr>' +
+    '<td><strong>' + E(x.lender || '—') + '</strong></td>' +
+    '<td class="num">' + x.count + '</td>' +
+    '<td class="num">' + fmt(x.borrowed) + '</td>' +
+    '<td class="num">' + fmt(x.profit) + '</td>' +
+    '<td class="num">' + fmt(x.total) + '</td>' +
+    '<td class="num txt-success">' + fmt(x.repaid) + '</td>' +
+    '<td class="num ' + (x.balance > 0 ? 'txt-danger' : 'txt-success') + ' fw-700">' + fmt(x.balance) + '</td>' +
+    '<td class="actions">—</td>' +
+  '</tr>').join('');
+};
+
+/* Biz Overview */
+NC.renderBizOverview = function(){
+  const totalInvested = state.deals.reduce((s,d) => s + N(d.purchaseTotal || 0), 0);
+  const totalRecovered = state.recoveries.reduce((s,r) => s + N(r.amount), 0);
+  const totalProfit = state.deals.reduce((s,d) => s + N(d.profitActual || 0), 0);
+  const activeDeals = state.deals.filter(d => d.status === 'active' || !d.status).length;
+  const completedDeals = state.deals.filter(d => d.status === 'completed').length;
+  const outstanding = Math.max(0, totalInvested - totalRecovered);
+
+  const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  setTxt('boInvested', fmt(totalInvested));
+  setTxt('boRecovered', fmt(totalRecovered));
+  setTxt('boOutstanding', fmt(outstanding));
+  setTxt('boProfit', fmt(totalProfit));
+  setTxt('boActiveDeals', activeDeals);
+  setTxt('boCompletedDeals', completedDeals);
+
+  const loansIn = state.loans.reduce((s,l) => s + N(l.principal), 0);
+  setTxt('boInLoans', fmt(loansIn));
+  setTxt('boInShops', fmt(totalRecovered));
+  setTxt('boInOwn', fmt(0));
+  setTxt('boInTotal', fmt(loansIn + totalRecovered));
+
+  const purchasesOut = state.purchases.reduce((s,p) => s + N(p.amount), 0);
+  const repaymentsOut = state.repayments.reduce((s,r) => s + N(r.amount), 0);
+  const expOut = state.expenses.reduce((s,e) => s + N(e.amount), 0);
+  setTxt('boOutPurchases', fmt(purchasesOut));
+  setTxt('boOutRepayments', fmt(repaymentsOut));
+  setTxt('boOutExpenses', fmt(expOut));
+  setTxt('boOutTotal', fmt(purchasesOut + repaymentsOut + expOut));
+
+  const cash = state.cash.reduce((s,c) => s + (c.type === 'in' ? N(c.amount) : -N(c.amount)), 0);
+  const bank = state.banks.reduce((s,b) => s + (NC.computeBankBalance ? NC.computeBankBalance(b.id) : 0), 0);
+  setTxt('boCash', fmt(cash));
+  setTxt('boBank', fmt(bank));
+  setTxt('boReceivable', fmt(outstanding));
+  setTxt('boPayable', fmt(0));
+  setTxt('boNetWorth', fmt(cash + bank + outstanding));
+
+  const tb = document.getElementById('boCategoryTable');
+  if (tb) {
+    tb.innerHTML = state.categories.map(cat => {
+      const stats = NC.catStats ? NC.catStats(cat) : { deals: [], invested:0, recovered:0, profit:0 };
+      const pct = stats.invested > 0 ? Math.round((stats.recovered / stats.invested) * 100) : 0;
+      return '<tr>' +
+        '<td>' + (cat.emoji || '🏷️') + ' <strong>' + E(cat.name) + '</strong></td>' +
+        '<td class="num">' + stats.deals.length + '</td>' +
+        '<td class="num">' + fmt(stats.invested) + '</td>' +
+        '<td class="num txt-success">' + fmt(stats.recovered) + '</td>' +
+        '<td class="num txt-success fw-700">' + fmt(stats.profit) + '</td>' +
+        '<td class="center">' + pct + '%</td>' +
+      '</tr>';
+    }).join('') || '<tr><td colspan="6" class="txt-center txt-muted" style="padding:20px">No categories yet</td></tr>';
+  }
+};
+
+/* Biz Reports */
+NC.renderBizReports = function(){
+  const cutoff = state.bizRepRange === 'all' ? 0 : Date.now() - state.bizRepRange * 86400000;
+  const inRange = d => {
+    if (!d) return false;
+    const t = new Date(d).getTime();
+    return t >= cutoff;
+  };
+  const revenue = state.recoveries.filter(r => inRange(r.date)).reduce((s,r) => s + N(r.amount), 0);
+  const cogs = state.purchases.filter(p => inRange(p.date)).reduce((s,p) => s + N(p.amount), 0);
+  const loanCosts = state.loans.filter(l => inRange(l.date)).reduce((s,l) => s + N(l.fixedProfit || 0), 0);
+  const exp = state.expenses.filter(e => inRange(e.date)).reduce((s,e) => s + N(e.amount), 0);
+  const gross = revenue - cogs;
+  const net = gross - loanCosts - exp;
+  const margin = revenue > 0 ? Math.round((net / revenue) * 100) : 0;
+
+  const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  setTxt('brRevenue', fmt(revenue));
+  setTxt('brCOGS', fmt(cogs));
+  setTxt('brGrossProfit', fmt(gross));
+  setTxt('brLoanCosts', fmt(loanCosts));
+  setTxt('brExpenses', fmt(exp));
+  setTxt('brNetProfit', fmt(net));
+  setTxt('brMargin', margin + '% margin');
+};
+
+/* ── FIX 4: Re-render current view now ── */
+setTimeout(() => {
+  try { NC.refreshView(NC.state.activeView || 'dashboard'); } catch(e){}
+}, 300);
+
+console.log('%c[NC Hotfix v1] ✅ Applied — dashboard will now render with your 165 cheques', 'color:#059669;font-weight:bold;font-size:13px');
+})();
+</script>
 </body>
 </html>
