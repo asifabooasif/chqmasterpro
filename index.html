@@ -17536,5 +17536,1677 @@ setTimeout(() => {
 console.log('%c[NC Hotfix v1] ✅ Applied — dashboard will now render with your 165 cheques', 'color:#059669;font-weight:bold;font-size:13px');
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     NC FINANCE — FULL v3.5 RESTORATION
+     Restores EVERY v3.5 feature that was simplified:
+       • Hub tabs (Dashboard / Plans / Payments / Deductions / Reports / Purge)
+       • Plan detail with ALL sections
+       • Summary & Projection (2-column committed vs projected)
+       • Payment Schedule table
+       • What-If Simulator
+       • Amortization Projection
+       • Bulk Cheque Entry modal
+       • Clear Transactions / Hard Delete / Purge All
+       • Finance Payments tab (Cheque Registry)
+       • Deductions tab (full)
+       • Reports tab (Portfolio Summary)
+       • Full Receipt viewer
+       • Bell notifications (finance-specific)
+     Append-only. Zero data loss. Finance math unchanged.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<style>
+/* v3.5 extra styles */
+.fin-hub-tabs{display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:20px;overflow-x:auto;padding-bottom:2px;align-items:center}
+.fin-hub-tab{padding:11px 16px;border:none;background:transparent;font-weight:600;color:var(--text-3);cursor:pointer;border-bottom:3px solid transparent;transition:all var(--t-fast);white-space:nowrap;display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-family:inherit}
+.fin-hub-tab:hover{color:var(--brand);transform:translateY(-2px)}
+.fin-hub-tab.active{color:var(--brand);border-bottom-color:var(--brand)}
+.fin-purge-btn{margin-left:auto;color:#dc2626 !important;font-weight:700 !important}
+.fin-purge-btn:hover{background:#fee2e2 !important;color:#991b1b !important;border-radius:8px}
+.fin-hub-pane{display:none;animation:fadeIn .3s ease}
+.fin-hub-pane.active{display:block}
+
+/* Plan detail sections */
+.fin-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);margin-bottom:14px;overflow:hidden}
+.fin-section > summary{cursor:pointer;list-style:none;padding:16px 20px;display:flex;align-items:center;gap:14px;transition:all var(--t-fast);user-select:none}
+.fin-section > summary::-webkit-details-marker{display:none}
+.fin-section > summary::before{content:'▸';font-size:14px;color:var(--text-3);transition:transform var(--t);width:16px;display:inline-block}
+.fin-section[open] > summary::before{transform:rotate(90deg)}
+.fin-section > summary:hover{background:var(--surface-2)}
+.fin-section[open] > summary{border-bottom:1px solid var(--border)}
+.fin-section-title{font-size:15px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:10px}
+.fin-section-badge{padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700}
+.fin-section-meta{margin-left:auto;font-size:12px;color:var(--text-3);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.fin-section-meta strong{color:var(--text)}
+.fin-section-body{padding:20px}
+.fin-section.pending > summary{background:linear-gradient(90deg,rgba(245,158,11,.06),transparent)}
+.fin-section.cleared > summary{background:linear-gradient(90deg,rgba(16,185,129,.06),transparent)}
+.fin-section.bounced > summary{background:linear-gradient(90deg,rgba(239,68,68,.06),transparent)}
+
+/* Projection wrap */
+.fin-proj-wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.fin-proj-col{padding:18px}
+.fin-proj-col.committed{background:var(--surface)}
+.fin-proj-col.projected{background:linear-gradient(135deg,#fef3c7,#fef9e7);border-left:2px dashed #f59e0b}
+.fin-proj-header{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.fin-proj-header.committed{color:var(--brand-dark)}
+.fin-proj-header.projected{color:#92400e}
+.fin-proj-row{display:flex;justify-content:space-between;padding:8px 0;font-size:13px;border-bottom:1px dashed rgba(0,0,0,.06)}
+.fin-proj-row:last-child{border-bottom:none;font-weight:800;padding-top:12px;border-top:2px solid rgba(0,0,0,.1)}
+.fin-proj-row .lbl{color:var(--text-3)}
+.fin-proj-row .val{font-weight:700;font-variant-numeric:tabular-nums}
+.fin-proj-delta{font-size:11px;color:#92400e;margin:-4px 0 8px;padding-left:2px;font-style:italic}
+
+/* Schedule table */
+.fin-schedule-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.fin-schedule-tbl th{background:var(--surface-2);padding:10px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-3);font-weight:700;border-bottom:1px solid var(--border)}
+.fin-schedule-tbl td{padding:10px 8px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+.fin-schedule-tbl tr.paid-row td:first-child{border-left:4px solid #10b981}
+.fin-schedule-tbl tr.late-row td:first-child{border-left:4px solid #f59e0b}
+.fin-schedule-tbl tr.pending-row{background:#fffbeb}
+.fin-schedule-tbl tr.pending-row td:first-child{border-left:4px solid #f59e0b}
+.fin-schedule-tbl tr.bounced-row{background:#fef2f2;opacity:.7}
+.fin-schedule-tbl tr.bounced-row td:first-child{border-left:4px solid #ef4444}
+
+/* Bulk rows */
+.fin-bulk-row{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--surface-2);margin-bottom:8px;font-size:12.5px}
+.fin-bulk-row .row-num{font-weight:700;color:var(--brand)}
+
+/* Receipt */
+.fin-receipt{background:#fff;padding:30px;border-radius:12px;font-family:'Courier New',monospace;max-width:520px;margin:0 auto;border:1px dashed var(--border)}
+.fin-receipt h2{text-align:center;font-size:20px;margin-bottom:20px;border-bottom:2px dashed var(--border);padding-bottom:12px}
+.fin-receipt .fin-receipt-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}
+.fin-receipt .fin-receipt-row.total{border-top:2px dashed var(--border);margin-top:12px;padding-top:12px;font-weight:800;font-size:15px}
+
+/* Audit rows */
+.fin-audit-row{display:flex;gap:12px;padding:12px;background:var(--surface-2);border-radius:10px;margin-bottom:8px;align-items:flex-start}
+.fin-audit-row .badge-src{font-size:9px;padding:3px 9px;border-radius:8px;font-weight:800;text-transform:uppercase;flex-shrink:0;letter-spacing:.3px}
+.fin-audit-row .badge-src.direct{background:#dbeafe;color:#1e40af}
+.fin-audit-row .badge-src.main{background:#fef3c7;color:#b45309}
+
+/* Widgets */
+.fin-widgets{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px}
+.fin-widget{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;transition:all var(--t)}
+.fin-widget:hover{transform:translateY(-3px);box-shadow:var(--shadow-sm)}
+.fin-widget-title{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.fin-widget-value{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.fin-widget-sub{font-size:10.5px;color:var(--text-3);margin-top:3px}
+
+/* Calculator preview */
+.fin-calc-preview{background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:14px;padding:18px;margin-top:16px;border:1px dashed var(--info)}
+
+@media(max-width:900px){
+  .fin-proj-wrap{grid-template-columns:1fr !important}
+  .fin-impact-body{grid-template-columns:1fr !important}
+  .fin-delta-grid{grid-template-columns:1fr !important}
+}
+</style>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     BULK CHEQUE ENTRY MODAL
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalFinanceBulk">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <h2 class="modal-title"><i class="fas fa-layer-group"></i> Bulk Cheque Entry</h2>
+        <p class="modal-subtitle">Add multiple cheques to a plan in one go</p>
+      </div>
+      <button class="modal-close" onclick="closeModal('modalFinanceBulk')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Finance Plan <span class="req">*</span></label>
+        <select id="fbPlan" onchange="finRenderBulkRows()"><option value="">— Select —</option></select>
+      </div>
+
+      <div class="form-group">
+        <label>Add Cheques</label>
+        <div style="display:grid;grid-template-columns:1.2fr 1fr 1.2fr 1.2fr 1fr auto;gap:8px;align-items:end">
+          <div><label style="font-size:10.5px;color:var(--text-3);font-weight:600;display:block;margin-bottom:3px">Date</label><input type="date" id="fbDate" style="padding:8px 10px;font-size:12.5px;border:1.5px solid var(--border-2);border-radius:6px;width:100%"></div>
+          <div><label style="font-size:10.5px;color:var(--text-3);font-weight:600;display:block;margin-bottom:3px">Amount</label><input type="number" id="fbAmount" step="0.01" placeholder="0.00" style="padding:8px 10px;font-size:12.5px;border:1.5px solid var(--border-2);border-radius:6px;width:100%"></div>
+          <div><label style="font-size:10.5px;color:var(--text-3);font-weight:600;display:block;margin-bottom:3px">Cheque #</label><input type="text" id="fbChequeNo" placeholder="004521" style="padding:8px 10px;font-size:12.5px;border:1.5px solid var(--border-2);border-radius:6px;width:100%"></div>
+          <div><label style="font-size:10.5px;color:var(--text-3);font-weight:600;display:block;margin-bottom:3px">Bank</label><input type="text" id="fbBank" placeholder="BOC" style="padding:8px 10px;font-size:12.5px;border:1.5px solid var(--border-2);border-radius:6px;width:100%"></div>
+          <div><label style="font-size:10.5px;color:var(--text-3);font-weight:600;display:block;margin-bottom:3px">Status</label>
+            <select id="fbStatus" style="padding:8px 10px;font-size:12.5px;border:1.5px solid var(--border-2);border-radius:6px;width:100%">
+              <option value="pending">⏳ Pending</option>
+              <option value="cleared">✅ Cleared</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="finAddBulkRow()"><i class="fas fa-plus"></i></button>
+        </div>
+      </div>
+
+      <div id="fbRowsList"></div>
+
+      <button class="btn btn-success btn-block" onclick="finCommitBulkPayments()" style="margin-top:14px">
+        <i class="fas fa-check-double"></i> Commit All Cheques
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+if (window.__ncFinanceFullV35) return;
+window.__ncFinanceFullV35 = true;
+
+const NC = window.NC;
+if (!NC) { console.error('[NC Fin Full] NC missing'); return; }
+const { state, N, fmt, fmtDec, fmtDate, $, E, toast, openModal, closeModal, confirmDlg, typeConfirm } = NC;
+const FIN = NC.FIN;
+if (!FIN) { console.error('[NC Fin Full] FIN missing'); return; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   BULK ENTRY STATE
+   ═══════════════════════════════════════════════════════════════════ */
+const BULK = { rows: [] };
+
+/* ═══════════════════════════════════════════════════════════════════
+   SAFE WRITE HELPERS (from v3.5)
+   ═══════════════════════════════════════════════════════════════════ */
+async function finSafeMerge(col, id, patch) {
+  try {
+    await NC.db.collection(col).doc(id).set(
+      Object.assign({}, patch, { updatedAt: NC.FV.serverTimestamp() }),
+      { merge: true }
+    );
+    return true;
+  } catch(e){ console.warn('Safe merge failed', col, id, e); return false; }
+}
+async function finSafeDelete(col, id) {
+  try { await NC.db.collection(col).doc(id).delete(); return true; }
+  catch(e){ console.warn('Safe delete failed', col, id, e); return false; }
+}
+async function finBatchDelete(refs) {
+  for (let i = 0; i < refs.length; i += 400) {
+    const batch = NC.db.batch();
+    refs.slice(i, i + 400).forEach(r => batch.delete(r));
+    await batch.commit();
+  }
+}
+async function finSaveDoc(col, data) {
+  const ref = data.id ? NC.db.collection(col).doc(data.id) : NC.db.collection(col).doc();
+  const payload = Object.assign({}, data);
+  const id = payload.id;
+  delete payload.id;
+  if (!id) {
+    payload.createdAt = NC.FV.serverTimestamp();
+    payload.createdBy = state.user ? state.user.email : 'anonymous';
+  }
+  payload.updatedAt = NC.FV.serverTimestamp();
+  await ref.set(payload, { merge: true });
+  return ref.id;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DASHBOARD / HUB TABS
+   ═══════════════════════════════════════════════════════════════════ */
+async function renderFinanceDashboardV35() {
+  if (!FIN.loaded) await NC.finLoadAll();
+
+  const host = $('fmPlansList');
+  const parentCard = host ? host.closest('.card') : null;
+  const container = parentCard ? parentCard.parentNode : null;
+  if (!container) return;
+
+  /* Compute stats */
+  const activePlans = FIN.plans.filter(p => p.status === 'active' || !p.status);
+  const totalCurrent = FIN.plans.reduce((s,p) => s + N(p.capitalCurrent), 0);
+  const totalPendingComm = FIN.plans.reduce((s,p) => s + N(p.pendingCommission), 0);
+  const validPmts = FIN.payments.filter(p => p.status !== 'bounced' && p.status !== 'pending');
+  const pendingPmts = FIN.payments.filter(p => p.status === 'pending');
+  const totalCommissionPaid = validPmts.reduce((s,p) =>
+    s + N((p.breakdown||{}).commissionPending || 0) + N((p.breakdown||{}).commissionCurrent || 0), 0);
+  const pendingChequeVal = pendingPmts.reduce((s,p) => s + N(p.amount), 0);
+  const overdueDeds = FIN.deductions.filter(NC.finIsOverdueDed);
+
+  /* Build full hub with tabs */
+  container.innerHTML = `
+    <!-- Top KPI strip -->
+    <div class="stats-grid mb-16">
+      <div class="stat brand">
+        <div class="stat-label">Active Plans</div>
+        <div class="stat-value">${activePlans.length}</div>
+        <div class="stat-sub">${FIN.plans.length} total</div>
+        <div class="stat-icon"><i class="fas fa-coins"></i></div>
+      </div>
+      <div class="stat warning">
+        <div class="stat-label">Capital Outstanding</div>
+        <div class="stat-value" style="font-size:19px">${fmt(totalCurrent)}</div>
+        <div class="stat-icon"><i class="fas fa-piggy-bank"></i></div>
+      </div>
+      <div class="stat success">
+        <div class="stat-label">Commission Paid</div>
+        <div class="stat-value" style="font-size:19px">${fmt(totalCommissionPaid)}</div>
+        <div class="stat-sub">${fmt(validPmts.reduce((s,p) => s + N(p.amount), 0))} cleared</div>
+        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+      </div>
+      <div class="stat danger">
+        <div class="stat-label">Pending Commission</div>
+        <div class="stat-value" style="font-size:19px">${fmt(totalPendingComm)}</div>
+        <div class="stat-icon"><i class="fas fa-hourglass-half"></i></div>
+      </div>
+      <div class="stat warning">
+        <div class="stat-label">Pending Cheques</div>
+        <div class="stat-value">${pendingPmts.length}</div>
+        <div class="stat-sub">${fmt(pendingChequeVal)}</div>
+        <div class="stat-icon"><i class="fas fa-money-check-alt"></i></div>
+      </div>
+      <div class="stat ${overdueDeds.length ? 'danger' : 'success'}">
+        <div class="stat-label">Overdue Deductions</div>
+        <div class="stat-value">${overdueDeds.length}</div>
+        <div class="stat-icon"><i class="fas fa-shield-alt"></i></div>
+      </div>
+    </div>
+
+    <!-- Info banner -->
+    <div class="alert info mb-16">
+      <i class="fas fa-info-circle alert-icon"></i>
+      <div class="alert-body">
+        <strong>Pending cheques don't affect your plan yet.</strong> Only <em>cleared</em> payments reduce capital and add commission.
+      </div>
+    </div>
+
+    <!-- HUB TABS -->
+    <div class="fin-hub-tabs">
+      <button class="fin-hub-tab active" data-fin-tab="dashboard" onclick="finSwitchHubTab('dashboard',this)"><i class="fas fa-chart-pie"></i> Dashboard</button>
+      <button class="fin-hub-tab" data-fin-tab="plans" onclick="finSwitchHubTab('plans',this)"><i class="fas fa-file-invoice-dollar"></i> Plans</button>
+      <button class="fin-hub-tab" data-fin-tab="payments" onclick="finSwitchHubTab('payments',this)"><i class="fas fa-money-check-alt"></i> Payments</button>
+      <button class="fin-hub-tab" data-fin-tab="deductions" onclick="finSwitchHubTab('deductions',this)"><i class="fas fa-shield-alt"></i> Deductions</button>
+      <button class="fin-hub-tab" data-fin-tab="reports" onclick="finSwitchHubTab('reports',this)"><i class="fas fa-chart-line"></i> Reports</button>
+      <button class="fin-hub-tab fin-purge-btn" onclick="finPurgeAllFinance(event)"><i class="fas fa-bomb"></i> Purge All</button>
+    </div>
+
+    <!-- PANES -->
+    <div id="finHub-dashboard" class="fin-hub-pane active"></div>
+    <div id="finHub-plans" class="fin-hub-pane"></div>
+    <div id="finHub-payments" class="fin-hub-pane"></div>
+    <div id="finHub-deductions" class="fin-hub-pane"></div>
+    <div id="finHub-reports" class="fin-hub-pane"></div>
+  `;
+
+  /* Render initial pane */
+  renderFinHubDashboardPane();
+  renderFinHubPlansPane();
+  renderFinHubPaymentsPane();
+  renderFinHubDeductionsPane();
+  renderFinHubReportsPane();
+}
+window.renderFinanceDashboard = renderFinanceDashboardV35;
+NC.renderFinanceDashboard = renderFinanceDashboardV35;
+
+function finSwitchHubTab(name, el) {
+  document.querySelectorAll('.fin-hub-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.fin-hub-pane').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  else {
+    const tab = document.querySelector('[data-fin-tab="' + name + '"]');
+    if (tab) tab.classList.add('active');
+  }
+  const pane = $('finHub-' + name);
+  if (pane) pane.classList.add('active');
+  if (name === 'dashboard') renderFinHubDashboardPane();
+  else if (name === 'plans') renderFinHubPlansPane();
+  else if (name === 'payments') renderFinHubPaymentsPane();
+  else if (name === 'deductions') renderFinHubDeductionsPane();
+  else if (name === 'reports') renderFinHubReportsPane();
+}
+window.finSwitchHubTab = finSwitchHubTab;
+NC.finSwitchHubTab = finSwitchHubTab;
+
+/* ═══════════════════════════════════════════════════════════════════
+   HUB: DASHBOARD PANE
+   ═══════════════════════════════════════════════════════════════════ */
+function renderFinHubDashboardPane() {
+  const host = $('finHub-dashboard');
+  if (!host) return;
+
+  const recentPmts = FIN.payments.slice().sort((a,b) =>
+    new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 8);
+
+  host.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">Active Finance Plans</h2>
+          <p class="card-subtitle">Click any plan to open full details</p>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-primary btn-sm" onclick="NC.finOpenPlanModal()"><i class="fas fa-plus"></i> New Plan</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="grid-cards wide">
+          ${FIN.plans.length
+            ? FIN.plans.map(p => NC.finPlanCardHTML(p)).join('')
+            : '<div class="empty" style="grid-column:1/-1"><i class="fas fa-coins empty-icon"></i><h3>No finance plans yet</h3><p>Create your first plan.</p></div>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">Recent Payments</h2>
+          <p class="card-subtitle">Latest cleared and pending cheques</p>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-secondary btn-sm" onclick="finSwitchHubTab('payments', document.querySelector('[data-fin-tab=\\'payments\\']'))">
+            View all <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+      <div class="table-wrap flat">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Eff. Date</th>
+              <th>Plan</th>
+              <th class="num">Amount</th>
+              <th>Method</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th class="num">Commission</th>
+              <th class="num">Capital</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${recentPmts.length
+              ? recentPmts.map(p => {
+                  const pl = FIN.plans.find(x => x.id === p.planId);
+                  const comm = N((p.breakdown||{}).commissionPending || 0) + N((p.breakdown||{}).commissionCurrent || 0);
+                  const na = p.status === 'pending' || p.status === 'bounced';
+                  const bg = p.status === 'pending' ? 'background:#fffbeb' : p.status === 'bounced' ? 'background:#fef2f2;opacity:.7' : '';
+                  return '<tr style="' + bg + ';cursor:pointer" onclick="finOpenPlanDetail(\\'' + p.planId + '\\')">' +
+                    '<td>' + fmtDate(p.effectiveDate || p.date) + '</td>' +
+                    '<td>' + E(pl ? NC.finPlanName(pl) : '—') + '</td>' +
+                    '<td class="num fw-700">' + fmt(p.amount) + '</td>' +
+                    '<td><span class="badge ' + (p.method === 'cheque' ? 'warning' : 'primary') + '">' + E(p.method) + '</span></td>' +
+                    '<td>' + (p.source === 'In Hand (Shop Cash)' ? '<span class="badge warning">🏪 In Hand</span>' :
+                              p.source === 'Bank Transfer' ? '<span class="badge primary">🏦 Bank</span>' :
+                              p.source === 'Own Funds' ? '<span class="badge success">💼 Own</span>' :
+                              p.source ? '<span class="badge">' + E(p.source) + '</span>' : '—') + '</td>' +
+                    '<td>' + NC.finPaymentStatusBadge(p.status) + '</td>' +
+                    '<td class="num ' + (na ? 'txt-muted' : 'txt-warning') + '">' + (na ? '—' : fmt(comm)) + '</td>' +
+                    '<td class="num ' + (na ? 'txt-muted' : 'txt-success') + '">' + (na ? '—' : fmt((p.breakdown||{}).capital)) + '</td>' +
+                  '</tr>';
+                }).join('')
+              : '<tr><td colspan="8" class="txt-center txt-muted" style="padding:30px">No payments yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+window.renderFinHubDashboardPane = renderFinHubDashboardPane;
+NC.renderFinHubDashboardPane = renderFinHubDashboardPane;
+
+/* ═══════════════════════════════════════════════════════════════════
+   HUB: PLANS PANE
+   ═══════════════════════════════════════════════════════════════════ */
+function renderFinHubPlansPane() {
+  const host = $('finHub-plans');
+  if (!host) return;
+
+  host.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">All Finance Plans</h2>
+          <p class="card-subtitle">Every plan — active, completed, or on hold</p>
+        </div>
+        <div class="card-actions">
+          <input type="text" id="finHubPlanSearch" placeholder="Search vehicle, company…" oninput="finFilterHubPlans()"
+                 style="padding:7px 12px;border:1.5px solid var(--border-2);border-radius:8px;font-size:13px;font-family:inherit">
+          <select id="finHubPlanStatus" onchange="finFilterHubPlans()" style="padding:7px 12px;border:1.5px solid var(--border-2);border-radius:8px;font-size:13px;font-family:inherit">
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="NC.finOpenPlanModal()"><i class="fas fa-plus"></i> New</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="finHubPlansGrid" class="grid-cards wide"></div>
+      </div>
+    </div>
+  `;
+  finFilterHubPlans();
+}
+window.renderFinHubPlansPane = renderFinHubPlansPane;
+NC.renderFinHubPlansPane = renderFinHubPlansPane;
+
+function finFilterHubPlans() {
+  const grid = $('finHubPlansGrid');
+  if (!grid) return;
+  const q = ($('finHubPlanSearch') ? $('finHubPlanSearch').value : '').toLowerCase();
+  const st = ($('finHubPlanStatus') ? $('finHubPlanStatus').value : '');
+
+  let list = FIN.plans.slice();
+  if (q) list = list.filter(p =>
+    (p.vehicle || '').toLowerCase().includes(q) ||
+    (p.company || '').toLowerCase().includes(q));
+  if (st) list = list.filter(p => (p.status || 'active') === st);
+
+  grid.innerHTML = list.length
+    ? list.map(p => NC.finPlanCardHTML(p)).join('')
+    : '<div class="empty" style="grid-column:1/-1"><i class="fas fa-file-invoice-dollar empty-icon"></i><h3>No plans found</h3></div>';
+}
+window.finFilterHubPlans = finFilterHubPlans;
+NC.finFilterHubPlans = finFilterHubPlans;
+
+/* ═══════════════════════════════════════════════════════════════════
+   HUB: PAYMENTS PANE (Cheque Registry + all payments)
+   ═══════════════════════════════════════════════════════════════════ */
+function renderFinHubPaymentsPane() {
+  const host = $('finHub-payments');
+  if (!host) return;
+
+  const cheques = FIN.payments.filter(p => p.method === 'cheque');
+  const pending = cheques.filter(c => c.status === 'pending');
+  const cleared = cheques.filter(c => c.status === 'cleared');
+  const bounced = cheques.filter(c => c.status === 'bounced');
+
+  host.innerHTML = `
+    <!-- Cheque Registry -->
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title"><i class="fas fa-money-check"></i> Cheque Registry</h2>
+          <p class="card-subtitle">All cheques across all plans</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="fin-widgets" style="margin-bottom:0">
+          <div class="fin-widget"><div class="fin-widget-title">⏳ Pending</div><div class="fin-widget-value" style="color:#f59e0b">${pending.length}</div><div class="fin-widget-sub">${fmt(pending.reduce((s,c) => s + N(c.amount), 0))}</div></div>
+          <div class="fin-widget"><div class="fin-widget-title">✅ Cleared</div><div class="fin-widget-value" style="color:#10b981">${cleared.length}</div><div class="fin-widget-sub">${fmt(cleared.reduce((s,c) => s + N(c.amount), 0))}</div></div>
+          <div class="fin-widget"><div class="fin-widget-title">❌ Bounced</div><div class="fin-widget-value" style="color:#dc2626">${bounced.length}</div><div class="fin-widget-sub">${fmt(bounced.reduce((s,c) => s + N(c.amount), 0))}</div></div>
+          <div class="fin-widget"><div class="fin-widget-title">Total</div><div class="fin-widget-value">${cheques.length}</div></div>
+        </div>
+      </div>
+      <div class="table-wrap flat">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Cheque #</th>
+              <th>Bank</th>
+              <th>Plan</th>
+              <th class="num">Amount</th>
+              <th>Cheque Date</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th class="actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${cheques.length ? [...cheques]
+              .sort((a,b) => new Date(a.effectiveDate || a.date) - new Date(b.effectiveDate || b.date))
+              .map(c => {
+                const pl = FIN.plans.find(x => x.id === c.planId);
+                const dtc = c.status === 'pending' ? NC.daysBetween(NC.T(), c.effectiveDate || c.date) : null;
+                const bg = c.status === 'pending' ? 'background:#fffbeb' : c.status === 'bounced' ? 'background:#fef2f2;opacity:.7' : '';
+                return '<tr style="' + bg + '">' +
+                  '<td><strong>' + E(c.chequeNo || '—') + '</strong></td>' +
+                  '<td>' + E(c.chequeBank || '—') + '</td>' +
+                  '<td>' + (pl ? E(NC.finPlanName(pl)) : '—') + '</td>' +
+                  '<td class="num fw-700">' + fmt(c.amount) + '</td>' +
+                  '<td>' + fmtDate(c.effectiveDate || c.date) +
+                    (dtc !== null && dtc > 0 ? '<div class="micro txt-warning">in ' + dtc + 'd</div>' : '') + '</td>' +
+                  '<td>' + (c.source === 'In Hand (Shop Cash)' ? '🏪 In Hand' : c.source === 'Bank Transfer' ? '🏦 Bank' : c.source === 'Own Funds' ? '💼 Own' : E(c.source || '—')) + '</td>' +
+                  '<td>' + NC.finPaymentStatusBadge(c.status) + '</td>' +
+                  '<td class="actions">' +
+                    '<button class="btn btn-xs ' + (c.status === 'pending' ? 'btn-success' : 'btn-secondary') + '" onclick="NC.finOpenChequeModal(\\'' + c.id + '\\')">' +
+                      '<i class="fas fa-' + (c.status === 'pending' ? 'check' : 'edit') + '"></i>' +
+                    '</button>' +
+                    '<button class="btn btn-xs btn-secondary" onclick="NC.finShowReceipt(\\'' + c.id + '\\')"><i class="fas fa-receipt"></i></button>' +
+                  '</td>' +
+                '</tr>';
+              }).join('')
+              : '<tr><td colspan="8" class="txt-center txt-muted" style="padding:30px">No cheques recorded</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- All Payments -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">All Payments</h2>
+          <p class="card-subtitle">Every payment — cheque, cash, bank, online</p>
+        </div>
+        <div class="card-actions">
+          <select id="finHubPayPlan" onchange="finFilterHubPayments()" style="padding:7px 12px;border:1.5px solid var(--border-2);border-radius:8px;font-size:13px;font-family:inherit">
+            <option value="">All plans</option>
+            ${FIN.plans.map(p => '<option value="' + E(p.id) + '">' + E(NC.finPlanName(p)) + '</option>').join('')}
+          </select>
+          <select id="finHubPayStatus" onchange="finFilterHubPayments()" style="padding:7px 12px;border:1.5px solid var(--border-2);border-radius:8px;font-size:13px;font-family:inherit">
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="cleared">Cleared</option>
+            <option value="bounced">Bounced</option>
+          </select>
+          <select id="finHubPaySource" onchange="finFilterHubPayments()" style="padding:7px 12px;border:1.5px solid var(--border-2);border-radius:8px;font-size:13px;font-family:inherit">
+            <option value="">All sources</option>
+            <option value="In Hand (Shop Cash)">In Hand</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Own Funds">Own Funds</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap flat">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Given</th>
+              <th>Plan</th>
+              <th class="num">Amount</th>
+              <th>Method</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th class="num">Commission</th>
+              <th class="num">Capital</th>
+              <th class="num">Pending</th>
+              <th class="actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="finHubPaymentsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  finFilterHubPayments();
+}
+window.renderFinHubPaymentsPane = renderFinHubPaymentsPane;
+NC.renderFinHubPaymentsPane = renderFinHubPaymentsPane;
+
+function finFilterHubPayments() {
+  const tb = $('finHubPaymentsBody');
+  if (!tb) return;
+  const planId = $('finHubPayPlan') ? $('finHubPayPlan').value : '';
+  const statusF = $('finHubPayStatus') ? $('finHubPayStatus').value : '';
+  const sourceF = $('finHubPaySource') ? $('finHubPaySource').value : '';
+
+  let list = FIN.payments.slice();
+  if (planId) list = list.filter(p => p.planId === planId);
+  if (statusF) list = list.filter(p => p.status === statusF);
+  if (sourceF) list = list.filter(p => p.source === sourceF);
+  list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  if (!list.length) {
+    tb.innerHTML = '<tr><td colspan="11" class="txt-center txt-muted" style="padding:30px">No payments match filters</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = list.map(p => {
+    const pl = FIN.plans.find(x => x.id === p.planId);
+    const comm = N((p.breakdown||{}).commissionPending || 0) + N((p.breakdown||{}).commissionCurrent || 0);
+    const na = p.status === 'pending' || p.status === 'bounced';
+    const bg = p.status === 'pending' ? 'background:#fffbeb' : p.status === 'bounced' ? 'background:#fef2f2;opacity:.7' : '';
+    return '<tr style="' + bg + '">' +
+      '<td>' + fmtDate(p.effectiveDate || p.date) + '</td>' +
+      '<td>' + fmtDate(p.date) + '</td>' +
+      '<td>' + (pl ? E(NC.finPlanName(pl)) : '—') + '</td>' +
+      '<td class="num fw-700">' + fmt(p.amount) + '</td>' +
+      '<td><span class="badge ' + (p.method === 'cheque' ? 'warning' : 'primary') + '">' + E(p.method) + '</span></td>' +
+      '<td>' + (p.source === 'In Hand (Shop Cash)' ? '<span class="badge warning">🏪 In Hand</span>' :
+                p.source === 'Bank Transfer' ? '<span class="badge primary">🏦 Bank</span>' :
+                p.source === 'Own Funds' ? '<span class="badge success">💼 Own</span>' : '—') + '</td>' +
+      '<td>' + NC.finPaymentStatusBadge(p.status) + '</td>' +
+      '<td class="num ' + (na ? 'txt-muted' : 'txt-warning') + '">' + (na ? '—' : fmt(comm)) + '</td>' +
+      '<td class="num ' + (na ? 'txt-muted' : 'txt-success') + '">' + (na ? '—' : fmt((p.breakdown||{}).capital)) + '</td>' +
+      '<td class="num ' + (na ? 'txt-muted' : (p.newPendingCommission > 0 ? 'txt-danger' : 'txt-success')) + '">' + (na ? '—' : fmt(p.newPendingCommission)) + '</td>' +
+      '<td class="actions">' +
+        '<button class="btn btn-xs btn-secondary" onclick="NC.finOpenChequeModal(\\'' + p.id + '\\')"><i class="fas fa-edit"></i></button>' +
+        '<button class="btn btn-xs btn-secondary" onclick="NC.finShowReceipt(\\'' + p.id + '\\')"><i class="fas fa-receipt"></i></button>' +
+        '<button class="btn btn-xs btn-danger" onclick="NC.finDeletePayment(\\'' + p.id + '\\')"><i class="fas fa-trash"></i></button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+window.finFilterHubPayments = finFilterHubPayments;
+NC.finFilterHubPayments = finFilterHubPayments;
+
+/* ═══════════════════════════════════════════════════════════════════
+   HUB: DEDUCTIONS PANE
+   ═══════════════════════════════════════════════════════════════════ */
+function renderFinHubDeductionsPane() {
+  const host = $('finHub-deductions');
+  if (!host) return;
+
+  const sorted = FIN.deductions.slice().sort((a,b) => {
+    const oa = NC.finIsOverdueDed(a) ? 0 : 1, ob = NC.finIsOverdueDed(b) ? 0 : 1;
+    if (oa !== ob) return oa - ob;
+    return new Date(a.dueDate) - new Date(b.dueDate);
+  });
+
+  host.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">Planned Deductions</h2>
+          <p class="card-subtitle">${FIN.deductions.length} deduction(s) scheduled</p>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-primary btn-sm" onclick="NC.finOpenDeductionModal()"><i class="fas fa-plus"></i> Add Deduction</button>
+        </div>
+      </div>
+      <div class="table-wrap flat">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Plan</th>
+              <th>Label</th>
+              <th class="num">Total</th>
+              <th class="num">Paid</th>
+              <th class="num">Remaining</th>
+              <th>Due Date</th>
+              <th>Status</th>
+              <th class="actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.length
+              ? sorted.map(d => {
+                  const pl = FIN.plans.find(x => x.id === d.planId);
+                  const rem = NC.finRemainingDed(d);
+                  const direct = NC.finPaidDirect(d);
+                  const fromMain = NC.finPaidFromMain(d);
+                  const total = NC.finPaidTotal(d);
+                  const overdue = NC.finIsOverdueDed(d);
+                  const daysOver = NC.finDaysOverdueDed(d);
+                  const statusK = NC.finStatusKeyDed(d);
+                  let statusLabel = 'Pending';
+                  let statusClass = 'warning';
+                  if (statusK === 'settled') { statusLabel = 'Settled'; statusClass = 'success'; }
+                  else if (statusK === 'partial') { statusLabel = 'Partial'; statusClass = 'primary'; }
+                  if (overdue && statusK !== 'settled') { statusLabel = 'Overdue ' + daysOver + 'd'; statusClass = 'danger'; }
+                  return '<tr>' +
+                    '<td>' + (pl ? E(NC.finPlanName(pl)) : '—') + '</td>' +
+                    '<td><strong>' + E(d.label) + '</strong></td>' +
+                    '<td class="num">' + fmt(d.amount) + '</td>' +
+                    '<td>' +
+                      (direct > 0 ? '<div class="txt-brand fw-700">' + fmt(direct) + ' <span class="micro">direct</span></div>' : '') +
+                      (fromMain > 0 ? '<div class="txt-warning fw-700">' + fmt(fromMain) + ' <span class="micro">from cleared</span></div>' : '') +
+                      (total === 0 ? '<span class="txt-muted">—</span>' : '') +
+                    '</td>' +
+                    '<td class="num fw-700 txt-danger">' + fmt(rem) + '</td>' +
+                    '<td>' + fmtDate(d.dueDate) + (overdue ? '<div class="micro txt-danger">⚠ ' + daysOver + 'd</div>' : '') + '</td>' +
+                    '<td><span class="status-pill status-' + statusClass + '">' + statusLabel + '</span></td>' +
+                    '<td class="actions">' +
+                      (rem > 0.001 ? '<button class="btn btn-xs btn-success" onclick="NC.finOpenDedPayDirect(\\'' + d.id + '\\')" title="Pay directly"><i class="fas fa-hand-holding-usd"></i></button>' : '') +
+                      '<button class="btn btn-xs btn-secondary" onclick="NC.finShowDedDetail(\\'' + d.id + '\\')" title="Audit trail"><i class="fas fa-eye"></i></button>' +
+                      '<button class="btn btn-xs btn-danger" onclick="NC.finDeleteDeduction(\\'' + d.id + '\\')"><i class="fas fa-trash"></i></button>' +
+                    '</td>' +
+                  '</tr>';
+                }).join('')
+              : '<tr><td colspan="8" class="txt-center txt-muted" style="padding:30px">No deductions yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+window.renderFinHubDeductionsPane = renderFinHubDeductionsPane;
+NC.renderFinHubDeductionsPane = renderFinHubDeductionsPane;
+
+/* ═══════════════════════════════════════════════════════════════════
+   HUB: REPORTS PANE (Portfolio Summary)
+   ═══════════════════════════════════════════════════════════════════ */
+function renderFinHubReportsPane() {
+  const host = $('finHub-reports');
+  if (!host) return;
+
+  const validPmts = FIN.payments.filter(p => p.status !== 'bounced' && p.status !== 'pending');
+  const pendingPmts = FIN.payments.filter(p => p.status === 'pending');
+  const totalStart = FIN.plans.reduce((s,p) => s + N(p.capitalStart), 0);
+  const totalCurrent = FIN.plans.reduce((s,p) => s + N(p.capitalCurrent), 0);
+  const totalPaid = validPmts.reduce((s,p) => s + N(p.amount), 0);
+  const totalComm = validPmts.reduce((s,p) =>
+    s + N((p.breakdown||{}).commissionPending || 0) + N((p.breakdown||{}).commissionCurrent || 0), 0);
+  const totalDeds = validPmts.reduce((s,p) =>
+    s + ((p.breakdown||{}).deductions || []).reduce((ss,d) => ss + (d.paid||0), 0), 0);
+  const pendingChequeVal = pendingPmts.reduce((s,p) => s + N(p.amount), 0);
+  const ratio = totalPaid > 0 ? (totalComm / totalPaid * 100) : 0;
+  const dedRatio = totalPaid > 0 ? (totalDeds / totalPaid * 100) : 0;
+  const capRatio = totalPaid > 0 ? (100 - ratio - dedRatio) : 0;
+
+  host.innerHTML = `
+    <!-- Portfolio Summary -->
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">Portfolio Summary</h2>
+          <p class="card-subtitle">All plans combined</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="fin-widgets">
+          <div class="fin-widget"><div class="fin-widget-title">Total Starting Capital</div><div class="fin-widget-value">${fmt(totalStart)}</div></div>
+          <div class="fin-widget"><div class="fin-widget-title">Current Outstanding</div><div class="fin-widget-value" style="color:var(--warning)">${fmt(totalCurrent)}</div></div>
+          <div class="fin-widget"><div class="fin-widget-title">Total Paid (Cleared)</div><div class="fin-widget-value" style="color:var(--success)">${fmt(totalPaid)}</div></div>
+          <div class="fin-widget"><div class="fin-widget-title">⏳ Pending Cheques</div><div class="fin-widget-value" style="color:#f59e0b">${fmt(pendingChequeVal)}</div><div class="fin-widget-sub">${pendingPmts.length} awaiting</div></div>
+          <div class="fin-widget"><div class="fin-widget-title">Commission Paid</div><div class="fin-widget-value" style="color:var(--info)">${fmt(totalComm)}</div></div>
+          <div class="fin-widget"><div class="fin-widget-title">Deductions Settled</div><div class="fin-widget-value" style="color:#06b6d4">${fmt(totalDeds)}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment Composition -->
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">Payment Composition</h2>
+          <p class="card-subtitle">Where cleared payment money went</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:14px">
+          <div class="flex-between mb-4" style="font-size:12.5px"><span class="fw-600">Deductions</span><span>${fmt(totalDeds)} (${dedRatio.toFixed(1)}%)</span></div>
+          <div class="progress lg"><div class="progress-bar" style="width:${dedRatio}%;background:linear-gradient(90deg,#06b6d4,#0891b2)"></div></div>
+        </div>
+        <div style="margin-bottom:14px">
+          <div class="flex-between mb-4" style="font-size:12.5px"><span class="fw-600">Commission</span><span>${fmt(totalComm)} (${ratio.toFixed(1)}%)</span></div>
+          <div class="progress lg"><div class="progress-bar" style="width:${ratio}%;background:linear-gradient(90deg,#f59e0b,#d97706)"></div></div>
+        </div>
+        <div style="margin-bottom:0">
+          <div class="flex-between mb-4" style="font-size:12.5px"><span class="fw-600">Capital</span><span>${fmt(totalPaid - totalDeds - totalComm)} (${Math.max(0, capRatio).toFixed(1)}%)</span></div>
+          <div class="progress lg"><div class="progress-bar success" style="width:${Math.max(0, capRatio)}%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plan-wise Breakdown -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">Plan-wise Breakdown</h2>
+          <p class="card-subtitle">Compare all plans side by side</p>
+        </div>
+      </div>
+      <div class="table-wrap flat">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Plan</th>
+              <th>Company</th>
+              <th class="num">Start Cap</th>
+              <th class="num">Current Cap</th>
+              <th class="num">Cleared</th>
+              <th class="num">Pending</th>
+              <th class="num">Commission</th>
+              <th>Progress</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${FIN.plans.length ? FIN.plans.map(p => {
+              const planPmts = validPmts.filter(x => x.planId === p.id);
+              const paid = planPmts.reduce((s,x) => s + N(x.amount), 0);
+              const comm = planPmts.reduce((s,x) =>
+                s + N((x.breakdown||{}).commissionPending || 0) + N((x.breakdown||{}).commissionCurrent || 0), 0);
+              const pendVal = FIN.payments.filter(x => x.planId === p.id && x.status === 'pending')
+                .reduce((s,x) => s + N(x.amount), 0);
+              const pct = N(p.capitalStart) > 0 ? ((N(p.capitalStart) - N(p.capitalCurrent)) / N(p.capitalStart) * 100) : 0;
+              return '<tr>' +
+                '<td><strong>' + E(p.vehicle) + '</strong></td>' +
+                '<td>' + E(p.company) + '</td>' +
+                '<td class="num">' + fmt(p.capitalStart) + '</td>' +
+                '<td class="num">' + fmt(p.capitalCurrent) + '</td>' +
+                '<td class="num txt-success fw-700">' + fmt(paid) + '</td>' +
+                '<td class="num txt-warning fw-700">' + (pendVal > 0 ? fmt(pendVal) : '—') + '</td>' +
+                '<td class="num txt-brand fw-700">' + fmt(comm) + '</td>' +
+                '<td style="min-width:130px">' +
+                  '<div class="micro mb-4">' + pct.toFixed(1) + '%</div>' +
+                  '<div class="progress"><div class="progress-bar success" style="width:' + Math.min(100, pct) + '%"></div></div>' +
+                '</td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="8" class="txt-center txt-muted" style="padding:30px">No plans yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+window.renderFinHubReportsPane = renderFinHubReportsPane;
+NC.renderFinHubReportsPane = renderFinHubReportsPane;
+
+/* ═══════════════════════════════════════════════════════════════════
+   OVERRIDE PLAN DETAIL — with ALL sections (Summary, Schedule, What-If, Amortization)
+   ═══════════════════════════════════════════════════════════════════ */
+async function finOpenPlanDetailV35Full(id) {
+  if (!FIN.loaded) await NC.finLoadAll();
+  const p = FIN.plans.find(x => x.id === id);
+  if (!p) return toast('Plan not found', 'error');
+
+  state.currentFinancePlanId = id;
+  FIN.activePlanId = id;
+
+  /* Find where to render — reuse the dashboard host */
+  const container = document.querySelector('#view-finance .card');
+  if (!container) return;
+
+  const committedState = NC.finReplayCommitted(p);
+  const pendingPmts = FIN.payments.filter(x => x.planId === id && x.status === 'pending');
+  const bouncedPmts = FIN.payments.filter(x => x.planId === id && x.status === 'bounced');
+  const clearedPmts = FIN.payments.filter(x => x.planId === id && x.status !== 'pending' && x.status !== 'bounced');
+  const projection = pendingPmts.length ? NC.finProjectPending(p, committedState) : null;
+
+  const replayLookup = {};
+  committedState.timeline.forEach(t => { replayLookup[t.payment.id] = t; });
+  const projLookup = {};
+  if (projection) projection.timeline.forEach(t => { projLookup[t.payment.id] = t; });
+
+  const paidPct = N(p.capitalStart) > 0 ? ((N(p.capitalStart) - N(p.capitalCurrent)) / N(p.capitalStart) * 100) : 0;
+  const planDeds = FIN.deductions.filter(x => x.planId === p.id);
+  const overdueDeds = planDeds.filter(NC.finIsOverdueDed);
+  const pendingVal = pendingPmts.reduce((s,x) => s + N(x.amount), 0);
+  const bouncedVal = bouncedPmts.reduce((s,x) => s + N(x.amount), 0);
+  const totalCommissionPaid = clearedPmts.reduce((s,x) =>
+    s + N((x.breakdown||{}).commissionPending||0) + N((x.breakdown||{}).commissionCurrent||0), 0);
+
+  container.innerHTML = `
+    <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
+      <button class="btn btn-sm btn-secondary" onclick="NC.renderFinanceDashboard()"><i class="fas fa-arrow-left"></i> Back to Finance</button>
+      <span class="text-sm text-muted">Finance <i class="fas fa-chevron-right" style="font-size:9px;margin:0 4px"></i> ${E(p.vehicle)}</span>
+    </div>
+
+    <!-- ═══ PLAN HEADER ═══ -->
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-header-left">
+          <div class="flex items-center gap-12">
+            <div>
+              <h1 class="h1" style="margin-bottom:4px">${E(p.vehicle)}</h1>
+              <p class="text-sm text-muted"><i class="fas fa-building"></i> ${E(p.company)}</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-sm btn-primary" onclick="NC.finOpenPaymentModal('${p.id}')"><i class="fas fa-plus"></i> Record Payment</button>
+          <button class="btn btn-sm btn-secondary" onclick="finOpenBulkModal('${p.id}')"><i class="fas fa-layer-group"></i> Bulk Entry</button>
+          <button class="btn btn-sm btn-secondary" onclick="NC.finRecalcPlan('${p.id}').then(()=>finOpenPlanDetail('${p.id}'))"><i class="fas fa-sync"></i> Recalc</button>
+          <button class="btn btn-sm btn-secondary" onclick="NC.finOpenPlanModal('${p.id}')"><i class="fas fa-edit"></i> Edit</button>
+          <button class="btn btn-sm btn-secondary" onclick="finClearPlanTransactions('${p.id}')"><i class="fas fa-eraser"></i> Clear Txns</button>
+          <button class="btn btn-sm btn-danger" onclick="finHardDeletePlan('${p.id}')"><i class="fas fa-trash-alt"></i> Delete Plan</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat brand"><div class="stat-label">Capital Outstanding</div><div class="stat-value" style="font-size:19px">${fmt(p.capitalCurrent)}</div><div class="stat-sub">of ${fmt(p.capitalStart)}</div></div>
+          <div class="stat ${N(p.pendingCommission) > 0 ? 'danger' : 'success'}"><div class="stat-label">Pending Commission</div><div class="stat-value" style="font-size:19px">${fmt(p.pendingCommission)}</div><div class="stat-sub">carried forward</div></div>
+          <div class="stat success"><div class="stat-label">Progress</div><div class="stat-value" style="font-size:19px">${paidPct.toFixed(1)}%</div><div class="stat-sub">${fmt(clearedPmts.reduce((s,x)=>s+N(x.amount),0))} cleared</div></div>
+          <div class="stat">
+            <div class="stat-label">Payments</div>
+            <div class="stat-value" style="font-size:19px">
+              <span class="txt-success">${clearedPmts.length}</span>
+              <span class="txt-muted" style="font-size:14px">·</span>
+              <span class="txt-warning">${pendingPmts.length}</span>
+              <span class="txt-muted" style="font-size:14px">·</span>
+              <span class="txt-danger">${bouncedPmts.length}</span>
+            </div>
+            <div class="stat-sub">cleared · pending · bounced</div>
+          </div>
+        </div>
+        <div class="progress lg"><div class="progress-bar success" style="width:${Math.min(100, paidPct)}%"></div></div>
+        ${overdueDeds.length ? `
+          <div class="alert danger mt-16">
+            <i class="fas fa-exclamation-triangle alert-icon"></i>
+            <div><strong>${overdueDeds.length} overdue deduction(s).</strong> Will auto-deduct from next cleared payment.</div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+
+    <!-- ═══ SUMMARY & PROJECTION ═══ -->
+    <details class="fin-section" open>
+      <summary>
+        <span class="fin-section-title"><i class="fas fa-chart-bar" style="color:var(--brand)"></i> Summary & Projection</span>
+        <span class="fin-section-meta">
+          <span>Capital: <strong>${fmt(p.capitalCurrent)}</strong></span>
+          <span>Progress: <strong>${paidPct.toFixed(1)}%</strong></span>
+          ${pendingPmts.length ? '<span style="color:#b45309">Projected: <strong>' + fmt(projection.capital) + '</strong></span>' : ''}
+        </span>
+      </summary>
+      <div class="fin-section-body">
+        <div class="fin-proj-wrap">
+          <div class="fin-proj-col committed">
+            <div class="fin-proj-header committed"><i class="fas fa-check-circle"></i> Current Committed</div>
+            <div class="fin-proj-row"><span class="lbl">Capital Outstanding</span><span class="val txt-warning">${fmt(p.capitalCurrent)}</span></div>
+            <div class="fin-proj-row"><span class="lbl">Pending Commission</span><span class="val ${N(p.pendingCommission) > 0 ? 'txt-danger' : 'txt-success'}">${fmt(p.pendingCommission)}</span></div>
+            <div class="fin-proj-row"><span class="lbl">Total Cleared</span><span class="val txt-success">${fmt(clearedPmts.reduce((s,x)=>s+N(x.amount),0))}</span></div>
+            <div class="fin-proj-row"><span class="lbl">Capital Reduced</span><span class="val">${fmt(N(p.capitalStart) - N(p.capitalCurrent))}</span></div>
+            <div class="fin-proj-row"><span class="lbl">Commission Paid</span><span class="val txt-brand">${fmt(totalCommissionPaid)}</span></div>
+          </div>
+          <div class="fin-proj-col projected">
+            <div class="fin-proj-header projected">
+              <i class="fas fa-hourglass-half"></i> After ${pendingPmts.length} Pending Clear
+              ${!pendingPmts.length ? '<span style="font-weight:400;font-size:10px;opacity:.6">(none)</span>' : ''}
+            </div>
+            ${pendingPmts.length === 0 ? `
+              <div style="text-align:center;padding:30px 10px;color:var(--text-3);font-size:13px">
+                <i class="fas fa-inbox" style="font-size:32px;opacity:.3;display:block;margin-bottom:8px"></i>
+                No pending cheques
+              </div>
+            ` : `
+              <div class="fin-proj-row"><span class="lbl">Projected Capital</span><span class="val" style="color:#92400e">${fmt(projection.capital)}</span></div>
+              <div class="fin-proj-delta">↓ ${fmt(projection.deltaCapital)} will be reduced</div>
+              <div class="fin-proj-row"><span class="lbl">Projected Pending Comm.</span><span class="val" style="color:#92400e">${fmt(projection.pending)}</span></div>
+              <div class="fin-proj-row"><span class="lbl">Commission from Pending</span><span class="val" style="color:#b45309">${fmt(projection.deltaCommission)}</span></div>
+              <div class="fin-proj-row"><span class="lbl">New Progress</span><span class="val">${N(p.capitalStart) > 0 ? (((N(p.capitalStart) - projection.capital) / N(p.capitalStart)) * 100).toFixed(1) : 0}%</span></div>
+            `}
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ═══ PENDING CHEQUES ═══ -->
+    ${pendingPmts.length ? `
+      <details class="fin-section pending" open>
+        <summary>
+          <span class="fin-section-title"><i class="fas fa-hourglass-half" style="color:#f59e0b"></i> Pending Cheques</span>
+          <span class="fin-section-badge" style="background:#fef3c7;color:#b45309">${pendingPmts.length}</span>
+          <span class="fin-section-meta"><span>Value: <strong>${fmt(pendingVal)}</strong></span></span>
+        </summary>
+        <div class="fin-section-body" style="background:var(--surface-2)">
+          ${pendingPmts
+            .sort((a,b) => new Date(a.effectiveDate || a.date) - new Date(b.effectiveDate || b.date))
+            .map(c => NC.finImpactCardHTML(c, 'pending', projLookup[c.id])).join('')}
+        </div>
+      </details>
+    ` : ''}
+
+    <!-- ═══ CLEARED PAYMENTS ═══ -->
+    ${clearedPmts.length ? `
+      <details class="fin-section cleared">
+        <summary>
+          <span class="fin-section-title"><i class="fas fa-check-circle" style="color:#10b981"></i> Cleared Payments</span>
+          <span class="fin-section-badge" style="background:#d1fae5;color:#065f46">${clearedPmts.length}</span>
+          <span class="fin-section-meta">
+            <span>Total: <strong>${fmt(clearedPmts.reduce((s,x)=>s+N(x.amount),0))}</strong></span>
+            <span>Commission: <strong>${fmt(totalCommissionPaid)}</strong></span>
+          </span>
+        </summary>
+        <div class="fin-section-body" style="background:var(--surface-2)">
+          ${clearedPmts
+            .sort((a,b) => new Date(b.effectiveDate || b.date) - new Date(a.effectiveDate || a.date))
+            .map(c => NC.finImpactCardHTML(c, 'cleared', replayLookup[c.id])).join('')}
+        </div>
+      </details>
+    ` : ''}
+
+    <!-- ═══ BOUNCED CHEQUES ═══ -->
+    ${bouncedPmts.length ? `
+      <details class="fin-section bounced">
+        <summary>
+          <span class="fin-section-title"><i class="fas fa-times-circle" style="color:#ef4444"></i> Bounced Cheques</span>
+          <span class="fin-section-badge" style="background:#fee2e2;color:#991b1b">${bouncedPmts.length}</span>
+          <span class="fin-section-meta"><span>Value: <strong>${fmt(bouncedVal)}</strong></span></span>
+        </summary>
+        <div class="fin-section-body" style="background:var(--surface-2)">
+          ${bouncedPmts.map(c => NC.finImpactCardHTML(c, 'bounced', null)).join('')}
+        </div>
+      </details>
+    ` : ''}
+
+    <!-- ═══ PAYMENT SCHEDULE ═══ -->
+    <details class="fin-section">
+      <summary>
+        <span class="fin-section-title"><i class="fas fa-calendar-check" style="color:var(--info)"></i> Payment Schedule</span>
+        <span class="fin-section-meta"><span>${clearedPmts.length + pendingPmts.length + bouncedPmts.length} total entries</span></span>
+      </summary>
+      <div class="fin-section-body">
+        ${finScheduleHTML(committedState, pendingPmts, bouncedPmts, projection)}
+      </div>
+    </details>
+
+    <!-- ═══ WHAT-IF SIMULATOR ═══ -->
+    <details class="fin-section">
+      <summary>
+        <span class="fin-section-title"><i class="fas fa-flask" style="color:#16a34a"></i> What-If Simulator</span>
+        <span class="fin-section-meta"><span>Test a hypothetical cleared payment</span></span>
+      </summary>
+      <div class="fin-section-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Amount</label>
+            <input type="number" id="finWiAmount" step="0.01" oninput="finRunWhatIf('${p.id}')">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Method</label>
+            <select id="finWiMethod" onchange="finRunWhatIf('${p.id}')">
+              <option value="cheque">Cheque</option>
+              <option value="cash">Cash</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Effective Date</label>
+            <input type="date" id="finWiDate" value="${NC.T()}" onchange="finRunWhatIf('${p.id}')">
+          </div>
+        </div>
+        <div id="finWhatIfResult"></div>
+      </div>
+    </details>
+
+    <!-- ═══ AMORTIZATION ═══ -->
+    <details class="fin-section">
+      <summary>
+        <span class="fin-section-title"><i class="fas fa-chart-area" style="color:var(--warning)"></i> Amortization Projection</span>
+        <span class="fin-section-meta"><span>Simulate monthly payments until plan closes</span></span>
+      </summary>
+      <div class="fin-section-body">
+        <div style="display:flex;gap:8px;align-items:center;font-size:12.5px;flex-wrap:wrap;margin-bottom:14px">
+          <label>Monthly payment:</label>
+          <input type="number" id="finAmortMonthly" value="1000000" step="10000" style="width:140px;padding:6px 10px;border:1.5px solid var(--border-2);border-radius:8px;font-size:12.5px;font-family:inherit">
+          <button class="btn btn-primary btn-xs" onclick="finRunAmortization('${p.id}')"><i class="fas fa-play"></i> Project</button>
+        </div>
+        <div id="finAmortResult"></div>
+      </div>
+    </details>
+
+    <!-- ═══ DEDUCTIONS ═══ -->
+    <details class="fin-section">
+      <summary>
+        <span class="fin-section-title"><i class="fas fa-shield-alt" style="color:#06b6d4"></i> Planned Deductions</span>
+        <span class="fin-section-badge" style="background:#e0e7ff;color:#4338ca">${planDeds.length}</span>
+        ${overdueDeds.length ? '<span class="fin-section-badge" style="background:#fee2e2;color:#991b1b">' + overdueDeds.length + ' overdue</span>' : ''}
+      </summary>
+      <div class="fin-section-body">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+          <button class="btn btn-primary btn-sm" onclick="NC.finOpenDeductionModal('${p.id}')"><i class="fas fa-plus"></i> Add Deduction</button>
+        </div>
+        ${finDeductionsTableHTML(planDeds)}
+      </div>
+    </details>
+  `;
+}
+window.finOpenPlanDetail = finOpenPlanDetailV35Full;
+NC.finOpenPlanDetail = finOpenPlanDetailV35Full;
+
+/* ═══════════════════════════════════════════════════════════════════
+   SCHEDULE HTML
+   ═══════════════════════════════════════════════════════════════════ */
+function finScheduleHTML(replay, pendingChqs, bouncedChqs, projection) {
+  const plan = (replay && replay.plan) ? replay.plan : (FIN.plans.find(x => x.id === FIN.activePlanId) || {});
+  const committed = replay ? replay.timeline : [];
+  const pendingRows = projection ? projection.pendingOnly : [];
+  const bounced = (bouncedChqs || []).map(c => ({ payment: c, kind: 'bounced' }));
+
+  const allRows = [
+    ...committed.map(t => Object.assign({}, t, { kind: 'committed' })),
+    ...pendingRows,
+    ...bounced.map(b => Object.assign({}, b, { days: 0, commissionPaid: 0, capitalPaid: 0, capitalAfter: null }))
+  ].sort((a,b) => new Date(a.payment.effectiveDate || a.payment.date) - new Date(b.payment.effectiveDate || b.payment.date));
+
+  if (!allRows.length) {
+    return '<div class="empty"><i class="fas fa-calendar-alt empty-icon"></i><h3>No payments yet</h3><p>Commission begins accruing from <strong>' + fmtDate(plan.startDate) + '</strong></p></div>';
+  }
+
+  const expectedInterval = N(plan.expectedInterval || 30);
+
+  return `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="background:var(--surface-2);padding:8px 12px;border-radius:8px;font-size:12px"><strong>Cleared:</strong> ${committed.length}</div>
+      <div style="background:#fffbeb;padding:8px 12px;border-radius:8px;font-size:12px;color:#92400e"><strong>Pending:</strong> ${pendingRows.length}</div>
+      <div style="background:#fef2f2;padding:8px 12px;border-radius:8px;font-size:12px;color:#991b1b"><strong>Bounced:</strong> ${bounced.length}</div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="fin-schedule-tbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Payment Date</th>
+            <th>Period</th>
+            <th>Capital Before</th>
+            <th>Commission</th>
+            <th>Capital Reduced</th>
+            <th>Capital After</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${allRows.map((t, i) => {
+            const isPending = t.kind === 'pending';
+            const isBounced = t.kind === 'bounced';
+            const rowClass = isBounced ? 'bounced-row' : (isPending ? 'pending-row' : (t.wasLate ? 'late-row' : 'paid-row'));
+            const statusLabel = isBounced ? '<span class="status-pill status-returned">BOUNCED</span>'
+                              : isPending ? '<span class="status-pill status-pending">⏳ PENDING</span>'
+                              : (t.wasLate ? '<span class="status-pill status-returned">LATE +' + (t.days - expectedInterval) + 'd</span>'
+                                           : '<span class="status-pill status-cleared">ON TIME</span>');
+            return '<tr class="' + rowClass + '">' +
+              '<td>#' + (i + 1) + '</td>' +
+              '<td><strong>' + fmtDate(t.payment.effectiveDate || t.payment.date) + '</strong>' +
+                (t.payment.effectiveDate && t.payment.effectiveDate !== t.payment.date ? '<div class="micro txt-warning">cheque</div>' : '') + '</td>' +
+              '<td>' + (t.startDate ? fmtDate(t.startDate) + ' → ' + fmtDate(t.endDate) : '—') +
+                (t.days ? '<div class="micro">' + t.days + ' days</div>' : '') + '</td>' +
+              '<td>' + (t.capitalBefore !== undefined ? fmt(t.capitalBefore) : '—') + '</td>' +
+              '<td class="' + (isPending || isBounced ? 'txt-muted' : 'txt-warning') + ' fw-600">' +
+                (isBounced ? '—' : fmt(t.commissionPaid)) +
+                (t.penalty > 0 ? '<div class="micro txt-warning">incl. ' + fmt(t.penalty) + '</div>' : '') +
+                (isPending ? '<div class="micro txt-warning">projected</div>' : '') + '</td>' +
+              '<td class="' + (isPending || isBounced ? 'txt-muted' : 'txt-success') + ' fw-600">' +
+                (isBounced ? '—' : fmt(t.capitalPaid)) +
+                (isPending ? '<div class="micro txt-warning">projected</div>' : '') + '</td>' +
+              '<td>' + (t.capitalAfter !== null && t.capitalAfter !== undefined ? '<strong>' + fmt(t.capitalAfter) + '</strong>' : '—') +
+                (isPending ? '<div class="micro txt-warning">if cleared</div>' : '') + '</td>' +
+              '<td>' + statusLabel + '</td>' +
+            '</tr>';
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DEDUCTIONS TABLE HTML
+   ═══════════════════════════════════════════════════════════════════ */
+function finDeductionsTableHTML(planDeds) {
+  if (!planDeds.length) {
+    return '<div class="empty compact"><i class="fas fa-shield-alt empty-icon"></i><h3>No planned deductions</h3></div>';
+  }
+  return `
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th class="num">Total</th>
+            <th class="num">Paid</th>
+            <th class="num">Remaining</th>
+            <th>Due</th>
+            <th>Status</th>
+            <th class="actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${planDeds.map(d => {
+            const rem = NC.finRemainingDed(d);
+            const direct = NC.finPaidDirect(d);
+            const fromMain = NC.finPaidFromMain(d);
+            const total = NC.finPaidTotal(d);
+            const overdue = NC.finIsOverdueDed(d);
+            const daysOver = NC.finDaysOverdueDed(d);
+            const statusK = NC.finStatusKeyDed(d);
+            const pct = N(d.amount) > 0 ? (total / N(d.amount) * 100) : 0;
+            let statusLabel = 'Pending';
+            let statusClass = 'warning';
+            if (statusK === 'settled') { statusLabel = 'Settled ✓'; statusClass = 'success'; }
+            else if (statusK === 'partial') { statusLabel = 'Partial'; statusClass = 'primary'; }
+            if (overdue && statusK !== 'settled') { statusLabel = 'Overdue ' + daysOver + 'd'; statusClass = 'danger'; }
+            return '<tr>' +
+              '<td><strong>' + E(d.label) + '</strong>' + (d.notes ? '<div class="micro">' + E(d.notes) + '</div>' : '') + '</td>' +
+              '<td class="num"><strong>' + fmt(d.amount) + '</strong></td>' +
+              '<td>' +
+                (direct > 0 ? '<div class="txt-brand fw-700">' + fmt(direct) + ' <span class="micro">direct</span></div>' : '') +
+                (fromMain > 0 ? '<div class="txt-warning fw-700">' + fmt(fromMain) + ' <span class="micro">from cleared</span></div>' : '') +
+                (total === 0 ? '<span class="txt-muted">—</span>' : '') +
+                '<div class="progress sm" style="width:100px;margin-top:4px"><div class="progress-bar success" style="width:' + Math.min(100, pct) + '%"></div></div>' +
+              '</td>' +
+              '<td class="num fw-700 ' + (rem > 0 ? 'txt-danger' : 'txt-success') + '">' + fmt(rem) + '</td>' +
+              '<td' + (overdue ? ' class="txt-danger fw-700"' : '') + '>' + fmtDate(d.dueDate) + (overdue ? '<div class="micro txt-danger">⚠ ' + daysOver + 'd</div>' : '') + '</td>' +
+              '<td><span class="status-pill status-' + statusClass + '">' + statusLabel + '</span></td>' +
+              '<td class="actions">' +
+                (rem > 0.001 ? '<button class="btn btn-xs btn-success" onclick="NC.finOpenDedPayDirect(\\'' + d.id + '\\')"><i class="fas fa-hand-holding-usd"></i> Pay</button>' : '') +
+                '<button class="btn btn-xs btn-secondary" onclick="NC.finShowDedDetail(\\'' + d.id + '\\')"><i class="fas fa-eye"></i></button>' +
+                '<button class="btn btn-xs btn-danger" onclick="NC.finDeleteDeduction(\\'' + d.id + '\\')"><i class="fas fa-trash"></i></button>' +
+              '</td>' +
+            '</tr>';
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BULK ENTRY
+   ═══════════════════════════════════════════════════════════════════ */
+function finOpenBulkModal(planId) {
+  const sel = $('fbPlan');
+  if (sel) {
+    sel.innerHTML = '<option value="">— Select —</option>' +
+      FIN.plans.map(p => '<option value="' + E(p.id) + '"' + (p.id === planId ? ' selected' : '') + '>' + E(NC.finPlanName(p)) + ' — ' + E(p.company) + '</option>').join('');
+    sel.onchange = finRenderBulkRows;
+  }
+  const d = $('fbDate'); if (d) d.value = NC.T();
+  ['fbAmount','fbChequeNo','fbBank'].forEach(id => { const e = $(id); if (e) e.value = ''; });
+  const st = $('fbStatus'); if (st) st.value = 'pending';
+  BULK.rows = [];
+  finRenderBulkRows();
+  openModal('modalFinanceBulk');
+}
+window.finOpenBulkModal = finOpenBulkModal;
+NC.finOpenBulkModal = finOpenBulkModal;
+
+function finAddBulkRow() {
+  const planId = $('fbPlan') ? $('fbPlan').value : '';
+  if (!planId) return toast('Select a plan first', 'error');
+  const date = $('fbDate') ? $('fbDate').value : '';
+  const amount = N($('fbAmount') ? $('fbAmount').value : 0);
+  const chequeNo = $('fbChequeNo') ? $('fbChequeNo').value.trim() : '';
+  const bank = $('fbBank') ? $('fbBank').value.trim() : '';
+  const status = $('fbStatus') ? $('fbStatus').value : 'pending';
+  if (!date || !amount || amount <= 0 || !chequeNo) {
+    return toast('Fill date, amount, cheque number', 'error');
+  }
+  BULK.rows.push({ id: NC.uid('bulk'), date, amount, chequeNo, bank, status });
+  BULK.rows.sort((a,b) => new Date(a.date) - new Date(b.date));
+  ['fbAmount','fbChequeNo','fbBank'].forEach(id => { const e = $(id); if (e) e.value = ''; });
+  finRenderBulkRows();
+}
+window.finAddBulkRow = finAddBulkRow;
+NC.finAddBulkRow = finAddBulkRow;
+
+function finRenderBulkRows() {
+  const host = $('fbRowsList');
+  if (!host) return;
+  if (!BULK.rows.length) {
+    host.innerHTML = '<div class="empty compact"><i class="fas fa-inbox empty-icon"></i><h3>No cheques added yet</h3></div>';
+    return;
+  }
+  const planId = $('fbPlan') ? $('fbPlan').value : '';
+  const orig = planId ? FIN.plans.find(x => x.id === planId) : null;
+
+  let sim = orig ? { capital: N(orig.capitalCurrent), pending: N(orig.pendingCommission) } : null;
+  let simDedStates = orig ? NC.finBuildDedStates(planId) : null;
+
+  host.innerHTML = BULK.rows.map(r => {
+    let preview = '';
+    if (orig && sim && r.status === 'cleared') {
+      const dueDeds = NC.finDueDedsAt(planId, r.date, simDedStates);
+      const calc = NC.finApplyPayment({ ...orig, capitalCurrent: sim.capital, pendingCommission: sim.pending }, r.amount, 30, 30, dueDeds);
+      preview = '<div class="micro">→ Ded ' + fmt(calc.breakdown.deductions.reduce((s,d)=>s+d.paid,0)) + ' · Comm ' + fmt(calc.totalCommissionPaid) + ' · Cap ' + fmt(calc.breakdown.capital) + '</div>';
+      for (const dd of calc.breakdown.deductions) { if (dd.paid > 0) simDedStates[dd.id].replayPaid += dd.paid; }
+      sim.capital = calc.newCapitalCurrent;
+      sim.pending = calc.newPendingCommission;
+    }
+    return '<div class="fin-bulk-row">' +
+      '<div class="row-num">#' + E(r.chequeNo) + '</div>' +
+      '<div>' +
+        '<div class="fw-600">' + fmtDate(r.date) + (r.bank ? ' · ' + E(r.bank) : '') + '</div>' +
+        '<div class="micro">' + fmt(r.amount) + '</div>' + preview +
+      '</div>' +
+      '<div><span class="status-pill status-' + (r.status === 'cleared' ? 'cleared' : 'pending') + '">' + (r.status === 'pending' ? '⏳ pending' : r.status) + '</span></div>' +
+      '<div></div>' +
+      '<button class="btn btn-xs btn-danger" onclick="finRemoveBulkRow(\\'' + r.id + '\\')"><i class="fas fa-times"></i></button>' +
+    '</div>';
+  }).join('');
+}
+window.finRenderBulkRows = finRenderBulkRows;
+NC.finRenderBulkRows = finRenderBulkRows;
+
+function finRemoveBulkRow(id) {
+  BULK.rows = BULK.rows.filter(r => r.id !== id);
+  finRenderBulkRows();
+}
+window.finRemoveBulkRow = finRemoveBulkRow;
+NC.finRemoveBulkRow = finRemoveBulkRow;
+
+async function finCommitBulkPayments() {
+  const planId = $('fbPlan') ? $('fbPlan').value : '';
+  if (!planId) return toast('Select a plan', 'error');
+  if (!BULK.rows.length) return toast('Add at least one cheque', 'error');
+
+  try {
+    BULK.rows.sort((a,b) => new Date(a.date) - new Date(b.date));
+    for (const r of BULK.rows) {
+      await NC.db.collection(NC.COLLECTIONS.financePayments).add({
+        planId,
+        date: NC.T(),
+        effectiveDate: r.date,
+        amount: r.amount,
+        method: 'cheque',
+        reference: 'Cheque #' + r.chequeNo + (r.bank ? ' · ' + r.bank : ''),
+        chequeNo: r.chequeNo,
+        chequeBank: r.bank,
+        status: r.status,
+        source: 'In Hand (Shop Cash)',
+        notes: 'Bulk entry',
+        breakdown: {},
+        newPendingCommission: 0,
+        newCapital: 0,
+        createdAt: NC.FV.serverTimestamp(),
+        createdBy: state.user.email
+      });
+    }
+    await NC.finLoadAll();
+    await NC.finRecalcPlan(planId);
+    await NC.finLoadAll();
+    toast('Committed ' + BULK.rows.length + ' cheque(s)', 'success');
+    closeModal('modalFinanceBulk');
+    BULK.rows = [];
+    finOpenPlanDetailV35Full(planId);
+  } catch(e){ console.error(e); toast('Error: ' + e.message, 'error'); }
+}
+window.finCommitBulkPayments = finCommitBulkPayments;
+NC.finCommitBulkPayments = finCommitBulkPayments;
+
+/* ═══════════════════════════════════════════════════════════════════
+   WHAT-IF SIMULATOR
+   ═══════════════════════════════════════════════════════════════════ */
+function finRunWhatIf(planId) {
+  const p = FIN.plans.find(x => x.id === planId);
+  if (!p) return;
+  const amount = N($('finWiAmount') ? $('finWiAmount').value : 0);
+  const method = $('finWiMethod') ? $('finWiMethod').value : 'cheque';
+  const date = $('finWiDate') ? $('finWiDate').value : NC.T();
+  const host = $('finWhatIfResult');
+  if (!host) return;
+  if (!amount || amount <= 0 || !date) {
+    host.innerHTML = '<div class="empty compact"><div class="txt-muted text-sm">Enter amount and date to simulate</div></div>';
+    return;
+  }
+  const calc = NC.finCalcPayment(p, amount, date);
+  const dedPaid = calc.breakdown.deductions.reduce((s,d) => s + d.paid, 0);
+  const totalApplied = dedPaid + calc.breakdown.commissionPending + calc.breakdown.commissionCurrent + calc.breakdown.capital;
+
+  host.innerHTML = `
+    <div class="fin-calc-preview" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#16a34a;margin-top:16px">
+      <div class="fw-700 mb-10" style="color:#14532d">
+        <i class="fas fa-flask"></i> Simulation — assumes CLEARED, effective ${fmtDate(calc.effectiveDate)}
+      </div>
+      <div class="detail-list">
+        <div class="detail-row"><div class="label">Days since last cleared</div><div class="value">${calc.days} days</div></div>
+        <div class="detail-row"><div class="label">Chargeable days (grace ${calc.grace}d)</div><div class="value">${calc.daysChargeable}</div></div>
+        <div class="detail-row"><div class="label">Daily commission</div><div class="value">${fmtDec(calc.dailyCommission)}</div></div>
+        <div class="detail-row"><div class="label">Accrued commission</div><div class="value">${fmtDec(calc.accruedCommission - calc.penalty)}</div></div>
+        ${calc.penalty > 0 ? '<div class="detail-row"><div class="label">Late fee</div><div class="value txt-warning">+ ' + fmtDec(calc.penalty) + '</div></div>' : ''}
+        <div class="detail-row"><div class="label">Pending commission</div><div class="value">${fmtDec(calc.pendingBefore)}</div></div>
+        <div class="detail-row"><div class="label">Deductions due</div><div class="value txt-warning">${fmtDec(calc.deductionsTotal)}</div></div>
+        <div class="detail-row total"><div class="label">Total due</div><div class="value">${fmtDec(calc.totalDue)}</div></div>
+      </div>
+      <div class="divider"></div>
+      <div class="detail-list">
+        <div class="detail-row"><div class="label">→ Deductions</div><div class="value">${fmtDec(dedPaid)}</div></div>
+        <div class="detail-row"><div class="label">→ Pending commission</div><div class="value">${fmtDec(calc.breakdown.commissionPending)}</div></div>
+        <div class="detail-row"><div class="label">→ Current commission</div><div class="value">${fmtDec(calc.breakdown.commissionCurrent)}</div></div>
+        <div class="detail-row"><div class="label">→ Capital reduction</div><div class="value txt-success">${fmtDec(calc.breakdown.capital)}</div></div>
+        <div class="detail-row total"><div class="label">Sum applied</div><div class="value">${fmtDec(totalApplied)}</div></div>
+      </div>
+      <div class="divider"></div>
+      <div class="detail-list">
+        <div class="detail-row"><div class="label">New Pending Commission</div><div class="value ${calc.newPendingCommission > 0 ? 'txt-danger' : 'txt-success'}">${fmtDec(calc.newPendingCommission)}</div></div>
+        <div class="detail-row"><div class="label">New Capital</div><div class="value">${fmtDec(calc.newCapitalCurrent)}</div></div>
+      </div>
+    </div>
+  `;
+}
+window.finRunWhatIf = finRunWhatIf;
+NC.finRunWhatIf = finRunWhatIf;
+
+/* ═══════════════════════════════════════════════════════════════════
+   AMORTIZATION PROJECTION
+   ═══════════════════════════════════════════════════════════════════ */
+function finRunAmortization(planId) {
+  const p = FIN.plans.find(x => x.id === planId);
+  if (!p) return;
+  const monthly = N($('finAmortMonthly') ? $('finAmortMonthly').value : 0);
+  const host = $('finAmortResult');
+  if (!host) return;
+  if (!monthly || monthly <= 0) {
+    host.innerHTML = '<div class="empty compact"><div class="txt-muted text-sm">Enter monthly payment amount</div></div>';
+    return;
+  }
+
+  let capital = N(p.capitalCurrent);
+  let pending = N(p.pendingCommission);
+  const rate = N(p.commissionRate);
+  const rows = [];
+  let cur = new Date();
+  let safety = 0, totalComm = 0, totalCap = 0;
+
+  while (capital > 0.01 && safety < 240) {
+    safety++;
+    cur.setDate(cur.getDate() + 30);
+    const daily = (capital / 100000) * rate;
+    const accrued = daily * 30;
+    const owed = pending + accrued;
+    const payComm = Math.min(monthly, owed);
+    const payCap = Math.max(0, monthly - payComm);
+    const newPend = owed - payComm;
+    const newCap = Math.max(0, capital - payCap);
+    totalComm += payComm; totalCap += payCap;
+    rows.push({ n: safety, date: cur.toISOString().slice(0,10), startCap: capital, accrued, payComm, payCap, endCap: newCap, pend: newPend });
+    capital = newCap; pending = newPend;
+    if (rows.length >= 36) break;
+  }
+
+  host.innerHTML = `
+    <div class="fin-widgets">
+      <div class="fin-widget"><div class="fin-widget-title">Months</div><div class="fin-widget-value">${rows.length}</div></div>
+      <div class="fin-widget"><div class="fin-widget-title">Projected commission</div><div class="fin-widget-value" style="font-size:17px">${fmt(totalComm)}</div></div>
+      <div class="fin-widget"><div class="fin-widget-title">Projected capital</div><div class="fin-widget-value" style="font-size:17px">${fmt(totalCap)}</div></div>
+    </div>
+    <div style="overflow-x:auto;margin-top:14px">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Date</th>
+            <th class="num">Start Cap</th>
+            <th class="num">Commission Due</th>
+            <th class="num">Paid → Comm</th>
+            <th class="num">Paid → Cap</th>
+            <th class="num">End Cap</th>
+            <th class="num">Pending</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => '<tr>' +
+            '<td>' + r.n + '</td>' +
+            '<td>' + fmtDate(r.date) + '</td>' +
+            '<td class="num">' + fmt(r.startCap) + '</td>' +
+            '<td class="num txt-warning">' + fmt(r.accrued) + '</td>' +
+            '<td class="num txt-brand">' + fmt(r.payComm) + '</td>' +
+            '<td class="num txt-success">' + fmt(r.payCap) + '</td>' +
+            '<td class="num fw-700">' + fmt(r.endCap) + '</td>' +
+            '<td class="num ' + (r.pend > 0 ? 'txt-danger' : 'txt-success') + '">' + fmt(r.pend) + '</td>' +
+          '</tr>').join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+window.finRunAmortization = finRunAmortization;
+NC.finRunAmortization = finRunAmortization;
+
+/* ═══════════════════════════════════════════════════════════════════
+   CLEAR PLAN TRANSACTIONS
+   ═══════════════════════════════════════════════════════════════════ */
+async function finClearPlanTransactions(planId) {
+  if (!planId) planId = FIN.activePlanId;
+  if (!planId) return toast('Open a plan first', 'error');
+
+  try {
+    const [pmtSnap, dedSnap, planDoc] = await Promise.all([
+      NC.db.collection(NC.COLLECTIONS.financePayments).where('planId', '==', planId).get(),
+      NC.db.collection(NC.COLLECTIONS.deductions).where('planId', '==', planId).get(),
+      NC.db.collection(NC.COLLECTIONS.plans).doc(planId).get()
+    ]);
+
+    const pname = planDoc.exists ? planDoc.data().vehicle : 'this plan';
+    const count = pmtSnap.size;
+
+    if (count === 0) return toast('No payments to clear', 'info');
+
+    if (!await confirmDlg(
+      'Clear ALL ' + count + ' payment(s) from "' + pname + '"?\n\n' +
+      '• Capital resets to starting value\n' +
+      '• Pending commission → 0\n' +
+      '• Deductions (' + dedSnap.size + ') kept, settlements reverted\n\n' +
+      'Cannot be undone.',
+      { danger: true, confirmLabel: 'Clear All' }
+    )) return;
+
+    if (!await confirmDlg('⚠ FINAL WARNING ⚠\n\nPermanently delete ' + count + ' payment record(s)?', { danger: true, confirmLabel: 'Delete Forever' })) return;
+
+    /* Reset deductions */
+    if (dedSnap.size > 0) {
+      const b1 = NC.db.batch();
+      dedSnap.docs.forEach(d => b1.update(d.ref, { mainDeductions: [] }));
+      await b1.commit();
+    }
+
+    await finBatchDelete(pmtSnap.docs.map(d => d.ref));
+
+    if (planDoc.exists) {
+      const d = planDoc.data();
+      await NC.db.collection(NC.COLLECTIONS.plans).doc(planId).update({
+        capitalCurrent: N(d.capitalStart) || 0,
+        pendingCommission: 0,
+        status: 'active',
+        updatedAt: NC.FV.serverTimestamp()
+      });
+    }
+
+    await NC.finLoadAll();
+    toast('✅ Cleared ' + count + ' payment(s)', 'success');
+    finOpenPlanDetailV35Full(planId);
+  } catch(e){ console.error(e); toast('Error: ' + e.message, 'error'); }
+}
+window.finClearPlanTransactions = finClearPlanTransactions;
+NC.finClearPlanTransactions = finClearPlanTransactions;
+
+/* ═══════════════════════════════════════════════════════════════════
+   HARD DELETE PLAN
+   ═══════════════════════════════════════════════════════════════════ */
+async function finHardDeletePlan(planId) {
+  if (!planId) planId = FIN.activePlanId;
+  if (!planId) return toast('Open a plan first', 'error');
+
+  try {
+    const [planDoc, pmtSnap, dedSnap] = await Promise.all([
+      NC.db.collection(NC.COLLECTIONS.plans).doc(planId).get(),
+      NC.db.collection(NC.COLLECTIONS.financePayments).where('planId', '==', planId).get(),
+      NC.db.collection(NC.COLLECTIONS.deductions).where('planId', '==', planId).get()
+    ]);
+    const pname = planDoc.exists ? (planDoc.data().vehicle || 'this plan') : 'this plan';
+
+    if (!await confirmDlg(
+      'DELETE "' + pname + '" and EVERYTHING related?\n\n' +
+      '• Plan (1)\n• Payments (' + pmtSnap.size + ')\n• Deductions (' + dedSnap.size + ')\n\n' +
+      'Cannot be undone.',
+      { danger: true, confirmLabel: 'Delete Plan' }
+    )) return;
+
+    if (!await confirmDlg('⚠ FINAL WARNING ⚠\n\nPermanently remove ' + (1 + pmtSnap.size + dedSnap.size) + ' document(s)?', { danger: true, confirmLabel: 'Yes, Delete' })) return;
+
+    await finBatchDelete([
+      NC.db.collection(NC.COLLECTIONS.plans).doc(planId),
+      ...pmtSnap.docs.map(d => d.ref),
+      ...dedSnap.docs.map(d => d.ref)
+    ]);
+
+    toast('✅ Deleted plan + ' + pmtSnap.size + ' payments + ' + dedSnap.size + ' deductions', 'success');
+    FIN.activePlanId = null;
+    state.currentFinancePlanId = null;
+    await NC.finLoadAll();
+    renderFinanceDashboardV35();
+  } catch(e){ console.error(e); toast('Error: ' + e.message, 'error'); }
+}
+window.finHardDeletePlan = finHardDeletePlan;
+NC.finHardDeletePlan = finHardDeletePlan;
+
+/* ═══════════════════════════════════════════════════════════════════
+   PURGE ALL FINANCE
+   ═══════════════════════════════════════════════════════════════════ */
+async function finPurgeAllFinance(ev) {
+  if (ev) ev.preventDefault();
+  try {
+    const [p, pm, dd] = await Promise.all([
+      NC.db.collection(NC.COLLECTIONS.plans).get(),
+      NC.db.collection(NC.COLLECTIONS.financePayments).get(),
+      NC.db.collection(NC.COLLECTIONS.deductions).get()
+    ]);
+    const total = p.size + pm.size + dd.size;
+    if (total === 0) return toast('Finance module is already empty', 'info');
+
+    if (!await confirmDlg(
+      'PURGE ALL FINANCE DATA?\n\n' +
+      'Plans: ' + p.size + '\n' +
+      'Payments: ' + pm.size + '\n' +
+      'Deductions: ' + dd.size + '\n' +
+      '──────────────\n' +
+      'TOTAL: ' + total + '\n\n' +
+      'NeonCheque cheque data is NOT touched.',
+      { danger: true, confirmLabel: 'Purge All' }
+    )) return;
+
+    const code = prompt('Type DELETE ALL (exact, uppercase) to confirm:');
+    if (code !== 'DELETE ALL') return toast('Cancelled — code did not match.', 'info');
+
+    await finBatchDelete([...p.docs.map(d => d.ref), ...pm.docs.map(d => d.ref), ...dd.docs.map(d => d.ref)]);
+
+    toast('✅ Purged ' + total + ' document(s)', 'success');
+    FIN.plans = []; FIN.payments = []; FIN.deductions = [];
+    FIN.activePlanId = null;
+    state.currentFinancePlanId = null;
+    await NC.finLoadAll();
+    renderFinanceDashboardV35();
+  } catch(e){ console.error(e); toast('Error: ' + e.message, 'error'); }
+}
+window.finPurgeAllFinance = finPurgeAllFinance;
+NC.finPurgeAllFinance = finPurgeAllFinance;
+
+/* ═══════════════════════════════════════════════════════════════════
+   FULL RECEIPT (v3.5 style)
+   ═══════════════════════════════════════════════════════════════════ */
+function finShowReceiptV35(paymentId) {
+  const c = FIN.payments.find(p => p.id === paymentId);
+  if (!c) return;
+  const pl = FIN.plans.find(x => x.id === c.planId);
+  const b = c.breakdown || {};
+  const isPending = c.status === 'pending';
+  const isBounced = c.status === 'bounced';
+
+  NC.$('receiptBody').innerHTML = `
+    <div class="fin-receipt">
+      <h2>${isPending ? 'PAYMENT (PENDING)' : isBounced ? 'PAYMENT (BOUNCED)' : 'PAYMENT RECEIPT'}</h2>
+      ${isPending ? '<div style="background:#fef3c7;color:#92400e;padding:8px;border-radius:6px;text-align:center;font-size:12px;margin-bottom:14px">⏳ Pending — plan not yet affected</div>' : ''}
+      ${isBounced ? '<div style="background:#fee2e2;color:#991b1b;padding:8px;border-radius:6px;text-align:center;font-size:12px;margin-bottom:14px">❌ Bounced — removed from plan</div>' : ''}
+      <div class="fin-receipt-row"><span>Receipt #</span><strong>${c.id.slice(-8).toUpperCase()}</strong></div>
+      <div class="fin-receipt-row"><span>Date</span><strong>${fmtDate(c.date)}</strong></div>
+      <div class="fin-receipt-row"><span>Plan</span><strong>${pl ? E(NC.finPlanName(pl)) : '—'}</strong></div>
+      <div class="fin-receipt-row"><span>Company</span><strong>${pl ? E(pl.company) : '—'}</strong></div>
+      <div class="fin-receipt-row"><span>Method</span><strong>${(c.method || '').toUpperCase()}</strong></div>
+      <div class="fin-receipt-row"><span>Source</span><strong>${E(c.source || '—')}</strong></div>
+      ${c.chequeNo ? '<div class="fin-receipt-row"><span>Cheque #</span><strong>' + E(c.chequeNo) + '</strong></div>' : ''}
+      ${c.chequeBank ? '<div class="fin-receipt-row"><span>Bank</span><strong>' + E(c.chequeBank) + '</strong></div>' : ''}
+      ${c.effectiveDate && c.effectiveDate !== c.date ? '<div class="fin-receipt-row"><span>Cheque date</span><strong>' + fmtDate(c.effectiveDate) + '</strong></div>' : ''}
+      <div class="fin-receipt-row" style="border-top:2px dashed #ddd;margin-top:8px;padding-top:8px"><span>Days covered</span><strong>${b.days || 0}</strong></div>
+      <div class="fin-receipt-row"><span>Daily commission</span><strong>${fmtDec(b.dailyCommission)}</strong></div>
+      <div class="fin-receipt-row"><span>Accrued commission</span><strong>${fmtDec(b.accruedCommission)}</strong></div>
+      ${b.penalty > 0 ? '<div class="fin-receipt-row"><span>Late fee</span><strong>' + fmtDec(b.penalty) + '</strong></div>' : ''}
+      ${(b.deductions || []).map(d => '<div class="fin-receipt-row"><span>Deduction: ' + E(d.label) + '</span><strong>' + fmtDec(d.paid) + '</strong></div>').join('')}
+      <div class="fin-receipt-row"><span>Commission ${isPending || isBounced ? '(projected)' : 'paid'}</span><strong>${fmtDec(N(b.commissionPending) + N(b.commissionCurrent))}</strong></div>
+      <div class="fin-receipt-row"><span>Capital ${isPending || isBounced ? '(projected)' : 'reduced'}</span><strong>${fmtDec(b.capital)}</strong></div>
+      <div class="fin-receipt-row total"><span>TOTAL</span><strong>${fmtDec(c.amount)}</strong></div>
+      <div class="fin-receipt-row" style="margin-top:12px"><span>New capital</span><strong>${fmtDec(c.newCapital)}</strong></div>
+      <div class="fin-receipt-row"><span>Pending commission</span><strong>${fmtDec(c.newPendingCommission)}</strong></div>
+      <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--text-3);border-top:1px dashed #ddd;padding-top:12px">
+        Generated by NeonCheque · ${new Date().toLocaleString()}
+      </div>
+    </div>
+  `;
+  openModal('modalReceipt');
+}
+window.finShowReceipt = finShowReceiptV35;
+NC.finShowReceipt = finShowReceiptV35;
+
+/* ═══════════════════════════════════════════════════════════════════
+   AUTO-REFRESH IF FINANCE VIEW IS ACTIVE
+   ═══════════════════════════════════════════════════════════════════ */
+setTimeout(() => {
+  if (state.activeView === 'finance') {
+    try { renderFinanceDashboardV35(); } catch(e){ console.warn(e); }
+  }
+}, 400);
+
+console.log('%c[NC Finance v3.5] ✅ FULL RESTORATION — every v3.5 feature restored', 'color:#059669;font-weight:bold;font-size:13px');
+})();
+</script>
 </body>
 </html>
