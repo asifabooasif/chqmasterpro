@@ -11352,6 +11352,937 @@ else p5Boot();
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
+     PROJECTS MODULE v1.0 — PART 6: BANK ACCOUNT DETAIL VIEW
+     Project-wise money flow, running balance, reconciliation
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__projectsModuleV1_part6) return;
+window.__projectsModuleV1_part6 = true;
+
+if (!window.__PJ) { console.error('[P6] Part 1 not loaded'); return; }
+
+const PJ = window.__PJ;
+const {
+  pjFmt, pjFmtExact, pjDate, pjToday, pjToast, pjEsc, pjUid,
+  pjPartyName, TYPE_LABELS,
+  pjLoadAll, pjSaveDoc
+} = window;
+
+/* ═══════════════════ 1 · STYLES ═══════════════════ */
+(function injectStyles(){
+  document.querySelectorAll('#__proj_p6_styles').forEach(e => e.remove());
+  const s = document.createElement('style');
+  s.id = '__proj_p6_styles';
+  s.textContent = `
+    .p6-hero{background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#312e81 100%);border-radius:18px;padding:26px;color:#fff;margin-bottom:20px;position:relative;overflow:hidden}
+    .p6-hero::before{content:'';position:absolute;top:-50%;right:-10%;width:400px;height:400px;background:radial-gradient(circle,rgba(59,130,246,.35) 0%,transparent 70%);pointer-events:none}
+    .p6-hero::after{content:'';position:absolute;bottom:-30%;left:-5%;width:300px;height:300px;background:radial-gradient(circle,rgba(168,85,247,.25) 0%,transparent 70%);pointer-events:none}
+    .p6-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px;position:relative;z-index:1}
+    .p6-hero-title h1{font-size:24px;font-weight:800;margin-bottom:4px}
+    .p6-hero-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;opacity:.85}
+    .p6-hero-balance{font-size:42px;font-weight:800;line-height:1.1;position:relative;z-index:1}
+    .p6-hero-balance-label{font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:1px;opacity:.7;margin-bottom:6px;position:relative;z-index:1}
+    .p6-hero-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:20px;position:relative;z-index:1}
+    .p6-hero-kpi{background:rgba(255,255,255,.1);padding:12px 14px;border-radius:11px;backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15)}
+    .p6-hero-kpi .lbl{font-size:10.5px;opacity:.8;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+    .p6-hero-kpi .val{font-size:17px;font-weight:800;margin-top:5px}
+    .p6-hero-kpi .sub{font-size:10.5px;opacity:.7;margin-top:2px}
+    .p6-proj-card{background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;transition:.2s;cursor:pointer}
+    .p6-proj-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.08);border-color:var(--primary)}
+    .p6-proj-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+    .p6-proj-name{font-weight:800;font-size:15px}
+    .p6-proj-net{font-size:18px;font-weight:800}
+    .p6-proj-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .p6-proj-stat{background:var(--light);padding:9px 11px;border-radius:8px}
+    .p6-proj-stat .lbl{font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700;letter-spacing:.5px}
+    .p6-proj-stat .val{font-size:14px;font-weight:800;margin-top:3px}
+    .p6-txn-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:14px;background:var(--light);border-radius:10px;margin-bottom:16px}
+    .p6-ledger-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+    .p6-ledger-tbl th{background:var(--light);padding:10px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray);font-weight:700;border-bottom:2px solid var(--border);position:sticky;top:0;z-index:2}
+    .p6-ledger-tbl td{padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+    .p6-ledger-tbl tbody tr:hover{background:var(--light)}
+    .p6-ledger-tbl .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}
+    .p6-ledger-tbl .in-amt{color:var(--success)}
+    .p6-ledger-tbl .out-amt{color:var(--danger)}
+    .p6-ledger-tbl .bal-col{font-weight:800;background:#f8fafc;border-left:2px solid var(--border)}
+    .p6-ledger-tbl tr.pending-row{background:#fffbeb;opacity:.85}
+    .p6-ledger-tbl tr.bounced-row{background:#fef2f2;opacity:.7}
+    .p6-ledger-wrap{max-height:600px;overflow-y:auto;border:1px solid var(--border);border-radius:10px}
+    .p6-recon-banner{background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:1.5px solid #10b981;border-radius:10px;padding:14px 18px;font-size:13px;color:#065f46;margin-bottom:16px;display:flex;gap:12px;align-items:center}
+    .p6-recon-banner.mismatch{background:linear-gradient(135deg,#fee2e2,#fecaca);border-color:#ef4444;color:#991b1b}
+    .p6-recon-banner i{font-size:22px}
+    .p6-section-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:12px;font-size:11px;font-weight:700}
+    .p6-method-chip{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10.5px;font-weight:700;background:#e0e7ff;color:#4338ca}
+    @media(max-width:900px){
+      .p6-hero-balance{font-size:32px}
+      .p6-proj-stats{grid-template-columns:1fr 1fr !important}
+    }
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ═══════════════════ 2 · CALCULATION ENGINE ═══════════════════ */
+
+/**
+ * Get all entries that touch a specific account.
+ * Includes:
+ *  - Entries with accountId = accountId
+ *  - Transfers with fromAccountId = accountId or toAccountId = accountId
+ */
+function p6EntriesForAccount(accountId) {
+  return PJ.entries.filter(e => {
+    if (e.type === 'transfer') {
+      return e.fromAccountId === accountId || e.toAccountId === accountId;
+    }
+    return e.accountId === accountId;
+  }).sort((a, b) => {
+    // Sort by effective date ascending (for running balance), then createdAt
+    const da = new Date(a.effectiveDate || a.date);
+    const db = new Date(b.effectiveDate || b.date);
+    if (da.getTime() !== db.getTime()) return da - db;
+    const ca = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+    const cb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+    return ca - cb;
+  });
+}
+
+/**
+ * Net effect of an entry on a given account.
+ * +ve = money in, -ve = money out.
+ * Only cleared entries counted in balance.
+ */
+function p6EntryImpact(e, accountId) {
+  const amt = parseFloat(e.amount) || 0;
+  if (e.type === 'transfer') {
+    if (e.toAccountId === accountId)   return +amt;
+    if (e.fromAccountId === accountId) return -amt;
+    return 0;
+  }
+  if (e.accountId !== accountId) return 0;
+  const meta = TYPE_LABELS[e.type];
+  if (!meta) return 0;
+  if (meta.dir === 'in')  return +amt;
+  if (meta.dir === 'out') return -amt;
+  return 0;
+}
+
+/**
+ * Compute full ledger with running balance for a given account.
+ * Running balance is only updated for cleared entries.
+ */
+function p6ComputeLedger(accountId) {
+  const acct = PJ.accounts.find(a => a.id === accountId);
+  const opening = acct ? (parseFloat(acct.openingBalance) || 0) : 0;
+  const entries = p6EntriesForAccount(accountId);
+
+  let running = opening;
+  const rows = entries.map(e => {
+    const impact = p6EntryImpact(e, accountId);
+    const cleared = !e.status || e.status === 'cleared';
+    const before = running;
+    if (cleared) running += impact;
+    return {
+      entry: e,
+      impact,
+      cleared,
+      balanceBefore: before,
+      balanceAfter: running
+    };
+  });
+
+  return {
+    openingBalance: opening,
+    rows,
+    closingBalance: running,
+    totalIn: rows.filter(r => r.cleared && r.impact > 0).reduce((s, r) => s + r.impact, 0),
+    totalOut: rows.filter(r => r.cleared && r.impact < 0).reduce((s, r) => s + Math.abs(r.impact), 0),
+    pendingIn:  rows.filter(r => !r.cleared && r.entry.status === 'pending' && r.impact > 0).reduce((s, r) => s + r.impact, 0),
+    pendingOut: rows.filter(r => !r.cleared && r.entry.status === 'pending' && r.impact < 0).reduce((s, r) => s + Math.abs(r.impact), 0),
+    projectedBalance: running +
+      rows.filter(r => !r.cleared && r.entry.status === 'pending').reduce((s, r) => s + r.impact, 0)
+  };
+}
+
+/**
+ * Group ledger rows by project.
+ * Includes an "Unassigned" bucket for transfers without a project.
+ */
+function p6GroupByProject(ledgerRows) {
+  const groups = {};
+  ledgerRows.forEach(r => {
+    const e = r.entry;
+    const key = e.projectId || '__unassigned__';
+    if (!groups[key]) {
+      groups[key] = {
+        projectId: e.projectId || null,
+        name: e.projectId
+          ? (PJ.projects.find(p => p.id === e.projectId)?.name || 'Unknown')
+          : 'General / Unassigned',
+        in: 0, out: 0, count: 0, pendingIn: 0, pendingOut: 0
+      };
+    }
+    const g = groups[key];
+    g.count++;
+    if (r.cleared) {
+      if (r.impact > 0) g.in += r.impact;
+      if (r.impact < 0) g.out += Math.abs(r.impact);
+    } else if (r.entry.status === 'pending') {
+      if (r.impact > 0) g.pendingIn += r.impact;
+      if (r.impact < 0) g.pendingOut += Math.abs(r.impact);
+    }
+  });
+  return Object.values(groups).sort((a, b) => (b.in + b.out) - (a.in + a.out));
+}
+
+/* ═══════════════════ 3 · ROUTER PATCH ═══════════════════ */
+const _origShowViewP6 = window.showView;
+
+window.showView = function (viewName, navElement) {
+  if (viewName !== 'account-detail') {
+    return _origShowViewP6.apply(this, arguments);
+  }
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  const navEl = document.getElementById('p4AccountsNavItem');
+  if (navEl) navEl.classList.add('active');
+
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById('accountDetailView');
+  if (el) el.classList.add('active');
+  document.getElementById('pageTitle').textContent = 'Account Details';
+
+  if (window.innerWidth <= 768) {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebarOverlay');
+    if (sb) sb.classList.remove('active');
+    if (ov) ov.classList.remove('active');
+  }
+
+  (async () => {
+    if (!PJ.loaded) await pjLoadAll();
+    if (!PJ.accountsLoaded && window.pjLoadAccounts) await window.pjLoadAccounts();
+    if (PJ.activeAccountId) p6RenderAccountDetail(PJ.activeAccountId);
+  })();
+};
+
+// Add the view container
+function p6BuildView() {
+  const main = document.querySelector('.main-content');
+  if (!main) return;
+  document.querySelectorAll('#__p6_views_root').forEach(el => el.remove());
+  const wrap = document.createElement('div');
+  wrap.id = '__p6_views_root';
+  wrap.innerHTML = `<div id="accountDetailView" class="view-content"></div>`;
+  main.appendChild(wrap);
+}
+
+window.p6OpenAccountDetail = function (accountId) {
+  PJ.activeAccountId = accountId;
+  window.showView('account-detail');
+};
+
+/* ═══════════════════ 4 · MAIN RENDER ═══════════════════ */
+window.p6RenderAccountDetail = function (accountId) {
+  const host = document.getElementById('accountDetailView');
+  if (!host) return;
+
+  const acct = PJ.accounts.find(a => a.id === accountId);
+  if (!acct) {
+    host.innerHTML = '<div class="card"><div class="pj-empty"><i class="fas fa-exclamation-circle"></i><h3>Account not found</h3><p style="margin-top:8px"><a href="#" onclick="event.preventDefault();pjShowView(\'accounts\');">Back to Accounts</a></p></div></div>';
+    return;
+  }
+
+  const ledger = p6ComputeLedger(accountId);
+  const projectGroups = p6GroupByProject(ledger.rows);
+
+  // Split ledger rows by status
+  const clearedRows  = ledger.rows.filter(r => r.cleared);
+  const pendingRows  = ledger.rows.filter(r => !r.cleared && r.entry.status === 'pending');
+  const bouncedRows  = ledger.rows.filter(r => r.entry.status === 'bounced');
+
+  // Category totals
+  const categoryTotals = {};
+  ledger.rows.forEach(r => {
+    if (!r.cleared) return;
+    const t = r.entry.type;
+    if (!categoryTotals[t]) categoryTotals[t] = { in: 0, out: 0, count: 0 };
+    categoryTotals[t].count++;
+    if (r.impact > 0) categoryTotals[t].in += r.impact;
+    if (r.impact < 0) categoryTotals[t].out += Math.abs(r.impact);
+  });
+
+  host.innerHTML = `
+    <!-- HERO -->
+    <div class="p6-hero">
+      <div class="p6-hero-top">
+        <div style="display:flex;gap:14px;align-items:flex-start">
+          <button class="pj-icon-btn secondary" onclick="pjShowView('accounts', document.getElementById('p4AccountsNavItem'))" data-tip="Back" style="background:rgba(255,255,255,.15);color:#fff;border:none">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <div class="p6-hero-title">
+            <h1>
+              <i class="fas fa-${acct.type === 'cash' ? 'wallet' : 'university'}" style="margin-right:10px;opacity:.85"></i>
+              ${pjEsc(acct.name)}
+            </h1>
+            <div class="p6-hero-meta">
+              ${acct.type === 'bank'
+                ? `<span><i class="fas fa-building"></i> ${pjEsc(acct.bankName || 'Bank')}${acct.branch ? ' · ' + pjEsc(acct.branch) : ''}</span>
+                   ${acct.accountNo ? `<span><i class="fas fa-hashtag"></i> A/c ${pjEsc(acct.accountNo)}</span>` : ''}
+                   ${acct.ifsc ? `<span><i class="fas fa-code"></i> ${pjEsc(acct.ifsc)}</span>` : ''}`
+                : `<span><i class="fas fa-wallet"></i> Physical Cash Wallet</span>`}
+              <span class="pj-chip ${acct.status === 'inactive' ? 'pj-chip-loss' : 'pj-chip-open'}">
+                ${acct.status === 'inactive' ? 'Inactive' : 'Active'}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="p6-action-bar" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="pj-icon-btn warning" onclick="p6OpenReconcileModal('${acct.id}')" data-tip="Reconcile" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff">
+            <i class="fas fa-balance-scale"></i>
+          </button>
+          <button class="pj-icon-btn primary" onclick="p4OpenTransferModal('${acct.id}')" data-tip="Transfer" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff">
+            <i class="fas fa-exchange-alt"></i>
+          </button>
+          <button class="pj-icon-btn secondary" onclick="p6ExportCSV('${acct.id}')" data-tip="Export Statement" style="background:rgba(255,255,255,.15);color:#fff;border:none">
+            <i class="fas fa-file-csv"></i>
+          </button>
+          <button class="pj-icon-btn secondary" onclick="p4OpenAccountModal('${acct.id}')" data-tip="Edit Account" style="background:rgba(255,255,255,.15);color:#fff;border:none">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button class="pj-icon-btn secondary" onclick="p6Refresh('${acct.id}')" data-tip="Refresh" style="background:rgba(255,255,255,.15);color:#fff;border:none">
+            <i class="fas fa-sync"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="p6-hero-balance-label">Current Balance</div>
+      <div class="p6-hero-balance">${pjFmt(ledger.closingBalance)}</div>
+
+      <div class="p6-hero-kpis">
+        <div class="p6-hero-kpi">
+          <div class="lbl">Opening Balance</div>
+          <div class="val">${pjFmt(ledger.openingBalance)}</div>
+          <div class="sub">${pjDate(acct.openingDate)}</div>
+        </div>
+        <div class="p6-hero-kpi">
+          <div class="lbl"><i class="fas fa-arrow-down" style="color:#a7f3d0"></i> Total In</div>
+          <div class="val" style="color:#a7f3d0">${pjFmt(ledger.totalIn)}</div>
+          <div class="sub">cleared</div>
+        </div>
+        <div class="p6-hero-kpi">
+          <div class="lbl"><i class="fas fa-arrow-up" style="color:#fecaca"></i> Total Out</div>
+          <div class="val" style="color:#fecaca">${pjFmt(ledger.totalOut)}</div>
+          <div class="sub">cleared</div>
+        </div>
+        <div class="p6-hero-kpi">
+          <div class="lbl"><i class="fas fa-hourglass-half" style="color:#fde68a"></i> Pending In</div>
+          <div class="val" style="color:#fde68a">${pjFmt(ledger.pendingIn)}</div>
+          <div class="sub">${pendingRows.filter(r => r.impact > 0).length} entries</div>
+        </div>
+        <div class="p6-hero-kpi">
+          <div class="lbl"><i class="fas fa-hourglass-half" style="color:#fde68a"></i> Pending Out</div>
+          <div class="val" style="color:#fde68a">${pjFmt(ledger.pendingOut)}</div>
+          <div class="sub">${pendingRows.filter(r => r.impact < 0).length} entries</div>
+        </div>
+        <div class="p6-hero-kpi">
+          <div class="lbl">Projected Balance</div>
+          <div class="val" style="color:#93c5fd">${pjFmt(ledger.projectedBalance)}</div>
+          <div class="sub">if all pending clears</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECONCILIATION BANNER -->
+    <div id="p6ReconBanner"></div>
+
+    <!-- PROJECT BREAKDOWN -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="fas fa-project-diagram" style="color:var(--primary);margin-right:8px"></i>
+          Project-wise Money Flow
+        </h2>
+        <span class="p6-section-pill" style="background:#e0e7ff;color:#4338ca">
+          ${projectGroups.length} project(s)
+        </span>
+      </div>
+      ${projectGroups.length === 0
+        ? '<div class="pj-empty"><i class="fas fa-inbox"></i><h3>No project activity yet</h3><p style="margin-top:8px">Money movements through this account will appear here, grouped by project.</p></div>'
+        : projectGroups.map(g => {
+            const net = g.in - g.out;
+            const netColor = net > 0 ? 'var(--success)' : net < 0 ? 'var(--danger)' : 'var(--gray)';
+            const clickable = g.projectId ? `onclick="pjOpenProjectDetail('${g.projectId}')"` : '';
+            const cursor = g.projectId ? 'cursor:pointer' : 'cursor:default';
+            return `
+              <div class="p6-proj-card" style="${cursor}" ${clickable}>
+                <div class="p6-proj-head">
+                  <div>
+                    <div class="p6-proj-name">
+                      <i class="fas fa-${g.projectId ? 'folder-open' : 'circle-notch'}" style="color:var(--primary);margin-right:6px"></i>
+                      ${pjEsc(g.name)}
+                    </div>
+                    <div style="font-size:11.5px;color:var(--gray);margin-top:3px">
+                      ${g.count} transaction(s) through this account
+                      ${g.projectId ? '<span style="color:var(--primary)"> · click to open project →</span>' : ''}
+                    </div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700;letter-spacing:.5px">Net Effect</div>
+                    <div class="p6-proj-net" style="color:${netColor}">${net >= 0 ? '+' : ''}${pjFmt(net)}</div>
+                  </div>
+                </div>
+                <div class="p6-proj-stats">
+                  <div class="p6-proj-stat">
+                    <div class="lbl">Money In</div>
+                    <div class="val" style="color:var(--success)">${pjFmt(g.in)}</div>
+                  </div>
+                  <div class="p6-proj-stat">
+                    <div class="lbl">Money Out</div>
+                    <div class="val" style="color:var(--danger)">${pjFmt(g.out)}</div>
+                  </div>
+                  <div class="p6-proj-stat">
+                    <div class="lbl">Pending In</div>
+                    <div class="val" style="color:${g.pendingIn > 0 ? '#b45309' : 'var(--gray)'}">${pjFmt(g.pendingIn)}</div>
+                  </div>
+                  <div class="p6-proj-stat">
+                    <div class="lbl">Pending Out</div>
+                    <div class="val" style="color:${g.pendingOut > 0 ? '#b45309' : 'var(--gray)'}">${pjFmt(g.pendingOut)}</div>
+                  </div>
+                </div>
+              </div>`;
+          }).join('')}
+    </div>
+
+    <!-- CATEGORY BREAKDOWN -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="fas fa-chart-pie" style="color:var(--info);margin-right:8px"></i>
+          Money Flow by Type
+        </h2>
+      </div>
+      ${Object.keys(categoryTotals).length === 0
+        ? '<div class="pj-empty"><i class="fas fa-chart-pie"></i><h3>No cleared transactions yet</h3></div>'
+        : `<div class="table-container"><table class="pj-ledger-tbl">
+            <thead><tr>
+              <th>Type</th>
+              <th style="text-align:right">Money In</th>
+              <th style="text-align:right">Money Out</th>
+              <th style="text-align:right">Net</th>
+              <th style="text-align:right">Entries</th>
+            </tr></thead>
+            <tbody>${Object.keys(categoryTotals).sort().map(t => {
+              const c = categoryTotals[t];
+              const meta = TYPE_LABELS[t] || { label: t, icon: 'circle', color: '#64748b' };
+              const net = c.in - c.out;
+              return `<tr>
+                <td><span class="pj-chip" style="background:${meta.color}22;color:${meta.color}">
+                  <i class="fas fa-${meta.icon}"></i> ${pjEsc(meta.label)}
+                </span></td>
+                <td class="num in-amt">${c.in > 0 ? pjFmt(c.in) : '—'}</td>
+                <td class="num out-amt">${c.out > 0 ? pjFmt(c.out) : '—'}</td>
+                <td class="num" style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${net >= 0 ? '+' : ''}${pjFmt(net)}</td>
+                <td class="num">${c.count}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table></div>`}
+    </div>
+
+    <!-- TRANSACTION LEDGER -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="fas fa-list-ol" style="color:var(--primary);margin-right:8px"></i>
+          Full Transaction Ledger
+        </h2>
+        <span class="p6-section-pill" style="background:#dbeafe;color:#1e40af">
+          ${ledger.rows.length} transaction(s)
+        </span>
+      </div>
+
+      <div class="p6-txn-filters">
+        <div class="filter-group">
+          <label>Search</label>
+          <input type="text" id="p6Search" placeholder="Number, party, notes..." oninput="p6ApplyFilters('${acct.id}')">
+        </div>
+        <div class="filter-group">
+          <label>Project</label>
+          <select id="p6FilterProject" onchange="p6ApplyFilters('${acct.id}')">
+            <option value="">All Projects</option>
+            <option value="__unassigned__">General / Unassigned</option>
+            ${PJ.projects.map(p => `<option value="${p.id}">${pjEsc(p.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Type</label>
+          <select id="p6FilterType" onchange="p6ApplyFilters('${acct.id}')">
+            <option value="">All Types</option>
+            ${Object.keys(TYPE_LABELS).map(k => `<option value="${k}">${TYPE_LABELS[k].label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Status</label>
+          <select id="p6FilterStatus" onchange="p6ApplyFilters('${acct.id}')">
+            <option value="">All Statuses</option>
+            <option value="cleared">Cleared</option>
+            <option value="pending">Pending</option>
+            <option value="bounced">Bounced</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>From Date</label>
+          <input type="date" id="p6DateFrom" onchange="p6ApplyFilters('${acct.id}')">
+        </div>
+        <div class="filter-group">
+          <label>To Date</label>
+          <input type="date" id="p6DateTo" onchange="p6ApplyFilters('${acct.id}')">
+        </div>
+        <div class="filter-group" style="display:flex;align-items:flex-end">
+          <button class="btn btn-secondary btn-sm" onclick="p6ClearFilters('${acct.id}')" style="width:100%">
+            <i class="fas fa-times"></i> Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="p6-ledger-wrap">
+        <table class="p6-ledger-tbl" id="p6LedgerTable">
+          <thead>
+            <tr>
+              <th style="width:90px">Date</th>
+              <th style="width:130px">Type</th>
+              <th>Project</th>
+              <th>Party / Details</th>
+              <th class="num" style="width:110px">Money In</th>
+              <th class="num" style="width:110px">Money Out</th>
+              <th class="num bal-col" style="width:120px">Balance</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody id="p6LedgerBody"></tbody>
+        </table>
+      </div>
+      <div id="p6LedgerEmpty" class="pj-empty hidden" style="display:none">
+        <i class="fas fa-search"></i>
+        <h3>No transactions match filters</h3>
+      </div>
+    </div>
+
+    <!-- PENDING CHEQUES / ENTRIES -->
+    ${pendingRows.length ? `
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="fas fa-hourglass-half" style="color:#f59e0b;margin-right:8px"></i>
+          Pending (Awaiting Clearance)
+        </h2>
+        <span class="p6-section-pill" style="background:#fef3c7;color:#b45309">
+          ${pendingRows.length} awaiting
+        </span>
+      </div>
+      <div class="table-container"><table class="pj-ledger-tbl">
+        <thead><tr>
+          <th>Date</th><th>Type</th><th>Project</th><th>Party</th>
+          <th style="text-align:right">Will Bring In</th>
+          <th style="text-align:right">Will Take Out</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${pendingRows.map(r => {
+          const e = r.entry;
+          const meta = TYPE_LABELS[e.type] || { label: e.type, icon: 'circle', color: '#64748b' };
+          const proj = PJ.projects.find(p => p.id === e.projectId);
+          return `<tr>
+            <td>${pjDate(e.effectiveDate || e.date)}</td>
+            <td><span class="pj-chip" style="background:${meta.color}22;color:${meta.color}"><i class="fas fa-${meta.icon}"></i> ${pjEsc(meta.label)}</span></td>
+            <td>${proj ? pjEsc(proj.name) : '—'}</td>
+            <td>${e.partyId ? pjEsc(pjPartyName(e.partyId)) : '—'}</td>
+            <td class="num in-amt">${r.impact > 0 ? pjFmt(r.impact) : '—'}</td>
+            <td class="num out-amt">${r.impact < 0 ? pjFmt(Math.abs(r.impact)) : '—'}</td>
+            <td>
+              <button class="pj-icon-btn secondary" style="width:30px;height:30px" onclick="pjOpenEntryDetail('${e.id}')" data-tip="View">
+                <i class="fas fa-eye" style="font-size:11px"></i>
+              </button>
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>` : ''}
+
+    <!-- BOUNCED -->
+    ${bouncedRows.length ? `
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="fas fa-times-circle" style="color:#ef4444;margin-right:8px"></i>
+          Bounced (Not Applied)
+        </h2>
+        <span class="p6-section-pill" style="background:#fee2e2;color:#991b1b">
+          ${bouncedRows.length} bounced
+        </span>
+      </div>
+      <div class="table-container"><table class="pj-ledger-tbl">
+        <thead><tr><th>Date</th><th>Type</th><th>Project</th><th>Party</th><th style="text-align:right">Amount</th><th>Reason</th></tr></thead>
+        <tbody>${bouncedRows.map(r => {
+          const e = r.entry;
+          const meta = TYPE_LABELS[e.type] || { label: e.type, icon: 'circle', color: '#64748b' };
+          const proj = PJ.projects.find(p => p.id === e.projectId);
+          return `<tr class="bounced-row">
+            <td>${pjDate(e.effectiveDate || e.date)}</td>
+            <td><span class="pj-chip" style="background:${meta.color}22;color:${meta.color}">${pjEsc(meta.label)}</span></td>
+            <td>${proj ? pjEsc(proj.name) : '—'}</td>
+            <td>${e.partyId ? pjEsc(pjPartyName(e.partyId)) : '—'}</td>
+            <td class="num">${pjFmt(e.amount)}</td>
+            <td style="font-size:11.5px;color:var(--gray)">${pjEsc(e.notes || '—')}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>` : ''}
+  `;
+
+  // Cache ledger for filters
+  window.__p6Cache = window.__p6Cache || {};
+  window.__p6Cache[accountId] = ledger;
+
+  // Initial filter render
+  p6ApplyFilters(accountId);
+
+  // Reconciliation check
+  p6RenderReconBanner(acct.id, ledger.closingBalance);
+};
+
+/* ═══════════════════ 5 · LEDGER TABLE + FILTERS ═══════════════════ */
+window.p6ApplyFilters = function (accountId) {
+  const cache = window.__p6Cache?.[accountId];
+  if (!cache) return;
+
+  const search = (document.getElementById('p6Search')?.value || '').toLowerCase();
+  const projectFilter = document.getElementById('p6FilterProject')?.value || '';
+  const typeFilter = document.getElementById('p6FilterType')?.value || '';
+  const statusFilter = document.getElementById('p6FilterStatus')?.value || '';
+  const fromDate = document.getElementById('p6DateFrom')?.value || '';
+  const toDate = document.getElementById('p6DateTo')?.value || '';
+
+  let rows = cache.rows.slice();
+
+  if (search) {
+    rows = rows.filter(r => {
+      const e = r.entry;
+      const hay = [
+        e.notes || '',
+        e.reference || '',
+        e.chequeNo || '',
+        e.partyId ? pjPartyName(e.partyId) : '',
+        String(e.amount)
+      ].join(' ').toLowerCase();
+      return hay.indexOf(search) !== -1;
+    });
+  }
+  if (projectFilter) {
+    if (projectFilter === '__unassigned__') rows = rows.filter(r => !r.entry.projectId);
+    else rows = rows.filter(r => r.entry.projectId === projectFilter);
+  }
+  if (typeFilter)  rows = rows.filter(r => r.entry.type === typeFilter);
+  if (statusFilter) {
+    rows = rows.filter(r => {
+      const st = r.entry.status || 'cleared';
+      return st === statusFilter;
+    });
+  }
+  if (fromDate) rows = rows.filter(r => (r.entry.effectiveDate || r.entry.date) >= fromDate);
+  if (toDate)   rows = rows.filter(r => (r.entry.effectiveDate || r.entry.date) <= toDate);
+
+  // Render
+  const body = document.getElementById('p6LedgerBody');
+  const empty = document.getElementById('p6LedgerEmpty');
+  if (!body) return;
+
+  if (rows.length === 0) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  body.innerHTML = rows.map(r => {
+    const e = r.entry;
+    const meta = TYPE_LABELS[e.type] || { label: e.type, icon: 'circle', color: '#64748b' };
+    const proj = PJ.projects.find(p => p.id === e.projectId);
+    const acctFrom = e.type === 'transfer' ? PJ.accounts.find(a => a.id === e.fromAccountId) : null;
+    const acctTo   = e.type === 'transfer' ? PJ.accounts.find(a => a.id === e.toAccountId)   : null;
+
+    let partyLine = '';
+    if (e.type === 'transfer') {
+      partyLine = `<span style="font-weight:600">${pjEsc(acctFrom?.name || '?')} → ${pjEsc(acctTo?.name || '?')}</span>`;
+    } else if (e.partyId) {
+      partyLine = `<span style="font-weight:600">${pjEsc(pjPartyName(e.partyId))}</span>`;
+    } else {
+      partyLine = '<span style="color:var(--gray)">—</span>';
+    }
+
+    const subline = [
+      e.chequeNo ? `Cheque #${pjEsc(e.chequeNo)}` : '',
+      e.notes || ''
+    ].filter(Boolean).join(' · ');
+
+    const statusChip = e.status === 'pending'
+      ? '<span class="pj-chip pj-chip-pending" style="margin-left:6px">Pending</span>'
+      : e.status === 'bounced'
+        ? '<span class="pj-chip pj-chip-bounced" style="margin-left:6px">Bounced</span>'
+        : '';
+
+    const rowClass = e.status === 'pending' ? 'pending-row' : (e.status === 'bounced' ? 'bounced-row' : '');
+
+    return `<tr class="${rowClass}">
+      <td><strong>${pjDate(e.effectiveDate || e.date)}</strong></td>
+      <td>
+        <span class="pj-chip" style="background:${meta.color}22;color:${meta.color}">
+          <i class="fas fa-${meta.icon}"></i> ${pjEsc(meta.label)}
+        </span>
+        ${statusChip}
+      </td>
+      <td>${proj
+        ? `<a href="#" onclick="event.preventDefault();pjOpenProjectDetail('${proj.id}')" style="color:var(--primary);font-weight:600">${pjEsc(proj.name)}</a>`
+        : '<span style="color:var(--gray)">—</span>'}</td>
+      <td>
+        <div>${partyLine}</div>
+        ${subline ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">${pjEsc(subline)}</div>` : ''}
+      </td>
+      <td class="num in-amt">${r.impact > 0 ? pjFmt(r.impact) : '—'}</td>
+      <td class="num out-amt">${r.impact < 0 ? pjFmt(Math.abs(r.impact)) : '—'}</td>
+      <td class="num bal-col">${pjFmt(r.balanceAfter)}</td>
+      <td>
+        <button class="pj-icon-btn secondary" style="width:28px;height:28px" onclick="pjOpenEntryDetail('${e.id}')" data-tip="View">
+          <i class="fas fa-eye" style="font-size:10px"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+};
+
+window.p6ClearFilters = function (accountId) {
+  ['p6Search','p6FilterProject','p6FilterType','p6FilterStatus','p6DateFrom','p6DateTo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  p6ApplyFilters(accountId);
+};
+
+/* ═══════════════════ 6 · RECONCILIATION ═══════════════════ */
+function p6RenderReconBanner(accountId, systemBalance) {
+  const host = document.getElementById('p6ReconBanner');
+  if (!host) return;
+  const lastRecon = localStorage.getItem('p6Recon_' + accountId);
+  if (!lastRecon) {
+    host.innerHTML = `
+      <div class="p6-recon-banner" style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-color:#3b82f6;color:#1e40af">
+        <i class="fas fa-balance-scale"></i>
+        <div style="flex:1">
+          <strong>Reconciliation not yet done.</strong>
+          Compare this account's computed balance with your actual bank/cash statement using the <strong>Reconcile</strong> button above.
+        </div>
+      </div>`;
+    return;
+  }
+  const rec = JSON.parse(lastRecon);
+  const diff = systemBalance - rec.actualBalance;
+  const matched = Math.abs(diff) < 1;
+  host.innerHTML = `
+    <div class="p6-recon-banner ${matched ? '' : 'mismatch'}">
+      <i class="fas fa-${matched ? 'check-circle' : 'exclamation-triangle'}"></i>
+      <div style="flex:1">
+        <strong>${matched ? '✅ Reconciled' : '⚠️ Mismatch detected'}</strong>
+        · Last checked ${new Date(rec.reconciledAt).toLocaleString()}
+        <div style="margin-top:4px;font-size:12px">
+          System balance: <strong>${pjFmt(systemBalance)}</strong> ·
+          Actual balance: <strong>${pjFmt(rec.actualBalance)}</strong> ·
+          Difference: <strong style="color:${matched ? 'inherit' : '#991b1b'}">${pjFmt(diff)}</strong>
+        </div>
+        ${rec.notes ? `<div style="margin-top:6px;font-size:11.5px;opacity:.85">Notes: ${pjEsc(rec.notes)}</div>` : ''}
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="localStorage.removeItem('p6Recon_${accountId}');p6RenderAccountDetail('${accountId}')">
+        <i class="fas fa-redo"></i> Redo
+      </button>
+    </div>`;
+}
+
+window.p6OpenReconcileModal = function (accountId) {
+  const ledger = p6ComputeLedger(accountId);
+  const acct = PJ.accounts.find(a => a.id === accountId);
+
+  const existing = document.getElementById('p6ReconModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'p6ReconModal';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <h2 class="modal-title"><i class="fas fa-balance-scale"></i> Reconcile Account</h2>
+        <button class="modal-close" onclick="document.getElementById('p6ReconModal').remove()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="background:var(--light);padding:16px;border-radius:10px;margin-bottom:16px">
+          <div style="font-weight:700;margin-bottom:8px">${pjEsc(acct.name)}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+            <div><strong style="display:block;font-size:10px;color:var(--gray);text-transform:uppercase">System Balance</strong>${pjFmt(ledger.closingBalance)}</div>
+            <div><strong style="display:block;font-size:10px;color:var(--gray);text-transform:uppercase">Cleared Entries</strong>${ledger.rows.filter(r => r.cleared).length}</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Actual Balance (from bank statement / cash count) *</label>
+          <input type="number" id="p6ReconActual" step="0.01" value="${ledger.closingBalance}">
+        </div>
+        <div class="form-group">
+          <label>Notes (optional)</label>
+          <textarea id="p6ReconNotes" rows="2" placeholder="Any reason for the difference?"></textarea>
+        </div>
+        <div id="p6ReconDiff" style="padding:12px;border-radius:8px;background:var(--light);font-size:13px">
+          Difference: <strong>Rs. 0.00</strong>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="document.getElementById('p6ReconModal').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="p6SaveRecon('${accountId}', ${ledger.closingBalance})">
+          <i class="fas fa-check"></i> Save Reconciliation
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.classList.add('active');
+
+  // Live diff
+  document.getElementById('p6ReconActual').addEventListener('input', function() {
+    const actual = parseFloat(this.value) || 0;
+    const diff = ledger.closingBalance - actual;
+    const matched = Math.abs(diff) < 1;
+    const host = document.getElementById('p6ReconDiff');
+    host.style.background = matched ? '#d1fae5' : '#fee2e2';
+    host.style.color = matched ? '#065f46' : '#991b1b';
+    host.innerHTML = `Difference: <strong>${pjFmt(diff)}</strong> ${matched ? '— Perfect match ✅' : '— Investigate ⚠️'}`;
+  });
+};
+
+window.p6SaveRecon = function (accountId, systemBalance) {
+  const actual = parseFloat(document.getElementById('p6ReconActual').value) || 0;
+  const notes = document.getElementById('p6ReconNotes').value.trim();
+  localStorage.setItem('p6Recon_' + accountId, JSON.stringify({
+    systemBalance, actualBalance: actual,
+    reconciledAt: new Date().toISOString(),
+    notes
+  }));
+  document.getElementById('p6ReconModal').remove();
+  pjToast('Reconciliation saved', 'success');
+  p6RenderAccountDetail(accountId);
+};
+
+/* ═══════════════════ 7 · CSV EXPORT ═══════════════════ */
+window.p6ExportCSV = function (accountId) {
+  const ledger = p6ComputeLedger(accountId);
+  const acct = PJ.accounts.find(a => a.id === accountId);
+  if (!ledger.rows.length) return pjToast('No transactions to export', 'error');
+
+  let csv = `Account: ${acct.name}\n`;
+  csv += `Opening Balance,${ledger.openingBalance}\n`;
+  csv += `Closing Balance,${ledger.closingBalance}\n`;
+  csv += `Generated,${new Date().toLocaleString()}\n\n`;
+  csv += `Date,Type,Project,Party,ChequeNo,Notes,Money In,Money Out,Balance,Status\n`;
+
+  ledger.rows.forEach(r => {
+    const e = r.entry;
+    const meta = TYPE_LABELS[e.type] || { label: e.type };
+    const proj = PJ.projects.find(p => p.id === e.projectId);
+    const party = e.partyId ? pjPartyName(e.partyId) : '';
+    csv += [
+      e.effectiveDate || e.date,
+      `"${meta.label}"`,
+      `"${proj?.name || 'General'}"`,
+      `"${party}"`,
+      `"${e.chequeNo || ''}"`,
+      `"${(e.notes || '').replace(/"/g,'""')}"`,
+      r.impact > 0 ? r.impact : '',
+      r.impact < 0 ? Math.abs(r.impact) : '',
+      r.balanceAfter,
+      e.status || 'cleared'
+    ].join(',') + '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${acct.name.replace(/[^a-z0-9]/gi,'_')}_statement_${pjToday()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  pjToast('Statement exported', 'success');
+};
+
+/* ═══════════════════ 8 · REFRESH ═══════════════════ */
+window.p6Refresh = async function (accountId) {
+  pjToast('Refreshing…', 'info');
+  await pjLoadAll();
+  if (window.pjLoadAccounts) await window.pjLoadAccounts();
+  p6RenderAccountDetail(accountId);
+  pjToast('Refreshed', 'success');
+};
+
+/* ═══════════════════ 9 · PATCH ACCOUNT CARDS TO BE CLICKABLE ═══════════════════ */
+const _origP4RenderAccounts = window.p4RenderAccounts;
+window.p4RenderAccounts = function () {
+  _origP4RenderAccounts.apply(this, arguments);
+  // Rewire card click → detail, but keep buttons intact
+  document.querySelectorAll('#accountsView .p4-account-card').forEach(card => {
+    // Skip if already wired
+    if (card.dataset.p6Wired) return;
+    card.dataset.p6Wired = '1';
+
+    // Find the account id from the Edit button
+    const editBtn = card.querySelector('button[onclick*="p4OpenAccountModal"]');
+    if (!editBtn) return;
+    const match = editBtn.getAttribute('onclick').match(/p4OpenAccountModal\('([^']+)'\)/);
+    if (!match) return;
+    const accountId = match[1];
+
+    // Add click on the card (but ignore clicks on buttons)
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', function(ev) {
+      if (ev.target.closest('button')) return; // let buttons handle their own clicks
+      p6OpenAccountDetail(accountId);
+    });
+
+    // Add a "View Full Details" button at the bottom of the card
+    const btnRow = card.querySelector('div[style*="display:flex"][style*="gap:6px"][style*="margin-top:14px"]');
+    if (btnRow) {
+      const viewBtn = document.createElement('button');
+      viewBtn.className = 'btn btn-sm btn-secondary';
+      viewBtn.style.flex = '1';
+      viewBtn.innerHTML = '<i class="fas fa-list-ol"></i> Details';
+      viewBtn.onclick = (e) => { e.stopPropagation(); p6OpenAccountDetail(accountId); };
+      // Insert as first button
+      btnRow.insertBefore(viewBtn, btnRow.firstChild);
+    }
+  });
+};
+
+/* ═══════════════════ 10 · BOOT ═══════════════════ */
+function p6Boot() {
+  try { p6BuildView(); } catch(e) { console.warn('[P6] view failed', e); }
+  try {
+    const m = document.createElement('div');
+    m.id = '__proj_p6_ready';
+    m.style.cssText = 'position:fixed;bottom:1px;left:420px;font-size:1px;color:transparent;pointer-events:none';
+    m.textContent = 'projects-p6-ready';
+    document.body.appendChild(m);
+    console.log('[Projects Module v1.0-P6] ✅ bank account detail view installed');
+  } catch(e) {}
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', p6Boot);
+else p6Boot();
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
      Appended at end of file. Runs alongside the existing console blocker.
      Detection: 5 layers. Action: DOM wipe + navigate to about:blank.
