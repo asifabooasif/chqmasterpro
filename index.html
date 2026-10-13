@@ -10006,6 +10006,1352 @@ else pjP3Boot();
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
+     PROJECTS MODULE v1.0 — PART 4: ACCOUNTS & EXECUTIVE DASHBOARD
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__projectsModuleV1_part4) return;
+window.__projectsModuleV1_part4 = true;
+
+if (!window.__PJ) { console.error('[Projects P4] Part 1 not loaded'); return; }
+
+const PJ = window.__PJ;
+const {
+  pjFmt, pjFmtExact, pjDate, pjToday, pjToast, pjEsc, pjUid,
+  pjPartyName, TYPE_LABELS, ALLOC_TARGETS,
+  pjLoadAll, pjSaveDoc, pjProjectEntries, pjProjectKPIs
+} = window;
+
+/* Extend state */
+PJ.accounts = PJ.accounts || [];
+PJ.accountsLoaded = false;
+
+/* ═══════════════════ 1 · STYLES ═══════════════════ */
+(function injectStyles(){
+  document.querySelectorAll('#__proj_p4_styles').forEach(e => e.remove());
+  const s = document.createElement('style');
+  s.id = '__proj_p4_styles';
+  s.textContent = `
+    .p4-account-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+    .p4-account-card{background:white;border-radius:14px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,.04);border-left:4px solid var(--primary);transition:.25s}
+    .p4-account-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(0,0,0,.1)}
+    .p4-account-card.cash{border-left-color:#10b981}
+    .p4-account-card.bank{border-left-color:#3b82f6}
+    .p4-account-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px}
+    .p4-account-name{font-weight:800;font-size:15px}
+    .p4-account-detail{font-size:11.5px;color:var(--gray);margin-top:3px;word-break:break-word}
+    .p4-account-balance{font-size:26px;font-weight:800;margin:6px 0}
+    .p4-account-balance.positive{color:var(--success)}
+    .p4-account-balance.negative{color:var(--danger)}
+    .p4-account-sub{font-size:11px;color:var(--gray)}
+    .p4-exec-hero{background:linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#4c1d95 100%);border-radius:18px;padding:28px;color:white;margin-bottom:22px;position:relative;overflow:hidden}
+    .p4-exec-hero::before{content:'';position:absolute;top:-50%;right:-10%;width:400px;height:400px;background:radial-gradient(circle,rgba(168,85,247,.3) 0%,transparent 70%);pointer-events:none}
+    .p4-exec-hero-title{font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:1px;opacity:.7;margin-bottom:8px}
+    .p4-exec-hero-value{font-size:42px;font-weight:800;line-height:1.1}
+    .p4-exec-hero-sub{font-size:13px;opacity:.85;margin-top:8px}
+    .p4-exec-split{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:22px;position:relative}
+    .p4-exec-split-item{background:rgba(255,255,255,.1);padding:14px 16px;border-radius:12px;backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15)}
+    .p4-exec-split-item .lbl{font-size:11px;opacity:.8;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    .p4-exec-split-item .val{font-size:20px;font-weight:800;margin-top:6px}
+    .p4-exec-split-item .sub{font-size:11px;opacity:.75;margin-top:3px}
+    .p4-flow-list{display:flex;flex-direction:column;gap:8px}
+    .p4-flow-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:11px 14px;background:var(--light);border-radius:10px;font-size:13px;transition:.2s}
+    .p4-flow-row:hover{transform:translateX(4px);background:white;box-shadow:0 4px 12px rgba(0,0,0,.06)}
+    .p4-flow-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;flex-shrink:0}
+    .p4-flow-main{min-width:0}
+    .p4-flow-title{font-weight:700;font-size:13px}
+    .p4-flow-sub{font-size:11.5px;color:var(--gray);margin-top:2px}
+    .p4-flow-amount{font-weight:800;font-size:14px;text-align:right}
+    .p4-proj-holdings{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:12px;margin-top:8px}
+    .p4-proj-holdings > div{background:var(--light);padding:8px 10px;border-radius:8px}
+    .p4-proj-holdings strong{display:block;font-size:10px;color:var(--gray);text-transform:uppercase;margin-bottom:2px}
+    .p4-inflight{background:linear-gradient(135deg,#fef3c7,#fed7aa);border:1.5px solid #f59e0b;border-radius:12px;padding:16px;margin-bottom:16px}
+    .p4-inflight-title{font-size:12px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+    .p4-inflight-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,.6);border-radius:8px;margin-bottom:6px;font-size:12.5px}
+    .p4-account-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 14px;background:var(--light);border-radius:10px;margin-bottom:6px}
+    @media(max-width:900px){
+      .p4-exec-hero-value{font-size:32px}
+      .p4-flow-row{grid-template-columns:1fr !important}
+      .p4-proj-holdings{grid-template-columns:1fr !important}
+    }
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ═══════════════════ 2 · LOAD ACCOUNTS ═══════════════════ */
+async function pjLoadAccounts() {
+  try {
+    const snap = await db.collection('accounts').orderBy('name').get();
+    PJ.accounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    PJ.accountsLoaded = true;
+  } catch (e) {
+    console.warn('[P4] accounts load failed:', e);
+    PJ.accounts = [];
+  }
+}
+window.pjLoadAccounts = pjLoadAccounts;
+
+/* ═══════════════════ 3 · BALANCE ENGINE ═══════════════════ */
+function p4AccountBalance(accountId) {
+  const acct = PJ.accounts.find(a => a.id === accountId);
+  if (!acct) return 0;
+  let bal = parseFloat(acct.openingBalance) || 0;
+
+  PJ.entries.forEach(e => {
+    if (e.status && e.status !== 'cleared') return;
+    const amt = parseFloat(e.amount) || 0;
+
+    if (e.type === 'transfer') {
+      if (e.fromAccountId === accountId) bal -= amt;
+      if (e.toAccountId === accountId) bal += amt;
+      return;
+    }
+    if (e.accountId !== accountId) return;
+
+    const meta = TYPE_LABELS[e.type];
+    if (!meta) return;
+    if (meta.dir === 'in')  bal += amt;
+    else if (meta.dir === 'out') bal -= amt;
+  });
+  return bal;
+}
+window.p4AccountBalance = p4AccountBalance;
+
+function p4AccountInFlight(accountId) {
+  let inAmt = 0, outAmt = 0;
+  PJ.entries.forEach(e => {
+    if (e.status !== 'pending') return;
+    if (e.accountId !== accountId) return;
+    const amt = parseFloat(e.amount) || 0;
+    const meta = TYPE_LABELS[e.type];
+    if (!meta) return;
+    if (meta.dir === 'in')  inAmt  += amt;
+    else if (meta.dir === 'out') outAmt += amt;
+  });
+  return { inAmt, outAmt };
+}
+
+function p4CashInHand() {
+  return PJ.accounts
+    .filter(a => a.type === 'cash' && a.status !== 'inactive')
+    .reduce((s,a) => s + p4AccountBalance(a.id), 0);
+}
+
+function p4BankTotal() {
+  return PJ.accounts
+    .filter(a => a.type === 'bank' && a.status !== 'inactive')
+    .reduce((s,a) => s + p4AccountBalance(a.id), 0);
+}
+
+function p4TotalLiquid() {
+  return p4CashInHand() + p4BankTotal();
+}
+
+function p4ProjectAccountFlow(projectId) {
+  // How much money each project has pushed in/out to accounts
+  let inAmt = 0, outAmt = 0;
+  pjProjectEntries(projectId).forEach(e => {
+    if (e.status && e.status !== 'cleared') return;
+    if (!e.accountId && e.type !== 'transfer') return;
+    const amt = parseFloat(e.amount) || 0;
+    const meta = TYPE_LABELS[e.type];
+    if (!meta) return;
+    if (meta.dir === 'in')  inAmt += amt;
+    else if (meta.dir === 'out') outAmt += amt;
+  });
+  return { inAmt, outAmt, net: inAmt - outAmt };
+}
+
+/* ═══════════════════ 4 · NAV & VIEWS ═══════════════════ */
+function p4BuildNav() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return;
+  document.querySelectorAll('#p4NavSection').forEach(el => el.remove());
+
+  const section = document.createElement('div');
+  section.className = 'nav-section';
+  section.id = 'p4NavSection';
+  section.innerHTML = `
+    <div class="nav-title">Treasury</div>
+    <div class="nav-item" id="p4ExecNavItem" onclick="pjShowView('executive',this)">
+      <i class="fas fa-crown"></i><span>Executive</span>
+    </div>
+    <div class="nav-item" id="p4AccountsNavItem" onclick="pjShowView('accounts',this)">
+      <i class="fas fa-university"></i><span>Accounts</span>
+    </div>
+  `;
+
+  // Insert right after the Trade Projects section
+  const projSection = document.getElementById('pjNavSection');
+  if (projSection) {
+    projSection.parentNode.insertBefore(section, projSection.nextSibling);
+  } else {
+    // Fallback — insert before Tools & Admin
+    const sections = nav.querySelectorAll('.nav-section');
+    let inserted = false;
+    sections.forEach(s => {
+      const t = s.querySelector('.nav-title');
+      if (t && t.textContent.trim() === 'Tools & Admin' && !inserted) {
+        nav.insertBefore(section, s);
+        inserted = true;
+      }
+    });
+    if (!inserted) nav.appendChild(section);
+  }
+}
+
+function p4BuildViews() {
+  const main = document.querySelector('.main-content');
+  if (!main) return;
+  document.querySelectorAll('#__p4_views_root').forEach(el => el.remove());
+
+  const wrap = document.createElement('div');
+  wrap.id = '__p4_views_root';
+  wrap.innerHTML = `
+    <div id="executiveView" class="view-content"></div>
+    <div id="accountsView" class="view-content"></div>
+  `;
+  main.appendChild(wrap);
+}
+
+/* ═══════════════════ 5 · ROUTER PATCH ═══════════════════ */
+const P4_ROUTES = ['executive', 'accounts'];
+const _origShowViewP4 = window.showView;
+
+window.showView = function (viewName, navElement) {
+  if (P4_ROUTES.indexOf(viewName) === -1) {
+    return _origShowViewP4.apply(this, arguments);
+  }
+
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  const navMap = { 'executive': 'p4ExecNavItem', 'accounts': 'p4AccountsNavItem' };
+  const navId = navMap[viewName];
+  const navEl = navElement || document.getElementById(navId);
+  if (navEl) navEl.classList.add('active');
+
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const viewId = viewName === 'executive' ? 'executiveView' : 'accountsView';
+  const el = document.getElementById(viewId);
+  if (el) el.classList.add('active');
+
+  document.getElementById('pageTitle').textContent =
+    viewName === 'executive' ? 'Executive Dashboard' : 'Accounts';
+
+  if (window.innerWidth <= 768) {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebarOverlay');
+    if (sb) sb.classList.remove('active');
+    if (ov) ov.classList.remove('active');
+  }
+
+  (async () => {
+    if (!PJ.loaded) await pjLoadAll();
+    if (!PJ.accountsLoaded) await pjLoadAccounts();
+    if (viewName === 'executive') p4RenderExecutive();
+    else if (viewName === 'accounts') p4RenderAccounts();
+  })();
+};
+
+/* ═══════════════════ 6 · EXECUTIVE DASHBOARD ═══════════════════ */
+window.p4RenderExecutive = function () {
+  const host = document.getElementById('executiveView');
+  if (!host) return;
+
+  const cash     = p4CashInHand();
+  const banks    = p4BankTotal();
+  const liquid   = cash + banks;
+
+  // In-flight (pending) entries
+  let inflightIn = 0, inflightOut = 0;
+  PJ.entries.forEach(e => {
+    if (e.status !== 'pending') return;
+    const amt = parseFloat(e.amount) || 0;
+    const meta = TYPE_LABELS[e.type];
+    if (!meta) return;
+    if (meta.dir === 'in') inflightIn += amt;
+    else if (meta.dir === 'out') inflightOut += amt;
+  });
+
+  // Per-project account flows
+  const projectFlows = PJ.projects.map(p => {
+    const f = p4ProjectAccountFlow(p.id);
+    return { project: p, ...f };
+  }).filter(f => f.inAmt > 0 || f.outAmt > 0)
+    .sort((a,b) => (b.inAmt - b.outAmt) - (a.inAmt - a.outAmt));
+
+  // Recent movements (account-affected entries, last 15)
+  const movements = PJ.entries
+    .filter(e => (e.accountId || e.type === 'transfer'))
+    .sort((a,b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 15);
+
+  // Account cards for hero
+  const accountSplit = PJ.accounts
+    .filter(a => a.status !== 'inactive')
+    .map(a => ({ acct: a, bal: p4AccountBalance(a.id) }))
+    .sort((a,b) => b.bal - a.bal);
+
+  host.innerHTML = `
+    <div class="card" style="padding:0;background:transparent;box-shadow:none">
+      <div class="p4-exec-hero">
+        <div class="p4-exec-hero-title">
+          <i class="fas fa-coins"></i> Total Money at Hand
+        </div>
+        <div class="p4-exec-hero-value">${pjFmt(liquid)}</div>
+        <div class="p4-exec-hero-sub">
+          Cash ${pjFmt(cash)} · Banks ${pjFmt(banks)} · ${accountSplit.length} active account(s)
+        </div>
+
+        <div class="p4-exec-split">
+          <div class="p4-exec-split-item">
+            <div class="lbl"><i class="fas fa-wallet"></i> Cash in Hand</div>
+            <div class="val" style="color:${cash >= 0 ? '#a7f3d0' : '#fecaca'}">${pjFmt(cash)}</div>
+            <div class="sub">${PJ.accounts.filter(a => a.type === 'cash' && a.status !== 'inactive').length} cash account(s)</div>
+          </div>
+          <div class="p4-exec-split-item">
+            <div class="lbl"><i class="fas fa-university"></i> Bank Balance</div>
+            <div class="val" style="color:${banks >= 0 ? '#93c5fd' : '#fecaca'}">${pjFmt(banks)}</div>
+            <div class="sub">${PJ.accounts.filter(a => a.type === 'bank' && a.status !== 'inactive').length} bank account(s)</div>
+          </div>
+          <div class="p4-exec-split-item">
+            <div class="lbl"><i class="fas fa-hourglass-half"></i> In-Transit In</div>
+            <div class="val" style="color:#fde68a">${pjFmt(inflightIn)}</div>
+            <div class="sub">pending receipts</div>
+          </div>
+          <div class="p4-exec-split-item">
+            <div class="lbl"><i class="fas fa-hourglass-half"></i> In-Transit Out</div>
+            <div class="val" style="color:#fde68a">${pjFmt(inflightOut)}</div>
+            <div class="sub">pending payments</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${(inflightIn > 0 || inflightOut > 0) ? `
+    <div class="p4-inflight">
+      <div class="p4-inflight-title">
+        <i class="fas fa-hourglass-half"></i> Awaiting Clearance
+      </div>
+      ${PJ.entries
+        .filter(e => e.status === 'pending' && (e.accountId || e.type === 'transfer'))
+        .sort((a,b) => new Date(a.date) - new Date(b.date))
+        .slice(0, 8)
+        .map(e => {
+          const meta = TYPE_LABELS[e.type] || { label: e.type, dir: 'in', icon: 'circle' };
+          const proj = PJ.projects.find(p => p.id === e.projectId);
+          return `<div class="p4-inflight-row">
+            <div>
+              <strong>${pjEsc(meta.label)}</strong>
+              <span style="color:var(--gray)"> · ${pjEsc(proj?.name || '—')}</span>
+              ${e.partyId ? `<span style="color:var(--gray)"> · ${pjEsc(pjPartyName(e.partyId))}</span>` : ''}
+            </div>
+            <div style="font-weight:800;color:${meta.dir === 'in' ? '#065f46' : '#991b1b'}">
+              ${meta.dir === 'in' ? '+' : '−'} ${pjFmt(e.amount)}
+            </div>
+          </div>`;
+        }).join('')}
+    </div>` : ''}
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="fas fa-piggy-bank" style="color:var(--primary);margin-right:8px"></i>Account Balances</h2>
+        <button class="btn btn-primary btn-sm" onclick="pjShowView('accounts', document.getElementById('p4AccountsNavItem'))">
+          Manage Accounts
+        </button>
+      </div>
+      ${accountSplit.length === 0
+        ? '<div class="pj-empty"><i class="fas fa-university"></i><h3>No accounts yet</h3><p style="margin-top:8px">Add your cash wallet and bank accounts to start tracking.</p></div>'
+        : accountSplit.map(({ acct, bal }) => `
+          <div class="p4-account-row">
+            <div style="display:flex;align-items:center;gap:12px;min-width:0">
+              <div style="width:38px;height:38px;border-radius:10px;background:${acct.type === 'cash' ? '#10b981' : '#3b82f6'};color:white;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fas fa-${acct.type === 'cash' ? 'wallet' : 'university'}"></i>
+              </div>
+              <div style="min-width:0">
+                <div style="font-weight:700;font-size:13px">${pjEsc(acct.name)}</div>
+                <div style="font-size:11px;color:var(--gray)">
+                  ${acct.type === 'bank'
+                    ? `${pjEsc(acct.bankName || '')}${acct.accountNo ? ' · A/c ' + pjEsc(acct.accountNo) : ''}`
+                    : 'Physical cash'}
+                </div>
+              </div>
+            </div>
+            <div style="font-weight:800;font-size:16px;color:${bal >= 0 ? 'var(--success)' : 'var(--danger)'}">
+              ${pjFmt(bal)}
+            </div>
+          </div>
+        `).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="fas fa-project-diagram" style="color:var(--primary);margin-right:8px"></i>Project Account Contributions</h2>
+      </div>
+      ${projectFlows.length === 0
+        ? '<div class="pj-empty"><i class="fas fa-project-diagram"></i><h3>No project account movements yet</h3></div>'
+        : `<div class="table-container"><table class="pj-ledger-tbl">
+            <thead><tr><th>Project</th><th style="text-align:right">Money In</th><th style="text-align:right">Money Out</th><th style="text-align:right">Net</th></tr></thead>
+            <tbody>${projectFlows.map(f => `
+              <tr>
+                <td><a href="#" onclick="event.preventDefault();pjOpenProjectDetail('${f.project.id}')" style="color:var(--primary);font-weight:700">${pjEsc(f.project.name)}</a></td>
+                <td style="text-align:right;color:var(--success);font-weight:700">${pjFmt(f.inAmt)}</td>
+                <td style="text-align:right;color:var(--danger);font-weight:700">${pjFmt(f.outAmt)}</td>
+                <td style="text-align:right;font-weight:800;color:${f.net >= 0 ? 'var(--success)' : 'var(--danger)'}">${pjFmt(f.net)}</td>
+              </tr>`).join('')}</tbody>
+          </table></div>`}
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="fas fa-exchange-alt" style="color:var(--primary);margin-right:8px"></i>Recent Money Movements</h2>
+        <button class="btn btn-secondary btn-sm" onclick="p4Refresh()"><i class="fas fa-sync"></i> Refresh</button>
+      </div>
+      ${movements.length === 0
+        ? '<div class="pj-empty"><i class="fas fa-stream"></i><h3>No movements yet</h3></div>'
+        : `<div class="p4-flow-list">${movements.map(e => {
+            const meta = TYPE_LABELS[e.type] || { label: e.type, dir: 'in', icon: 'circle', color: '#64748b' };
+            const proj = PJ.projects.find(p => p.id === e.projectId);
+            const acct = PJ.accounts.find(a => a.id === e.accountId);
+            const fromAcct = e.type === 'transfer' ? PJ.accounts.find(a => a.id === e.fromAccountId) : null;
+            const toAcct   = e.type === 'transfer' ? PJ.accounts.find(a => a.id === e.toAccountId) : null;
+            const acctLine = e.type === 'transfer'
+              ? `${pjEsc(fromAcct?.name || '?')} → ${pjEsc(toAcct?.name || '?')}`
+              : (acct ? pjEsc(acct.name) : '—');
+            const statusChip = e.status === 'pending' ? ' <span class="pj-chip pj-chip-pending">Pending</span>' : '';
+            return `<div class="p4-flow-row">
+              <div class="p4-flow-icon" style="background:${meta.color}"><i class="fas fa-${meta.icon}"></i></div>
+              <div class="p4-flow-main">
+                <div class="p4-flow-title">${pjEsc(meta.label)} ${statusChip}</div>
+                <div class="p4-flow-sub">${pjDate(e.date)} · ${pjEsc(proj?.name || '—')} · ${acctLine}</div>
+              </div>
+              <div class="p4-flow-amount" style="color:${meta.dir === 'in' ? 'var(--success)' : 'var(--danger)'}">
+                ${meta.dir === 'in' ? '+' : '−'} ${pjFmt(e.amount)}
+              </div>
+              <button class="pj-icon-btn secondary" style="width:32px;height:32px" onclick="pjOpenEntryDetail('${e.id}')" data-tip="View">
+                <i class="fas fa-eye" style="font-size:12px"></i>
+              </button>
+            </div>`;
+          }).join('')}</div>`}
+    </div>
+  `;
+};
+
+/* ═══════════════════ 7 · ACCOUNTS VIEW ═══════════════════ */
+window.p4RenderAccounts = function () {
+  const host = document.getElementById('accountsView');
+  if (!host) return;
+
+  if (!PJ.accounts.length) {
+    host.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-university" style="color:var(--primary);margin-right:8px"></i>Accounts</h2>
+          <button class="btn btn-primary btn-sm" onclick="p4OpenAccountModal()"><i class="fas fa-plus"></i> Add Account</button>
+        </div>
+        <div class="pj-empty">
+          <i class="fas fa-university"></i>
+          <h3>No accounts yet</h3>
+          <p style="margin-top:8px">Add your cash-in-hand wallet and each bank account. Balances update automatically from every project entry.</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const cards = PJ.accounts.map(a => {
+    const bal = p4AccountBalance(a.id);
+    const flight = p4AccountInFlight(a.id);
+    const opening = parseFloat(a.openingBalance) || 0;
+    const movement = bal - opening;
+    return `
+      <div class="p4-account-card ${a.type}">
+        <div class="p4-account-head">
+          <div style="min-width:0">
+            <div class="p4-account-name">${pjEsc(a.name)}</div>
+            <div class="p4-account-detail">
+              ${a.type === 'cash' ? '<i class="fas fa-wallet"></i> Cash in Hand'
+                : `<i class="fas fa-university"></i> ${pjEsc(a.bankName || 'Bank')}${a.accountNo ? ' · ' + pjEsc(a.accountNo) : ''}`}
+            </div>
+          </div>
+          <span class="pj-chip ${a.status === 'inactive' ? 'pj-chip-loss' : 'pj-chip-open'}">
+            ${a.status === 'inactive' ? 'Inactive' : 'Active'}
+          </span>
+        </div>
+        <div class="p4-account-balance ${bal >= 0 ? 'positive' : 'negative'}">${pjFmt(bal)}</div>
+        <div class="p4-account-sub">
+          Opening: ${pjFmt(opening)} · Movement: <span style="color:${movement >= 0 ? 'var(--success)' : 'var(--danger)'}">${pjFmt(movement)}</span>
+        </div>
+        ${flight.inAmt > 0 || flight.outAmt > 0 ? `
+          <div style="margin-top:10px;padding:8px 10px;background:#fef3c7;border-radius:8px;font-size:11.5px;color:#92400e">
+            <i class="fas fa-hourglass-half"></i>
+            In transit: +${pjFmt(flight.inAmt)} / −${pjFmt(flight.outAmt)}
+          </div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:14px">
+          <button class="btn btn-sm btn-secondary" onclick="p4OpenAccountModal('${a.id}')" style="flex:1"><i class="fas fa-edit"></i> Edit</button>
+          <button class="btn btn-sm btn-primary" onclick="p4OpenTransferModal('${a.id}')" style="flex:1"><i class="fas fa-exchange-alt"></i> Transfer</button>
+          <button class="btn btn-sm btn-danger" onclick="p4DeleteAccount('${a.id}')"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const cash = p4CashInHand();
+  const banks = p4BankTotal();
+
+  host.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="fas fa-university" style="color:var(--primary);margin-right:8px"></i>Accounts</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="p4Refresh()"><i class="fas fa-sync"></i> Refresh</button>
+          <button class="btn btn-primary btn-sm" onclick="p4OpenAccountModal()"><i class="fas fa-plus"></i> Add Account</button>
+        </div>
+      </div>
+
+      <div class="pj-widgets" style="margin-bottom:20px">
+        <div class="pj-widget" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff">
+          <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Cash in Hand</div>
+          <div class="pj-widget-value">${pjFmt(cash)}</div>
+          <div class="pj-widget-sub" style="color:rgba(255,255,255,.8)">${PJ.accounts.filter(a=>a.type==='cash'&&a.status!=='inactive').length} wallet(s)</div>
+        </div>
+        <div class="pj-widget" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff">
+          <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Bank Total</div>
+          <div class="pj-widget-value">${pjFmt(banks)}</div>
+          <div class="pj-widget-sub" style="color:rgba(255,255,255,.8)">${PJ.accounts.filter(a=>a.type==='bank'&&a.status!=='inactive').length} bank(s)</div>
+        </div>
+        <div class="pj-widget" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff">
+          <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Total Liquid</div>
+          <div class="pj-widget-value">${pjFmt(cash + banks)}</div>
+          <div class="pj-widget-sub" style="color:rgba(255,255,255,.8)">cash + banks</div>
+        </div>
+      </div>
+
+      <div class="p4-account-grid">${cards}</div>
+    </div>
+  `;
+};
+
+/* ═══════════════════ 8 · ACCOUNT MODAL ═══════════════════ */
+function p4BuildModals() {
+  document.querySelectorAll('#__p4_modals_root').forEach(el => el.remove());
+  const wrap = document.createElement('div');
+  wrap.id = '__p4_modals_root';
+  wrap.innerHTML = `
+    <!-- Account modal -->
+    <div class="modal-overlay" id="p4AccountModal">
+      <div class="modal" style="max-width:560px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="p4AccountModalTitle">Add Account</h2>
+          <button class="modal-close" onclick="closeModal('p4AccountModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="p4AccountId">
+          <div class="form-group">
+            <label>Account Type *</label>
+            <select id="p4AccountType" onchange="p4OnAccountTypeChange()">
+              <option value="cash">Cash in Hand</option>
+              <option value="bank">Bank Account</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Display Name *</label>
+            <input type="text" id="p4AccountName" placeholder="e.g. Main Cash Wallet / Commercial Bank - Current">
+          </div>
+          <div id="p4BankFields" style="display:none">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Bank Name</label>
+                <input type="text" id="p4AccountBankName" placeholder="Commercial Bank">
+              </div>
+              <div class="form-group">
+                <label>Branch</label>
+                <input type="text" id="p4AccountBranch" placeholder="Colombo 07">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Account Number</label>
+                <input type="text" id="p4AccountNo" placeholder="8001234567">
+              </div>
+              <div class="form-group">
+                <label>IFSC / SWIFT</label>
+                <input type="text" id="p4AccountIfsc">
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Opening Balance (Rs.)</label>
+              <input type="number" id="p4AccountOpening" step="0.01" value="0">
+            </div>
+            <div class="form-group">
+              <label>Opening Date</label>
+              <input type="date" id="p4AccountOpeningDate">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="p4AccountStatus">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="p4AccountNotes" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('p4AccountModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="p4SaveAccount()"><i class="fas fa-save"></i> Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer modal -->
+    <div class="modal-overlay" id="p4TransferModal">
+      <div class="modal" style="max-width:520px">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fas fa-exchange-alt"></i> Transfer Between Accounts</h2>
+          <button class="modal-close" onclick="closeModal('p4TransferModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>From Account *</label>
+              <select id="p4TFrom"></select>
+            </div>
+            <div class="form-group">
+              <label>To Account *</label>
+              <select id="p4TTo"></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Amount (Rs.) *</label>
+              <input type="number" id="p4TAmount" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label>Date *</label>
+              <input type="date" id="p4TDate" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Project (optional)</label>
+            <select id="p4TProject">
+              <option value="">-- None / General --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="p4TNotes" rows="2" placeholder="e.g. Deposit cash to bank"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('p4TransferModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="p4SaveTransfer()"><i class="fas fa-check"></i> Record Transfer</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+}
+
+window.p4OnAccountTypeChange = function () {
+  const t = document.getElementById('p4AccountType').value;
+  document.getElementById('p4BankFields').style.display = t === 'bank' ? 'block' : 'none';
+};
+
+window.p4OpenAccountModal = function (id) {
+  if (id) {
+    const a = PJ.accounts.find(x => x.id === id);
+    if (!a) return;
+    document.getElementById('p4AccountModalTitle').textContent = 'Edit Account';
+    document.getElementById('p4AccountId').value = a.id;
+    document.getElementById('p4AccountType').value = a.type || 'cash';
+    document.getElementById('p4AccountName').value = a.name || '';
+    document.getElementById('p4AccountBankName').value = a.bankName || '';
+    document.getElementById('p4AccountBranch').value = a.branch || '';
+    document.getElementById('p4AccountNo').value = a.accountNo || '';
+    document.getElementById('p4AccountIfsc').value = a.ifsc || '';
+    document.getElementById('p4AccountOpening').value = a.openingBalance || 0;
+    document.getElementById('p4AccountOpeningDate').value = a.openingDate || pjToday();
+    document.getElementById('p4AccountStatus').value = a.status || 'active';
+    document.getElementById('p4AccountNotes').value = a.notes || '';
+  } else {
+    document.getElementById('p4AccountModalTitle').textContent = 'Add Account';
+    ['p4AccountId','p4AccountName','p4AccountBankName','p4AccountBranch','p4AccountNo','p4AccountIfsc','p4AccountNotes'].forEach(k => document.getElementById(k).value = '');
+    document.getElementById('p4AccountType').value = 'cash';
+    document.getElementById('p4AccountOpening').value = 0;
+    document.getElementById('p4AccountOpeningDate').value = pjToday();
+    document.getElementById('p4AccountStatus').value = 'active';
+  }
+  p4OnAccountTypeChange();
+  openModal('p4AccountModal');
+};
+
+window.p4SaveAccount = async function () {
+  const id = document.getElementById('p4AccountId').value;
+  const type = document.getElementById('p4AccountType').value;
+  const name = document.getElementById('p4AccountName').value.trim();
+  const bankName = document.getElementById('p4AccountBankName').value.trim();
+  const branch = document.getElementById('p4AccountBranch').value.trim();
+  const accountNo = document.getElementById('p4AccountNo').value.trim();
+  const ifsc = document.getElementById('p4AccountIfsc').value.trim();
+  const openingBalance = parseFloat(document.getElementById('p4AccountOpening').value) || 0;
+  const openingDate = document.getElementById('p4AccountOpeningDate').value;
+  const status = document.getElementById('p4AccountStatus').value;
+  const notes = document.getElementById('p4AccountNotes').value.trim();
+
+  if (!name) return pjToast('Account name is required', 'error');
+  try {
+    const payload = { type, name, bankName, branch, accountNo, ifsc, openingBalance, openingDate, status, notes };
+    if (id) payload.id = id;
+    await pjSaveDoc('accounts', payload);
+    closeModal('p4AccountModal');
+    await pjLoadAccounts();
+    pjToast(id ? 'Account updated' : 'Account created', 'success');
+    if (document.getElementById('accountsView').classList.contains('active')) p4RenderAccounts();
+    if (document.getElementById('executiveView').classList.contains('active')) p4RenderExecutive();
+  } catch (e) { console.error(e); pjToast('Error: ' + e.message, 'error'); }
+};
+
+window.p4DeleteAccount = async function (id) {
+  const a = PJ.accounts.find(x => x.id === id);
+  if (!a) return;
+  const usedIn = PJ.entries.filter(e => e.accountId === id || e.fromAccountId === id || e.toAccountId === id).length;
+  let msg = `Delete account "${a.name}"?`;
+  if (usedIn > 0) msg += `\n\n⚠ This account is used in ${usedIn} entr(ies). Balances will not recalculate correctly.`;
+  if (!confirm(msg)) return;
+  if (!confirm('⚠ FINAL WARNING ⚠\n\nThis cannot be undone.')) return;
+  try {
+    await db.collection('accounts').doc(id).delete();
+    await pjLoadAccounts();
+    pjToast('Account deleted', 'success');
+    if (document.getElementById('accountsView').classList.contains('active')) p4RenderAccounts();
+    if (document.getElementById('executiveView').classList.contains('active')) p4RenderExecutive();
+  } catch (e) { console.error(e); pjToast('Error: ' + e.message, 'error'); }
+};
+
+/* ═══════════════════ 9 · TRANSFER FLOW ═══════════════════ */
+window.p4OpenTransferModal = function (preselectFromId) {
+  if (PJ.accounts.length < 2) return pjToast('You need at least 2 accounts', 'error');
+  const fromSel = document.getElementById('p4TFrom');
+  const toSel = document.getElementById('p4TTo');
+  const active = PJ.accounts.filter(a => a.status !== 'inactive');
+  fromSel.innerHTML = active.map(a => `<option value="${a.id}">${pjEsc(a.name)} — ${pjFmt(p4AccountBalance(a.id))}</option>`).join('');
+  toSel.innerHTML = active.map(a => `<option value="${a.id}">${pjEsc(a.name)} — ${pjFmt(p4AccountBalance(a.id))}</option>`).join('');
+  if (preselectFromId) fromSel.value = preselectFromId;
+  // Default "to" to a different account
+  if (fromSel.value === toSel.value) {
+    const other = active.find(a => a.id !== fromSel.value);
+    if (other) toSel.value = other.id;
+  }
+  document.getElementById('p4TAmount').value = '';
+  document.getElementById('p4TDate').value = pjToday();
+  document.getElementById('p4TNotes').value = '';
+  const projSel = document.getElementById('p4TProject');
+  projSel.innerHTML = '<option value="">-- None / General --</option>' +
+    PJ.projects.map(p => `<option value="${p.id}">${pjEsc(p.name)}</option>`).join('');
+  openModal('p4TransferModal');
+};
+
+window.p4SaveTransfer = async function () {
+  const fromId = document.getElementById('p4TFrom').value;
+  const toId = document.getElementById('p4TTo').value;
+  const amount = parseFloat(document.getElementById('p4TAmount').value);
+  const date = document.getElementById('p4TDate').value;
+  const projectId = document.getElementById('p4TProject').value;
+  const notes = document.getElementById('p4TNotes').value.trim();
+
+  if (!fromId || !toId) return pjToast('Select both accounts', 'error');
+  if (fromId === toId) return pjToast('From and To must be different', 'error');
+  if (!amount || amount <= 0) return pjToast('Enter a valid amount', 'error');
+  if (!date) return pjToast('Select a date', 'error');
+
+  try {
+    await pjSaveDoc('project_entries', {
+      projectId: projectId || null,
+      type: 'transfer',
+      direction: 'internal',
+      amount,
+      date,
+      effectiveDate: date,
+      fromAccountId: fromId,
+      toAccountId: toId,
+      accountId: null,
+      partyId: null,
+      status: 'cleared',
+      notes: notes || `Transfer: ${PJ.accounts.find(a=>a.id===fromId)?.name} → ${PJ.accounts.find(a=>a.id===toId)?.name}`,
+      allocations: []
+    });
+    closeModal('p4TransferModal');
+    await pjLoadAll();
+    await pjLoadAccounts();
+    pjToast('Transfer recorded', 'success');
+    if (document.getElementById('accountsView').classList.contains('active')) p4RenderAccounts();
+    if (document.getElementById('executiveView').classList.contains('active')) p4RenderExecutive();
+    if (PJ.activeView === 'project-detail' && PJ.activeProjectId) pjRenderProjectDetail(PJ.activeProjectId);
+    if (PJ.activeView === 'ledger') pjRenderLedger();
+  } catch (e) { console.error(e); pjToast('Error: ' + e.message, 'error'); }
+};
+
+/* ═══════════════════ 10 · REFRESH ═══════════════════ */
+window.p4Refresh = async function () {
+  pjToast('Refreshing…', 'info');
+  await pjLoadAll();
+  await pjLoadAccounts();
+  if (document.getElementById('accountsView').classList.contains('active')) p4RenderAccounts();
+  if (document.getElementById('executiveView').classList.contains('active')) p4RenderExecutive();
+  pjToast('Refreshed', 'success');
+};
+
+/* ═══════════════════ 11 · PATCH ENTRY MODAL (add Account selector) ═══════════════════ */
+const _origOpenEntryModal = window.pjOpenEntryModal;
+window.pjOpenEntryModal = function (projectId, type) {
+  _origOpenEntryModal(projectId, type);
+
+  // Give it a moment for Part 3's modal body to render
+  setTimeout(() => {
+    const notesGroup = document.getElementById('pjEntryNotes')?.closest('.form-group');
+    if (!notesGroup) return;
+    if (document.getElementById('p4EntryAccountWrap')) return; // already injected
+
+    const wrap = document.createElement('div');
+    wrap.id = 'p4EntryAccountWrap';
+    wrap.className = 'form-group';
+    wrap.innerHTML = `
+      <label>Move Through Account <span style="font-weight:400;color:var(--gray);font-size:12px">(cash or bank)</span></label>
+      <select id="pjEntryAccountId">
+        <option value="">-- No account impact --</option>
+        ${PJ.accounts
+          .filter(a => a.status !== 'inactive')
+          .map(a => `<option value="${a.id}">${pjEsc(a.name)} — ${pjFmt(p4AccountBalance(a.id))}</option>`)
+          .join('')}
+      </select>
+      <div style="font-size:11px;color:var(--gray);margin-top:4px">
+        For <strong>supply-given</strong> entries, leave as "No account impact" (goods, not money).
+      </div>
+    `;
+    notesGroup.parentNode.insertBefore(wrap, notesGroup);
+
+    // Auto-select sensible defaults per type
+    const t = document.getElementById('pjEntryType').value;
+    const acctSel = document.getElementById('pjEntryAccountId');
+    const cashAccts = PJ.accounts.filter(a => a.type === 'cash' && a.status !== 'inactive');
+    if (['purchase-out','payment-out','expense-out'].indexOf(t) !== -1 && cashAccts.length) {
+      // Suggest cash for small payments, leave blank otherwise
+    }
+  }, 60);
+};
+
+/* ═══════════════════ 12 · PATCH COMMIT ENTRY (inject accountId) ═══════════════════ */
+const _origCommitEntryP4 = window.pjCommitEntry;
+window.pjCommitEntry = async function (payload, harshReason) {
+  // Inject accountId from our injected selector
+  const acctSel = document.getElementById('pjEntryAccountId');
+  if (acctSel && acctSel.value && !payload.accountId) {
+    payload.accountId = acctSel.value;
+  }
+  // Transfers use from/to (handled by their own modal)
+  await _origCommitEntryP4(payload, harshReason);
+  // Reload accounts so balances refresh
+  await pjLoadAccounts();
+  // Re-render the current treasury view if active
+  if (document.getElementById('accountsView').classList.contains('active')) p4RenderAccounts();
+  if (document.getElementById('executiveView').classList.contains('active')) p4RenderExecutive();
+};
+
+/* ═══════════════════ 13 · ADD "TRANSFER" TO TYPE_LABELS ═══════════════════ */
+if (window.TYPE_LABELS && !window.TYPE_LABELS['transfer']) {
+  window.TYPE_LABELS['transfer'] = {
+    label: 'Transfer Between Accounts',
+    dir: 'internal',
+    icon: 'exchange-alt',
+    color: '#8b5cf6'
+  };
+}
+
+/* ═══════════════════ 14 · BOOT ═══════════════════ */
+function p4Boot() {
+  try { p4BuildNav(); }    catch(e){ console.warn('[P4] nav failed', e); }
+  try { p4BuildViews(); }  catch(e){ console.warn('[P4] views failed', e); }
+  try { p4BuildModals(); } catch(e){ console.warn('[P4] modals failed', e); }
+
+  // Load accounts when auth ready
+  let loaded = false;
+  const check = setInterval(async () => {
+    if (typeof currentUser !== 'undefined' && currentUser && !loaded) {
+      loaded = true;
+      clearInterval(check);
+      try { await pjLoadAccounts(); } catch(e){ console.warn('[P4] initial load failed', e); }
+    }
+  }, 1000);
+  setTimeout(() => clearInterval(check), 30000);
+
+  try {
+    const m = document.createElement('div');
+    m.id = '__proj_p4_ready';
+    m.style.cssText = 'position:fixed;bottom:1px;left:300px;font-size:1px;color:transparent;pointer-events:none';
+    m.textContent = 'projects-p4-ready';
+    document.body.appendChild(m);
+    console.log('[Projects Module v1.0-P4] ✅ accounts + executive installed');
+  } catch(e) {}
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', p4Boot);
+else p4Boot();
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     PROJECTS MODULE v1.0 — PART 5: BULK LINK EXISTING CHEQUES
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__projectsModuleV1_part5) return;
+window.__projectsModuleV1_part5 = true;
+
+if (!window.__PJ) { console.error('[P5] Part 1 not loaded'); return; }
+
+const PJ = window.__PJ;
+const {
+  pjFmt, pjDate, pjToday, pjToast, pjEsc, pjUid,
+  pjPartyName, TYPE_LABELS,
+  pjLoadAll, pjSaveDoc
+} = window;
+
+/* ═══════════════════ 1 · STYLES ═══════════════════ */
+(function injectStyles(){
+  document.querySelectorAll('#__proj_p5_styles').forEach(e => e.remove());
+  const s = document.createElement('style');
+  s.id = '__proj_p5_styles';
+  s.textContent = `
+    .p5-linker-shell{background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:14px;padding:20px;margin-bottom:20px;border:1.5px dashed var(--primary)}
+    .p5-linker-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+    .p5-linker-head h3{font-size:16px;font-weight:800;margin-bottom:4px}
+    .p5-linker-head p{font-size:12.5px;color:var(--gray)}
+    .p5-filter-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px;padding:12px;background:white;border-radius:10px}
+    .p5-cheque-list{max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:white}
+    .p5-cheque-row{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px;transition:.15s;cursor:pointer}
+    .p5-cheque-row:hover{background:var(--light)}
+    .p5-cheque-row:last-child{border-bottom:none}
+    .p5-cheque-row.selected{background:#dbeafe}
+    .p5-cheque-row input[type=checkbox]{cursor:pointer;width:16px;height:16px}
+    .p5-cheque-num{font-weight:700;color:var(--primary)}
+    .p5-cheque-payee{min-width:0}
+    .p5-cheque-payee-name{font-weight:600}
+    .p5-cheque-payee-sub{font-size:11px;color:var(--gray);margin-top:2px}
+    .p5-cheque-amount{font-weight:800;text-align:right;white-space:nowrap}
+    .p5-summary-bar{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 18px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:white;border-radius:12px;margin-top:16px;flex-wrap:wrap}
+    .p5-summary-bar .left{display:flex;gap:20px;flex-wrap:wrap}
+    .p5-summary-bar .stat{font-size:12px}
+    .p5-summary-bar .stat strong{display:block;font-size:19px;font-weight:800;margin-top:2px}
+    .p5-link-btn{padding:11px 22px;background:white;color:var(--primary-dark);border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px;transition:.2s}
+    .p5-link-btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.15)}
+    .p5-link-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    .p5-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:9px;font-size:10.5px;font-weight:700}
+    .p5-badge-linked{background:#d1fae5;color:#065f46}
+    .p5-badge-unlinked{background:#fee2e2;color:#991b1b}
+    .p5-badge-partial{background:#fef3c7;color:#b45309}
+    .p5-empty-mini{padding:40px 20px;text-align:center;color:var(--gray)}
+    .p5-empty-mini i{font-size:44px;opacity:.3;display:block;margin-bottom:12px}
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ═══════════════════ 2 · RENDER LINKER PANEL ═══════════════════ */
+window.p5RenderLinker = async function () {
+  const host = document.getElementById('pjProjectsBody');
+  if (!host) return;
+
+  // Make sure cheques are loaded
+  if (!PJ.cheques || !PJ.cheques.length) {
+    try {
+      const snap = await db.collection('cheques').get();
+      PJ.cheques = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deletedAt);
+    } catch (e) { console.warn('[P5] cheque load failed', e); }
+  }
+
+  const cheques = PJ.cheques || [];
+  const projects = PJ.projects;
+
+  if (!projects.length) {
+    host.innerHTML = `<div class="pj-empty">
+      <i class="fas fa-project-diagram"></i>
+      <h3>Create a project first</h3>
+      <p style="margin-top:8px">You need at least one project before linking cheques.</p>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="pjOpenProjectModal()">
+        <i class="fas fa-plus"></i> New Project
+      </button>
+    </div>`;
+    return;
+  }
+
+  // Which cheques are already linked?
+  const linked = cheques.filter(c => c.tradeProjectId);
+  const unlinked = cheques.filter(c => !c.tradeProjectId);
+
+  host.innerHTML = `
+    <div class="p5-linker-shell">
+      <div class="p5-linker-head">
+        <div>
+          <h3><i class="fas fa-link" style="color:var(--primary)"></i> Bulk Link Existing Cheques</h3>
+          <p>Select one or more cheques from your NeonCheque collection and assign them to a project. Optionally auto-create the matching "Payment In" entries.</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="p5RefreshLinker()">
+            <i class="fas fa-sync"></i> Refresh List
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="pjOpenProjectModal()">
+            <i class="fas fa-plus"></i> New Project
+          </button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <span class="p5-badge p5-badge-linked"><i class="fas fa-check"></i> ${linked.length} linked</span>
+        <span class="p5-badge p5-badge-unlinked"><i class="fas fa-exclamation"></i> ${unlinked.length} unlinked</span>
+        <span class="p5-badge p5-badge-partial"><i class="fas fa-list"></i> ${cheques.length} total cheques</span>
+      </div>
+
+      <div class="p5-filter-bar">
+        <div class="filter-group">
+          <label>Search Payee / Number</label>
+          <input type="text" id="p5Search" placeholder="e.g. ABC Traders or 45123" oninput="p5ApplyFilter()">
+        </div>
+        <div class="filter-group">
+          <label>Status</label>
+          <select id="p5StatusFilter" onchange="p5ApplyFilter()">
+            <option value="">All Statuses</option>
+            <option value="in-hand">In-Hand</option>
+            <option value="issued">Issued</option>
+            <option value="deposited">Deposited</option>
+            <option value="cleared">Cleared</option>
+            <option value="returned">Returned</option>
+            <option value="stopped">Stopped</option>
+            <option value="draft">Draft</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Show</label>
+          <select id="p5LinkedFilter" onchange="p5ApplyFilter()">
+            <option value="unlinked">Only Unlinked</option>
+            <option value="all">All Cheques</option>
+            <option value="linked">Only Linked</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Date From</label>
+          <input type="date" id="p5DateFrom" onchange="p5ApplyFilter()">
+        </div>
+        <div class="filter-group">
+          <label>Date To</label>
+          <input type="date" id="p5DateTo" onchange="p5ApplyFilter()">
+        </div>
+      </div>
+
+      <div class="p5-cheque-list" id="p5ChequeList"></div>
+
+      <div class="p5-summary-bar">
+        <div class="left">
+          <div class="stat">Selected<strong id="p5SelectedCount">0</strong></div>
+          <div class="stat">Total Amount<strong id="p5SelectedAmount">Rs. 0</strong></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select id="p5TargetProject" style="padding:10px 14px;border-radius:9px;border:none;font-size:13px;font-weight:600;min-width:200px">
+            <option value="">-- Assign to Project --</option>
+            ${projects.map(p => `<option value="${p.id}">${pjEsc(p.name)}</option>`).join('')}
+          </select>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+            <input type="checkbox" id="p5AutoCreate" checked>
+            Also create Payment-In entries
+          </label>
+          <button class="p5-link-btn" id="p5LinkBtn" onclick="p5LinkSelected()" disabled>
+            <i class="fas fa-link"></i> Link Selected
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Recent Linkings</h2>
+      </div>
+      <div id="p5RecentLinks"></div>
+    </div>
+  `;
+
+  p5ApplyFilter();
+  p5RenderRecentLinks();
+};
+
+window.p5RefreshLinker = async function () {
+  try {
+    const snap = await db.collection('cheques').get();
+    PJ.cheques = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deletedAt);
+    await pjLoadAll();
+    pjToast('Cheques refreshed', 'success');
+    p5RenderLinker();
+  } catch (e) { pjToast('Error: ' + e.message, 'error'); }
+};
+
+/* ═══════════════════ 3 · FILTER + LIST ═══════════════════ */
+window.p5ApplyFilter = function () {
+  const search = (document.getElementById('p5Search')?.value || '').toLowerCase();
+  const status = document.getElementById('p5StatusFilter')?.value || '';
+  const linkedMode = document.getElementById('p5LinkedFilter')?.value || 'unlinked';
+  const dateFrom = document.getElementById('p5DateFrom')?.value || '';
+  const dateTo = document.getElementById('p5DateTo')?.value || '';
+
+  let list = (PJ.cheques || []).slice();
+
+  if (linkedMode === 'unlinked') list = list.filter(c => !c.tradeProjectId);
+  else if (linkedMode === 'linked') list = list.filter(c => c.tradeProjectId);
+
+  if (status) list = list.filter(c => c.status === status);
+  if (dateFrom) list = list.filter(c => (c.date || '') >= dateFrom);
+  if (dateTo)   list = list.filter(c => (c.date || '') <= dateTo);
+  if (search) {
+    list = list.filter(c =>
+      (c.number || '').toLowerCase().includes(search) ||
+      (c.payee || '').toLowerCase().includes(search) ||
+      (c.issuedTo || '').toLowerCase().includes(search)
+    );
+  }
+
+  list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  const host = document.getElementById('p5ChequeList');
+  if (!host) return;
+
+  if (!list.length) {
+    host.innerHTML = '<div class="p5-empty-mini"><i class="fas fa-search"></i><h3>No cheques match filters</h3></div>';
+    p5UpdateSummary();
+    return;
+  }
+
+  const selectedIds = p5GetSelected();
+  host.innerHTML = list.map(c => {
+    const linkedChip = c.tradeProjectId
+      ? `<span class="p5-badge p5-badge-linked"><i class="fas fa-check"></i> linked</span>`
+      : `<span class="p5-badge p5-badge-unlinked"><i class="fas fa-times"></i> unlinked</span>`;
+    const isSel = selectedIds.indexOf(c.id) !== -1;
+    return `<div class="p5-cheque-row ${isSel ? 'selected' : ''}" data-id="${c.id}" onclick="p5ToggleCheque('${c.id}', event)">
+      <input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();p5ToggleCheque('${c.id}', event)">
+      <div class="p5-cheque-payee">
+        <div class="p5-cheque-payee-name"><span class="p5-cheque-num">#${pjEsc(c.number)}</span> · ${pjEsc(c.payee)}</div>
+        <div class="p5-cheque-payee-sub">${pjDate(c.date)} · ${pjEsc(c.bank || '')}${c.issuedTo ? ' · Issued: ' + pjEsc(c.issuedTo) : ''}</div>
+      </div>
+      <span class="status-badge status-${c.status}">${pjEsc(c.status)}</span>
+      ${linkedChip}
+      <div class="p5-cheque-amount">${pjFmt(c.amount)}</div>
+    </div>`;
+  }).join('');
+
+  p5UpdateSummary();
+};
+
+/* Selection state (kept in memory, keyed on a module-level Set) */
+const P5_SELECTED = new Set();
+window.p5GetSelected = () => Array.from(P5_SELECTED);
+
+window.p5ToggleCheque = function (id, ev) {
+  if (P5_SELECTED.has(id)) P5_SELECTED.delete(id);
+  else P5_SELECTED.add(id);
+  // Update row styling without full re-render
+  const row = document.querySelector(`.p5-cheque-row[data-id="${id}"]`);
+  if (row) {
+    row.classList.toggle('selected', P5_SELECTED.has(id));
+    const cb = row.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = P5_SELECTED.has(id);
+  }
+  p5UpdateSummary();
+};
+
+function p5UpdateSummary() {
+  const ids = p5GetSelected();
+  const countEl = document.getElementById('p5SelectedCount');
+  const amtEl = document.getElementById('p5SelectedAmount');
+  const btn = document.getElementById('p5LinkBtn');
+  if (countEl) countEl.textContent = ids.length;
+  const total = ids.reduce((s, id) => {
+    const c = (PJ.cheques || []).find(x => x.id === id);
+    return s + (parseFloat(c?.amount) || 0);
+  }, 0);
+  if (amtEl) amtEl.textContent = pjFmt(total);
+  if (btn) btn.disabled = ids.length === 0;
+}
+
+/* ═══════════════════ 4 · LINK ACTION ═══════════════════ */
+window.p5LinkSelected = async function () {
+  const ids = p5GetSelected();
+  if (!ids.length) return pjToast('Select at least one cheque', 'error');
+
+  const targetProjectId = document.getElementById('p5TargetProject').value;
+  if (!targetProjectId) return pjToast('Select a target project', 'error');
+  const autoCreate = document.getElementById('p5AutoCreate').checked;
+
+  const project = PJ.projects.find(p => p.id === targetProjectId);
+  if (!project) return pjToast('Project not found', 'error');
+
+  const confirmMsg = `Link ${ids.length} cheque(s) to project "${project.name}"?\n\n` +
+    (autoCreate
+      ? `✓ Each cheque will get a "Payment In" entry with its date.\n✓ Cleared cheques count immediately; pending cheques are marked pending.\n`
+      : `✓ Cheques will only be tagged — no entries created.\n`) +
+    `\nContinue?`;
+  if (!confirm(confirmMsg)) return;
+
+  const btn = document.getElementById('p5LinkBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Linking...'; }
+
+  let okCount = 0, entryCount = 0, errCount = 0;
+
+  try {
+    for (const chequeId of ids) {
+      const c = (PJ.cheques || []).find(x => x.id === chequeId);
+      if (!c) continue;
+
+      try {
+        // 1. Tag the cheque with tradeProjectId
+        await db.collection('cheques').doc(chequeId).update({
+          tradeProjectId: targetProjectId,
+          linkedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          linkedBy: currentUser ? currentUser.email : 'system'
+        });
+
+        // 2. Optionally create a Payment-In entry
+        if (autoCreate) {
+          const entryPayload = {
+            projectId: targetProjectId,
+            type: 'payment-in',
+            direction: 'in',
+            amount: parseFloat(c.amount) || 0,
+            date: c.date || pjToday(),
+            effectiveDate: c.date || pjToday(),
+            partyId: null,               // user can edit later
+            partyRole: 'shop',
+            chequeId: chequeId,
+            status: c.status === 'cleared' ? 'cleared'
+                  : c.status === 'returned' ? 'bounced'
+                  : 'pending',
+            notes: `Backfilled from cheque #${c.number} (${c.payee}) on ${pjDate(c.date)}`,
+            allocations: []              // can be edited later via entry detail
+          };
+          await pjSaveDoc('project_entries', entryPayload);
+          entryCount++;
+        }
+        okCount++;
+      } catch (perErr) {
+        console.warn('Link failed for cheque', c.number, perErr);
+        errCount++;
+      }
+    }
+
+    P5_SELECTED.clear();
+    await pjLoadAll();
+    await pjLoadAccounts && pjLoadAccounts().catch(() => {});
+
+    pjToast(`✅ Linked ${okCount} cheque(s) to "${project.name}"${entryCount ? ' + created ' + entryCount + ' entries' : ''}${errCount ? ' · ' + errCount + ' failed' : ''}`, 'success');
+    p5RenderLinker();
+  } catch (e) {
+    console.error(e);
+    pjToast('Error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-link"></i> Link Selected'; }
+  }
+};
+
+/* ═══════════════════ 5 · RECENT LINKINGS ═══════════════════ */
+function p5RenderRecentLinks() {
+  const host = document.getElementById('p5RecentLinks');
+  if (!host) return;
+  const linked = (PJ.cheques || []).filter(c => c.tradeProjectId);
+  if (!linked.length) {
+    host.innerHTML = '<div class="p5-empty-mini"><i class="fas fa-link"></i><h3>No cheques linked yet</h3></div>';
+    return;
+  }
+  const sorted = linked.sort((a,b) => {
+    const ta = a.linkedAt?.toDate ? a.linkedAt.toDate().getTime() : new Date(a.linkedAt || 0).getTime();
+    const tb = b.linkedAt?.toDate ? b.linkedAt.toDate().getTime() : new Date(b.linkedAt || 0).getTime();
+    return tb - ta;
+  }).slice(0, 20);
+
+  host.innerHTML = `<div class="table-container"><table class="pj-ledger-tbl">
+    <thead><tr><th>Cheque</th><th>Payee</th><th>Amount</th><th>Project</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>${sorted.map(c => {
+      const proj = PJ.projects.find(p => p.id === c.tradeProjectId);
+      return `<tr>
+        <td><strong>#${pjEsc(c.number)}</strong><div style="font-size:11px;color:var(--gray)">${pjDate(c.date)}</div></td>
+        <td>${pjEsc(c.payee)}</td>
+        <td><strong>${pjFmt(c.amount)}</strong></td>
+        <td>${proj ? `<a href="#" onclick="event.preventDefault();pjOpenProjectDetail('${proj.id}')" style="color:var(--primary);font-weight:600">${pjEsc(proj.name)}</a>` : '—'}</td>
+        <td><span class="status-badge status-${c.status}">${pjEsc(c.status)}</span></td>
+        <td>
+          <button class="pj-icon-btn danger" style="width:30px;height:30px" onclick="p5UnlinkCheque('${c.id}')" data-tip="Unlink">
+            <i class="fas fa-unlink" style="font-size:11px"></i>
+          </button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+window.p5UnlinkCheque = async function (chequeId) {
+  const c = (PJ.cheques || []).find(x => x.id === chequeId);
+  if (!c) return;
+  if (!confirm(`Unlink cheque #${c.number} from its project?\n\nThe cheque stays in NeonCheque; only the project link is removed.\n\nAuto-created entries will NOT be deleted automatically.`)) return;
+  try {
+    await db.collection('cheques').doc(chequeId).update({
+      tradeProjectId: firebase.firestore.FieldValue.delete(),
+      tradeEntryId: firebase.firestore.FieldValue.delete(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await pjLoadAll();
+    pjToast('Cheque unlinked', 'success');
+    p5RenderLinker();
+  } catch (e) { pjToast('Error: ' + e.message, 'error'); }
+};
+
+/* ═══════════════════ 6 · PATCH PROJECTS VIEW ═══════════════════ */
+// Wrap the projects render to add a "Bulk Link" button at the top
+const _origPjRenderProjects = window.pjRenderProjects;
+window.pjRenderProjects = function () {
+  _origPjRenderProjects.apply(this, arguments);
+  // Now inject a "Bulk Link Existing Cheques" button next to "New Project"
+  const header = document.querySelector('#projectsView .card-header');
+  if (!header) return;
+  if (header.querySelector('.p5-bulk-link-btn')) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-secondary btn-sm p5-bulk-link-btn';
+  btn.style.marginRight = '8px';
+  btn.innerHTML = '<i class="fas fa-link"></i> Bulk Link Existing Cheques';
+  btn.onclick = () => p5RenderLinker();
+
+  const newProjBtn = header.querySelector('button.btn-primary');
+  if (newProjBtn) header.insertBefore(btn, newProjBtn);
+  else header.appendChild(btn);
+};
+
+/* ═══════════════════ 7 · BOOT ═══════════════════ */
+function p5Boot() {
+  try {
+    const m = document.createElement('div');
+    m.id = '__proj_p5_ready';
+    m.style.cssText = 'position:fixed;bottom:1px;left:360px;font-size:1px;color:transparent;pointer-events:none';
+    m.textContent = 'projects-p5-ready';
+    document.body.appendChild(m);
+    console.log('[Projects Module v1.0-P5] ✅ bulk cheque linker installed');
+  } catch(e) {}
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', p5Boot);
+else p5Boot();
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
      Appended at end of file. Runs alongside the existing console blocker.
      Detection: 5 layers. Action: DOM wipe + navigate to about:blank.
