@@ -9962,5 +9962,1209 @@ window.NCX_P8 = {
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     NEONCHEQUE — PART 9 · DIAGNOSTIC + FIXES + DRILL-DOWNS
+     · Run Diagnostic tool (sidebar)
+     · Payee click → drill-down modal with all cheques
+     · Issuer click → drill-down modal with all cheques
+     · Settings rebuild with robust tab switching
+     · Finance debug panel + force reload
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__NCX_PART9) return;
+if (!window.NCX) { console.error('[Part 9] Shell not loaded'); return; }
+window.__NCX_PART9 = true;
+
+var NCX = window.NCX;
+var S = NCX.S;
+var db = NCX.db;
+var $ = NCX.$;
+var fmt = NCX.fmt;
+var fmtShort = NCX.fmtShort;
+var dateFmt = NCX.dateFmt;
+var esc = NCX.esc;
+var num = NCX.num;
+var today = NCX.today;
+var toast = NCX.toast;
+var openModal = NCX.openModal;
+var closeModal = NCX.closeModal;
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 1 · DIAGNOSTIC TOOL
+   ═══════════════════════════════════════════════════════════════════ */
+function runDiagnostic() {
+  toast('Running diagnostic...', 'info');
+
+  var COLLECTIONS = [
+    'cheques', 'parties', 'projects', 'project_entries', 'accounts',
+    'cheque_discounts', 'finance_plans', 'finance_payments', 'finance_deductions',
+    'cheque_books', 'auditLog'
+  ];
+
+  var MEMORY_MAP = {
+    cheques: 'cheques', parties: 'parties', projects: 'projects',
+    project_entries: 'entries', accounts: 'accounts',
+    cheque_discounts: 'discounts', finance_plans: 'financePlans',
+    finance_payments: 'financePayments', finance_deductions: 'financeDeductions',
+    cheque_books: 'books', auditLog: null
+  };
+
+  var fsResults = {};
+  var promises = COLLECTIONS.map(function (coll) {
+    return db.collection(coll).get().then(function (snap) {
+      fsResults[coll] = {
+        count: snap.docs.length,
+        fields: snap.docs[0] ? Object.keys(snap.docs[0].data()).slice(0, 12) : [],
+        firstId: snap.docs[0] ? snap.docs[0].id : null,
+        sample: snap.docs[0] ? snap.docs[0].data() : null
+      };
+    }).catch(function (e) {
+      fsResults[coll] = { error: e.message, code: e.code || '—' };
+    });
+  });
+
+  Promise.all(promises).then(function () {
+    showDiagnosticModal(fsResults, MEMORY_MAP);
+  });
+}
+
+function showDiagnosticModal(fs, memMap) {
+  var old = $('diagnosticModal'); if (old) old.remove();
+
+  var memRows = Object.keys(memMap).map(function (fsName) {
+    var memKey = memMap[fsName];
+    if (!memKey) return '';
+    var memVal = Array.isArray(S[memKey]) ? S[memKey].length : '—';
+    return '<div style="display:flex;justify-content:space-between;padding:5px 10px;background:white;border-radius:6px;margin-bottom:3px"><span style="font-size:11.5px">' + fsName + '</span><strong style="color:' + (memVal > 0 ? 'var(--success)' : 'var(--gray)') + '">' + memVal + '</strong></div>';
+  }).join('');
+
+  var fsRows = Object.keys(fs).map(function (coll) {
+    var f = fs[coll];
+    if (f.error) {
+      return '<div style="padding:10px 12px;background:#fee2e2;border-radius:8px;margin-bottom:6px;border-left:4px solid #ef4444">' +
+        '<div style="font-weight:800;color:#991b1b;font-size:13px">' + coll + '</div>' +
+        '<div style="font-size:11px;color:#991b1b;margin-top:4px"><strong>ERROR:</strong> ' + esc(f.error) + ' <span style="opacity:.7">(' + esc(f.code) + ')</span></div>' +
+        '</div>';
+    }
+    var memKey = memMap[coll];
+    var memCount = memKey ? (Array.isArray(S[memKey]) ? S[memKey].length : 0) : null;
+    var matches = memCount === null || memCount === f.count;
+    return '<div style="padding:10px 12px;background:white;border-radius:8px;margin-bottom:6px;border-left:4px solid ' + (f.count > 0 ? 'var(--success)' : 'var(--gray)') + '">' +
+      '<div style="display:flex;justify-content:space-between"><strong style="font-size:13px">' + coll + '</strong><span style="font-weight:800;color:' + (f.count > 0 ? 'var(--success)' : 'var(--gray)') + '">' + f.count + ' docs</span></div>' +
+      (f.fields.length ? '<div style="font-size:11px;color:var(--gray);margin-top:4px">Fields: ' + esc(f.fields.join(', ')) + '</div>' : '') +
+      (memCount !== null && memCount !== f.count ? '<div style="font-size:11px;color:#b45309;margin-top:4px;font-weight:700">⚠ In memory: ' + memCount + ' — MISMATCH! Try Force Reload</div>' : '') +
+      '</div>';
+  }).join('');
+
+  var html = '<div class="modal" style="max-width:820px">' +
+    '<div class="modal-header"><h2 class="modal-title"><i class="fas fa-stethoscope"></i> Full Data Diagnostic</h2>' +
+    '<button class="modal-close" onclick="NCX_P9.closeDiagnostic()"><i class="fas fa-times"></i></button></div>' +
+    '<div class="modal-body">' +
+    '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1.5px solid #3b82f6;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;color:#1e40af">' +
+    '<strong>User:</strong> ' + esc(S.user ? S.user.email : 'NOT LOGGED IN') +
+    ' · <strong>Loaded:</strong> ' + S.loaded +
+    ' · <strong>Loading:</strong> ' + S.loading +
+    '</div>' +
+
+    '<h3 style="font-size:14px;font-weight:800;margin-bottom:10px">📦 In-Memory Counts (S.xxx)</h3>' +
+    '<div style="margin-bottom:20px">' + memRows + '</div>' +
+
+    '<h3 style="font-size:14px;font-weight:800;margin-bottom:10px">🔥 Firestore Direct Query</h3>' +
+    '<div style="margin-bottom:20px;max-height:400px;overflow-y:auto">' + fsRows + '</div>' +
+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn btn-primary btn-sm" onclick="NCX_P9.forceReload()"><i class="fas fa-sync"></i> Force Reload All</button>' +
+    '<button class="btn btn-secondary btn-sm" onclick="NCX_P9.closeDiagnostic()">Close</button>' +
+    '</div>' +
+    '</div></div>';
+
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'diagnosticModal';
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+  openModal('diagnosticModal');
+}
+
+function closeDiagnostic() {
+  var m = $('diagnosticModal'); if (m) m.remove();
+}
+
+function forceReload() {
+  var m = $('diagnosticModal'); if (m) m.remove();
+  toast('Force reloading all data...', 'info');
+  S.loading = false;
+  S.loaded = false;
+  NCX.loadAll().then(function () {
+    toast('Data reloaded — check counts', 'success');
+    NCX.showView(S.activeView || 'dashboard');
+    setTimeout(function () { runDiagnostic(); }, 400);
+  }).catch(function (e) {
+    toast('Reload failed: ' + e.message, 'error');
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 2 · PAYEE DRILL-DOWN
+   ═══════════════════════════════════════════════════════════════════ */
+function openPayeeDetail(payeeName) {
+  if (!payeeName) return;
+  var cheques = S.cheques.filter(function (c) {
+    return !c.deletedAt && (c.payee || '').toLowerCase() === payeeName.toLowerCase();
+  }).sort(function (a, b) {
+    return new Date(b.date || 0) - new Date(a.date || 0);
+  });
+
+  var total = cheques.length;
+  var totalValue = cheques.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var cleared = cheques.filter(function (c) { return c.status === 'cleared'; });
+  var clearedValue = cleared.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var inHand = cheques.filter(function (c) { return c.status === 'in-hand'; });
+  var inHandValue = inHand.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var returned = cheques.filter(function (c) { return c.status === 'returned'; });
+  var returnedValue = returned.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var pending = cheques.filter(function (c) { return ['issued', 'deposited', 'draft'].indexOf(c.status) !== -1; });
+  var pendingValue = pending.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var recovered = cheques.reduce(function (s, c) {
+    return s + (c.payments || []).reduce(function (ss, p) { return ss + num(p.amount); }, 0);
+  }, 0);
+
+  var statusColors = {
+    'draft': 'status-draft', 'in-hand': 'status-in-hand', 'issued': 'status-issued',
+    'deposited': 'status-deposited', 'returned': 'status-returned',
+    'cleared': 'status-cleared', 'stopped': 'status-stopped'
+  };
+
+  var html = '<div class="modal" style="max-width:900px">' +
+    '<div class="modal-header">' +
+    '<h2 class="modal-title"><i class="fas fa-user" style="color:var(--primary);margin-right:8px"></i>' + esc(payeeName) + '</h2>' +
+    '<button class="modal-close" onclick="NCX_P9.closeAnyModal(\'payeeDetailModal\')"><i class="fas fa-times"></i></button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+
+    '<div style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:12px;padding:20px;color:white;margin-bottom:16px">' +
+    '<div style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:1px;opacity:.8;margin-bottom:6px">Total Value from This Payee</div>' +
+    '<div style="font-size:34px;font-weight:800">' + fmt(totalValue) + '</div>' +
+    '<div style="font-size:12.5px;opacity:.85;margin-top:6px">' + total + ' cheque(s) · ' + cleared.length + ' cleared · ' + inHand.length + ' in-hand · ' + returned.length + ' returned · ' + pending.length + ' pending</div>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px">' +
+    kpiTile('Total Cheques', String(total), 'fa-money-check', '#6366f1') +
+    kpiTile('Cleared', cleared.length + ' · ' + fmtShort(clearedValue), 'fa-check-circle', '#10b981') +
+    kpiTile('In Hand', inHand.length + ' · ' + fmtShort(inHandValue), 'fa-hand-holding', '#3b82f6') +
+    kpiTile('Returned', returned.length + ' · ' + fmtShort(returnedValue), 'fa-undo', '#ef4444') +
+    kpiTile('Recovered', fmtShort(recovered), 'fa-hand-holding-usd', '#10b981') +
+    kpiTile('Pending', pending.length + ' · ' + fmtShort(pendingValue), 'fa-hourglass-half', '#f59e0b') +
+    '</div>' +
+
+    '<h3 style="font-size:14px;font-weight:800;margin-bottom:10px"><i class="fas fa-list"></i> All Cheques (' + cheques.length + ')</h3>';
+
+  if (!cheques.length) {
+    html += '<div style="text-align:center;padding:30px;color:var(--gray)"><i class="fas fa-inbox" style="font-size:36px;opacity:.3;display:block;margin-bottom:10px"></i>No cheques found</div>';
+  } else {
+    html += '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+      '<thead><tr>' +
+      thEl('Date') + thEl('Cheque #') + thEl('Amount', 'right') + thEl('Bank') + thEl('Status') + thEl('Paid', 'right') +
+      '</tr></thead><tbody>';
+
+    cheques.forEach(function (c) {
+      var paid = (c.payments || []).reduce(function (s, p) { return s + num(p.amount); }, 0);
+      html += '<tr style="cursor:pointer" onclick="NCX_P9.closeAnyModal(\'payeeDetailModal\');setTimeout(function(){NCX_P2.openChequeDetail(\'' + c.id + '\')},200)">' +
+        tdEl(dateFmt(c.date)) +
+        tdEl('<strong>' + esc(c.number) + '</strong>') +
+        tdEl('<span style="font-weight:700">' + fmt(c.amount) + '</span>', 'right') +
+        tdEl(esc(c.bank || '—')) +
+        tdEl('<span class="status-badge ' + (statusColors[c.status] || '') + '">' + esc(c.status) + '</span>') +
+        tdEl(paid > 0 ? '<span style="color:var(--success);font-weight:700">' + fmt(paid) + '</span>' : '—', 'right') +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  html += '<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn btn-secondary btn-sm" onclick="NCX_P9.closeAnyModal(\'payeeDetailModal\')">Close</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="NCX_P9.exportPayeeCSV(\'' + esc(payeeName).replace(/'/g, '\\\'') + '\')"><i class="fas fa-file-csv"></i> Export CSV</button>' +
+    '</div>' +
+    '</div></div>';
+
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'payeeDetailModal';
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+  openModal('payeeDetailModal');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 3 · ISSUER DRILL-DOWN
+   ═══════════════════════════════════════════════════════════════════ */
+function openIssuerDetail(issuerName) {
+  if (!issuerName) return;
+  var cheques = S.cheques.filter(function (c) {
+    if (c.deletedAt) return false;
+    var iss = (c.issuedTo || c.issuer || '').toLowerCase();
+    return iss === issuerName.toLowerCase();
+  }).sort(function (a, b) {
+    return new Date(b.date || 0) - new Date(a.date || 0);
+  });
+
+  var total = cheques.length;
+  var totalValue = cheques.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var cleared = cheques.filter(function (c) { return c.status === 'cleared'; });
+  var clearedValue = cleared.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var issued = cheques.filter(function (c) { return c.status === 'issued'; });
+  var issuedValue = issued.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var deposited = cheques.filter(function (c) { return c.status === 'deposited'; });
+  var depositedValue = deposited.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var returned = cheques.filter(function (c) { return c.status === 'returned'; });
+  var returnedValue = returned.reduce(function (s, c) { return s + num(c.amount); }, 0);
+
+  var statusColors = {
+    'draft': 'status-draft', 'in-hand': 'status-in-hand', 'issued': 'status-issued',
+    'deposited': 'status-deposited', 'returned': 'status-returned',
+    'cleared': 'status-cleared', 'stopped': 'status-stopped'
+  };
+
+  var html = '<div class="modal" style="max-width:900px">' +
+    '<div class="modal-header">' +
+    '<h2 class="modal-title"><i class="fas fa-user-tie" style="color:var(--primary);margin-right:8px"></i>' + esc(issuerName) + '</h2>' +
+    '<button class="modal-close" onclick="NCX_P9.closeAnyModal(\'issuerDetailModal\')"><i class="fas fa-times"></i></button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+
+    '<div style="background:linear-gradient(135deg,#06b6d4,#0891b2);border-radius:12px;padding:20px;color:white;margin-bottom:16px">' +
+    '<div style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:1px;opacity:.8;margin-bottom:6px">Total Value to This Issuer</div>' +
+    '<div style="font-size:34px;font-weight:800">' + fmt(totalValue) + '</div>' +
+    '<div style="font-size:12.5px;opacity:.85;margin-top:6px">' + total + ' cheque(s) · ' + cleared.length + ' cleared · ' + issued.length + ' issued · ' + deposited.length + ' deposited · ' + returned.length + ' returned</div>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px">' +
+    kpiTile('Total', String(total), 'fa-money-check', '#6366f1') +
+    kpiTile('Cleared', cleared.length + ' · ' + fmtShort(clearedValue), 'fa-check-circle', '#10b981') +
+    kpiTile('Issued', issued.length + ' · ' + fmtShort(issuedValue), 'fa-paper-plane', '#f59e0b') +
+    kpiTile('Deposited', deposited.length + ' · ' + fmtShort(depositedValue), 'fa-university', '#4338ca') +
+    kpiTile('Returned', returned.length + ' · ' + fmtShort(returnedValue), 'fa-undo', '#ef4444') +
+    kpiTile('Value', fmtShort(totalValue), 'fa-coins', '#3b82f6') +
+    '</div>' +
+
+    '<h3 style="font-size:14px;font-weight:800;margin-bottom:10px"><i class="fas fa-list"></i> All Cheques (' + cheques.length + ')</h3>';
+
+  if (!cheques.length) {
+    html += '<div style="text-align:center;padding:30px;color:var(--gray)"><i class="fas fa-inbox" style="font-size:36px;opacity:.3;display:block;margin-bottom:10px"></i>No cheques found</div>';
+  } else {
+    html += '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+      '<thead><tr>' +
+      thEl('Date') + thEl('Cheque #') + thEl('Payee') + thEl('Amount', 'right') + thEl('Bank') + thEl('Status') +
+      '</tr></thead><tbody>';
+
+    cheques.forEach(function (c) {
+      html += '<tr style="cursor:pointer" onclick="NCX_P9.closeAnyModal(\'issuerDetailModal\');setTimeout(function(){NCX_P2.openChequeDetail(\'' + c.id + '\')},200)">' +
+        tdEl(dateFmt(c.date)) +
+        tdEl('<strong>' + esc(c.number) + '</strong>') +
+        tdEl(esc(c.payee || '—')) +
+        tdEl('<span style="font-weight:700">' + fmt(c.amount) + '</span>', 'right') +
+        tdEl(esc(c.bank || '—')) +
+        tdEl('<span class="status-badge ' + (statusColors[c.status] || '') + '">' + esc(c.status) + '</span>') +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  html += '<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn btn-secondary btn-sm" onclick="NCX_P9.closeAnyModal(\'issuerDetailModal\')">Close</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="NCX_P9.exportIssuerCSV(\'' + esc(issuerName).replace(/'/g, '\\\'') + '\')"><i class="fas fa-file-csv"></i> Export CSV</button>' +
+    '</div>' +
+    '</div></div>';
+
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'issuerDetailModal';
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+  openModal('issuerDetailModal');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
+function kpiTile(label, value, icon, color) {
+  return '<div style="background:white;border-radius:10px;padding:12px;border-left:4px solid ' + color + ';box-shadow:0 1px 3px rgba(0,0,0,.05)">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--gray);text-transform:uppercase">' + label + '</span><i class="fas ' + icon + '" style="color:' + color + ';font-size:14px"></i></div>' +
+    '<div style="font-size:16px;font-weight:800;margin-top:6px">' + value + '</div>' +
+    '</div>';
+}
+function thEl(label) {
+  return '<th style="background:var(--light);padding:10px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray);font-weight:700;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2">' + label + '</th>';
+}
+function tdEl(content, align) {
+  return '<td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:' + (align || 'left') + '">' + content + '</td>';
+}
+function closeAnyModal(id) {
+  closeModal(id);
+  setTimeout(function () { var m = $(id); if (m) m.remove(); }, 250);
+}
+
+function exportPayeeCSV(payeeName) {
+  var cheques = S.cheques.filter(function (c) {
+    return !c.deletedAt && (c.payee || '').toLowerCase() === payeeName.toLowerCase();
+  });
+  var csv = 'Payee: ' + payeeName + '\nTotal Cheques,' + cheques.length + '\n\n';
+  csv += 'Date,Cheque#,Amount,Bank,Status,Paid,Due,Notes\n';
+  cheques.forEach(function (c) {
+    var paid = (c.payments || []).reduce(function (s, p) { return s + num(p.amount); }, 0);
+    var due = num(c.amount) - paid;
+    csv += [
+      c.date || '', '"' + c.number + '"', num(c.amount), '"' + (c.bank || '') + '"',
+      c.status, paid, due, '"' + String(c.notes || '').replace(/"/g, '""') + '"'
+    ].join(',') + '\n';
+  });
+  downloadCSV(csv, 'payee_' + payeeName.replace(/[^a-z0-9]/gi, '_') + '_' + today() + '.csv');
+  toast('Payee exported', 'success');
+}
+
+function exportIssuerCSV(issuerName) {
+  var cheques = S.cheques.filter(function (c) {
+    if (c.deletedAt) return false;
+    return ((c.issuedTo || c.issuer || '').toLowerCase() === issuerName.toLowerCase());
+  });
+  var csv = 'Issuer: ' + issuerName + '\nTotal Cheques,' + cheques.length + '\n\n';
+  csv += 'Date,Cheque#,Payee,Amount,Bank,Status,Notes\n';
+  cheques.forEach(function (c) {
+    csv += [
+      c.date || '', '"' + c.number + '"', '"' + (c.payee || '') + '"',
+      num(c.amount), '"' + (c.bank || '') + '"', c.status,
+      '"' + String(c.notes || '').replace(/"/g, '""') + '"'
+    ].join(',') + '\n';
+  });
+  downloadCSV(csv, 'issuer_' + issuerName.replace(/[^a-z0-9]/gi, '_') + '_' + today() + '.csv');
+  toast('Issuer exported', 'success');
+}
+
+function downloadCSV(content, filename) {
+  var blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 4 · ROBUST SETTINGS RENDERER
+   ═══════════════════════════════════════════════════════════════════ */
+var SETTINGS_TABS = [
+  { key: 'general',         label: 'General',          icon: 'cog' },
+  { key: 'banks',           label: 'Banks',            icon: 'university' },
+  { key: 'users',           label: 'Users',            icon: 'users-cog' },
+  { key: 'escalation',      label: 'Escalation Rules', icon: 'route' },
+  { key: 'custom-fields',   label: 'Custom Fields',    icon: 'plus-circle' },
+  { key: 'custom-statuses', label: 'Custom Statuses',  icon: 'tags' },
+  { key: 'branding',        label: 'Branding',         icon: 'palette' },
+  { key: 'data',            label: 'Data & Backup',    icon: 'database' }
+];
+
+function getActiveTab() {
+  try { return localStorage.getItem('ncx_settings_tab_v9') || 'general'; } catch (e) { return 'general'; }
+}
+function setActiveTab(k) {
+  try { localStorage.setItem('ncx_settings_tab_v9', k); } catch (e) {}
+}
+
+function renderSettingsV2(host) {
+  var activeTab = getActiveTab();
+  var tabsHtml = SETTINGS_TABS.map(function (t) {
+    var active = activeTab === t.key;
+    return '<button type="button" data-tabkey="' + t.key + '" ' +
+      'style="padding:10px 16px;border:none;background:transparent;font-weight:' + (active ? '700' : '600') + ';color:' + (active ? 'var(--primary)' : 'var(--gray)') + ';cursor:pointer;border-bottom:3px solid ' + (active ? 'var(--primary)' : 'transparent') + ';transition:.2s;white-space:nowrap;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-family:inherit">' +
+      '<i class="fas fa-' + t.icon + '"></i> ' + t.label + '</button>';
+  }).join('');
+
+  var html = '<div class="card">' +
+    '<div class="card-header">' +
+    '<h2 class="card-title"><i class="fas fa-shield-alt" style="color:var(--primary);margin-right:8px"></i>Settings & Administration</h2>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn btn-secondary btn-sm" onclick="NCX_P9.runDiagnostic()"><i class="fas fa-stethoscope"></i> Diagnostic</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="NCX_P9.saveAllSettings()"><i class="fas fa-save"></i> Save All</button>' +
+    '</div></div>' +
+
+    '<div id="ncxSettingsTabs" style="display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:20px;overflow-x:auto;padding-bottom:2px">' +
+    tabsHtml + '</div>' +
+
+    '<div id="ncxSettingsPane">' + renderPane(activeTab) + '</div>' +
+    '</div>';
+
+  host.innerHTML = html;
+
+  // Attach click handlers to tabs
+  var tabsContainer = $('ncxSettingsTabs');
+  if (tabsContainer) {
+    tabsContainer.querySelectorAll('[data-tabkey]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        setActiveTab(this.dataset.tabkey);
+        renderSettingsV2(host);
+      });
+    });
+  }
+}
+
+function renderPane(key) {
+  switch (key) {
+    case 'general':         return renderPaneGeneral();
+    case 'banks':           return renderPaneBanks();
+    case 'users':           return renderPaneUsers();
+    case 'escalation':      return renderPaneEscalation();
+    case 'custom-fields':   return renderPaneCustomFields();
+    case 'custom-statuses': return renderPaneCustomStatuses();
+    case 'branding':        return renderPaneBranding();
+    case 'data':            return renderPaneData();
+    default: return '<div class="empty-state"><h3>Unknown tab: ' + esc(key) + '</h3></div>';
+  }
+}
+
+function getLS(k, def) {
+  try { var v = localStorage.getItem(k); return v === null ? def : JSON.parse(v); }
+  catch (e) { return def; }
+}
+function setLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+function renderPaneGeneral() {
+  var g = getLS('ncx_general', { companyName: 'Main Company', currency: 'Rs. ', fiscalYear: '' });
+  var prefs = getLS('ncx_preferences', { defaultTab: 'dashboard', rowsPerPage: 50, dateFormat: 'dd-mmm-yyyy' });
+
+  var counts = {
+    Cheques: S.cheques.length,
+    Parties: S.parties.length,
+    Projects: S.projects.length,
+    Entries: S.entries.length,
+    Accounts: S.accounts.length,
+    Discounts: S.discounts.length,
+    'Finance Plans': S.financePlans.length,
+    'Finance Payments': S.financePayments.length,
+    'Finance Deductions': S.financeDeductions.length,
+    'Cheque Books': S.books.length
+  };
+
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">' +
+
+    '<div style="background:var(--light);padding:20px;border-radius:12px">' +
+    '<h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-building"></i> System Settings</h4>' +
+    '<div class="form-group"><label>Company Name</label><input type="text" id="gCompanyName" value="' + esc(g.companyName) + '"></div>' +
+    '<div class="form-group"><label>Currency Symbol</label><input type="text" id="gCurrency" value="' + esc(g.currency) + '"></div>' +
+    '<div class="form-group"><label>Fiscal Year</label><input type="text" id="gFiscalYear" value="' + esc(g.fiscalYear || '') + '" placeholder="e.g. 2025-2026"></div>' +
+    '<button class="btn btn-primary btn-sm" style="width:100%" onclick="NCX_P9.saveGeneralSettings()"><i class="fas fa-save"></i> Save</button>' +
+    '</div>' +
+
+    '<div style="background:var(--light);padding:20px;border-radius:12px">' +
+    '<h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-sliders-h"></i> Preferences</h4>' +
+    '<div class="form-group"><label>Default View</label><select id="pDefaultTab">' +
+    ['dashboard', 'cheques', 'projects', 'accounts', 'executive', 'finance'].map(function (t) {
+      return '<option value="' + t + '"' + (prefs.defaultTab === t ? ' selected' : '') + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
+    }).join('') +
+    '</select></div>' +
+    '<div class="form-group"><label>Rows Per Page</label><select id="pRowsPerPage">' +
+    [10, 25, 50, 100, 200].map(function (n) {
+      return '<option value="' + n + '"' + (prefs.rowsPerPage === n ? ' selected' : '') + '>' + n + '</option>';
+    }).join('') +
+    '</select></div>' +
+    '<button class="btn btn-primary btn-sm" style="width:100%" onclick="NCX_P9.savePreferences()"><i class="fas fa-save"></i> Save</button>' +
+    '</div>' +
+
+    '<div style="background:var(--light);padding:20px;border-radius:12px">' +
+    '<h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-chart-pie"></i> Data Stats</h4>' +
+    '<div style="font-size:12.5px;line-height:2">' +
+    Object.keys(counts).map(function (k) {
+      return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0"><span>' + k + '</span><strong>' + counts[k] + '</strong></div>';
+    }).join('') +
+    '</div></div>' +
+
+    '<div style="background:var(--light);padding:20px;border-radius:12px">' +
+    '<h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-info-circle"></i> About</h4>' +
+    '<div style="font-size:12.5px;line-height:2">' +
+    '<div><strong>NeonCheque</strong> v3.0</div>' +
+    '<div>Project: ' + esc(firebase.app().options.projectId) + '</div>' +
+    '<div>User: ' + esc(S.user ? S.user.email : '—') + '</div>' +
+    '</div></div>' +
+    '</div>';
+}
+
+function renderPaneBanks() {
+  var html = '<div><h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-university"></i> Bank Account Management</h4>';
+  if (!S.accounts.length) {
+    html += '<div style="text-align:center;padding:30px;color:var(--gray)"><i class="fas fa-university" style="font-size:36px;opacity:.3;display:block;margin-bottom:10px"></i>No accounts yet. Add them in the Accounts view.</div>';
+  } else {
+    html += '<div class="table-container"><table><thead><tr><th>Account</th><th>Type</th><th>Bank</th><th>A/c#</th><th class="num">Balance</th><th>Status</th><th></th></tr></thead><tbody>';
+    S.accounts.forEach(function (a) {
+      var bal = 0;
+      var opening = num(a.openingBalance);
+      bal = opening;
+      S.entries.forEach(function (e) {
+        if (e.status && e.status !== 'cleared') return;
+        var amt = num(e.amount);
+        if (e.type === 'transfer') {
+          if (e.toAccountId === a.id) bal += amt;
+          if (e.fromAccountId === a.id) bal -= amt;
+          return;
+        }
+        if (e.accountId !== a.id) return;
+        if (e.direction === 'in') bal += amt;
+        else if (e.direction === 'out') bal -= amt;
+      });
+      html += '<tr>' +
+        '<td><strong>' + esc(a.name) + '</strong></td>' +
+        '<td><span class="status-badge status-' + (a.type === 'cash' ? 'in-hand' : 'issued') + '">' + esc(a.type) + '</span></td>' +
+        '<td>' + esc(a.bankName || '—') + '</td>' +
+        '<td>' + esc(a.accountNo || '—') + '</td>' +
+        '<td class="num" style="color:' + (bal >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + fmt(bal) + '</td>' +
+        '<td><span class="status-badge status-' + (a.status === 'inactive' ? 'loss' : 'active') + '">' + (a.status || 'active') + '</span></td>' +
+        '<td><button class="btn btn-xs btn-secondary" onclick="NCX_P6.openAccountModal(\'' + a.id + '\')"><i class="fas fa-edit"></i></button></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  html += '<button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="NCX.showView(\'accounts\')"><i class="fas fa-arrow-right"></i> Go to Accounts View</button>';
+  html += '</div>';
+  return html;
+}
+
+function renderPaneUsers() {
+  var u = S.user;
+  var localUsers = getLS('ncx_users', []);
+
+  var html = '<div><h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-users-cog"></i> User Management</h4>';
+
+  if (u) {
+    var name = u.displayName || (u.email || '').split('@')[0];
+    var initial = (name || 'U').charAt(0).toUpperCase();
+    html += '<div style="display:flex;gap:14px;align-items:center;padding:16px;background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:10px;color:white;margin-bottom:16px">' +
+      '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;flex-shrink:0">' + esc(initial) + '</div>' +
+      '<div style="flex:1"><div style="font-weight:800;font-size:15px">' + esc(name) + ' <span style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:8px;font-size:10px;margin-left:6px">YOU</span></div>' +
+      '<div style="font-size:12.5px;opacity:.9;margin-top:3px">' + esc(u.email) + '</div>' +
+      '<div style="font-size:11px;opacity:.85;margin-top:3px"><i class="fas fa-shield-alt"></i> Admin</div></div>' +
+      '</div>';
+  }
+
+  html += '<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" onclick="NCX_P9.openInviteModal()"><i class="fas fa-user-plus"></i> Invite User</button></div>';
+
+  if (localUsers.length) {
+    html += '<h5 style="font-size:12px;color:var(--gray);text-transform:uppercase;font-weight:700;margin-bottom:10px">Team Members (' + localUsers.length + ')</h5>';
+    localUsers.forEach(function (user, i) {
+      html += '<div style="display:flex;gap:12px;align-items:center;padding:12px;background:var(--light);border-radius:10px;margin-bottom:8px;border:1px solid var(--border)">' +
+        '<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--info),#2563eb);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;flex-shrink:0">' + esc((user.name || 'U').charAt(0).toUpperCase()) + '</div>' +
+        '<div style="flex:1;min-width:0"><div style="font-weight:700">' + esc(user.name) + '</div>' +
+        '<div style="font-size:11.5px;color:var(--gray);margin-top:2px">' + esc(user.email) + ' · <strong>' + esc(user.role) + '</strong></div></div>' +
+        '<button class="btn btn-xs btn-secondary" onclick="NCX_P9.editLocalUser(' + i + ')"><i class="fas fa-edit"></i></button>' +
+        '<button class="btn btn-xs btn-danger" onclick="NCX_P9.deleteLocalUser(' + i + ')"><i class="fas fa-trash"></i></button>' +
+        '</div>';
+    });
+  } else {
+    html += '<div style="text-align:center;padding:24px;color:var(--gray);background:var(--light);border-radius:10px"><i class="fas fa-users" style="font-size:32px;opacity:.3;display:block;margin-bottom:8px"></i>No team members yet</div>';
+  }
+
+  html += '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1.5px solid #3b82f6;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#1e40af;margin-top:14px">' +
+    '<i class="fas fa-info-circle"></i> Firebase user accounts are created when someone signs up at the login screen. This list is for team reference.</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function renderPaneEscalation() {
+  var rules = getLS('ncx_escalation_rules', []);
+
+  var html = '<div><h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-route"></i> Escalation Rules</h4>';
+
+  html += '<div style="background:var(--light);padding:16px;border-radius:12px;margin-bottom:16px">' +
+    '<h5 style="font-size:12px;color:var(--gray);text-transform:uppercase;font-weight:700;margin-bottom:10px">Add Rule</h5>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end">' +
+    '<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray);display:block;margin-bottom:4px">Condition</label>' +
+    '<select id="escCond" style="width:100%;padding:9px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<option>In-hand days</option><option>Returned amount</option><option>Pending commission</option><option>Deposited days</option><option>Project outstanding</option>' +
+    '</select></div>' +
+    '<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray);display:block;margin-bottom:4px">Value</label>' +
+    '<input type="text" id="escVal" placeholder="30" style="width:100%;padding:9px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray);display:block;margin-bottom:4px">Action</label>' +
+    '<select id="escAction" style="width:100%;padding:9px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<option>Notify Manager</option><option>Highlight in Dashboard</option><option>Log Only</option>' +
+    '</select></div>' +
+    '<button class="btn btn-primary" onclick="NCX_P9.addEscRule()"><i class="fas fa-plus"></i> Add</button>' +
+    '</div></div>';
+
+  if (!rules.length) {
+    html += '<div style="text-align:center;padding:24px;color:var(--gray)">No rules yet</div>';
+  } else {
+    html += '<h5 style="font-size:12px;color:var(--gray);text-transform:uppercase;font-weight:700;margin-bottom:10px">Rules (' + rules.length + ')</h5>';
+    rules.forEach(function (r, i) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--light);padding:12px;border-radius:10px;margin-bottom:8px;gap:10px">' +
+        '<div style="flex:1"><div style="font-weight:700">' + esc(r.condition) + ' > ' + esc(r.value) + '</div>' +
+        '<div style="font-size:11.5px;color:var(--gray);margin-top:2px">Action: <strong>' + esc(r.action) + '</strong></div></div>' +
+        '<button class="btn btn-xs btn-danger" onclick="NCX_P9.deleteEscRule(' + i + ')"><i class="fas fa-trash"></i></button>' +
+        '</div>';
+    });
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderPaneCustomFields() {
+  var fields = getLS('ncx_custom_fields', []);
+
+  var html = '<div><h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-plus-circle"></i> Custom Fields</h4>';
+
+  html += '<div style="background:var(--light);padding:16px;border-radius:12px;margin-bottom:16px">' +
+    '<h5 style="font-size:12px;color:var(--gray);text-transform:uppercase;font-weight:700;margin-bottom:10px">Add Field</h5>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">' +
+    '<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray);display:block;margin-bottom:4px">Field Name</label>' +
+    '<input type="text" id="cfName" placeholder="Department" style="width:100%;padding:9px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray);display:block;margin-bottom:4px">Type</label>' +
+    '<select id="cfType" style="width:100%;padding:9px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<option>Text</option><option>Number</option><option>Date</option><option>Currency</option><option>Dropdown</option>' +
+    '</select></div>' +
+    '<button class="btn btn-primary" onclick="NCX_P9.addCustomField()"><i class="fas fa-plus"></i> Add</button>' +
+    '</div></div>';
+
+  if (!fields.length) {
+    html += '<div style="text-align:center;padding:24px;color:var(--gray)">No custom fields yet</div>';
+  } else {
+    fields.forEach(function (f, i) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--light);padding:12px;border-radius:10px;margin-bottom:8px;gap:10px">' +
+        '<div style="flex:1"><div style="font-weight:700">' + esc(f.name) + ' <span style="color:var(--gray);font-size:11.5px">(' + esc(f.type) + ')</span></div></div>' +
+        '<button class="btn btn-xs btn-danger" onclick="NCX_P9.deleteCustomField(' + i + ')"><i class="fas fa-trash"></i></button>' +
+        '</div>';
+    });
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderPaneCustomStatuses() {
+  var statuses = getLS('ncx_custom_statuses', []);
+
+  var html = '<div><h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-tags"></i> Custom Statuses</h4>';
+
+  html += '<div style="background:var(--light);padding:16px;border-radius:12px;margin-bottom:16px">' +
+    '<h5 style="font-size:12px;color:var(--gray);text-transform:uppercase;font-weight:700;margin-bottom:10px">Standard Statuses</h5>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+    ['draft', 'in-hand', 'issued', 'deposited', 'returned', 'cleared', 'stopped'].map(function (s) {
+      return '<span class="status-badge status-' + s + '">' + s + '</span>';
+    }).join('') +
+    '</div></div>';
+
+  html += '<div style="background:var(--light);padding:16px;border-radius:12px;margin-bottom:16px">' +
+    '<h5 style="font-size:12px;color:var(--gray);text-transform:uppercase;font-weight:700;margin-bottom:10px">Add Custom Status</h5>' +
+    '<div style="display:grid;grid-template-columns:1fr 80px auto;gap:10px;align-items:end">' +
+    '<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray);display:block;margin-bottom:4px">Name</label>' +
+    '<input type="text" id="csName" placeholder="Awaiting Deposit" style="width:100%;padding:9px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray);display:block;margin-bottom:4px">Color</label>' +
+    '<input type="color" id="csColor" value="#6366f1" style="width:100%;height:38px;border:2px solid var(--border);border-radius:8px"></div>' +
+    '<button class="btn btn-primary" onclick="NCX_P9.addCustomStatus()"><i class="fas fa-plus"></i> Add</button>' +
+    '</div></div>';
+
+  if (!statuses.length) {
+    html += '<div style="text-align:center;padding:24px;color:var(--gray)">No custom statuses yet</div>';
+  } else {
+    statuses.forEach(function (s, i) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--light);padding:12px;border-radius:10px;margin-bottom:8px;gap:10px">' +
+        '<div style="flex:1"><div style="font-weight:700"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + esc(s.color) + ';margin-right:8px;vertical-align:middle"></span>' + esc(s.name) + '</div></div>' +
+        '<button class="btn btn-xs btn-danger" onclick="NCX_P9.deleteCustomStatus(' + i + ')"><i class="fas fa-trash"></i></button>' +
+        '</div>';
+    });
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderPaneBranding() {
+  var b = getLS('ncx_branding', { logoText: 'NeonCheque', primaryColor: '#6366f1', secondaryColor: '#06b6d4' });
+
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+    '<div style="background:var(--light);padding:20px;border-radius:12px">' +
+    '<h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-palette"></i> Customize</h4>' +
+    '<div class="form-group"><label>App Name</label><input type="text" id="brLogoText" value="' + esc(b.logoText) + '" maxlength="30"></div>' +
+    '<div class="form-group"><label>Primary Color</label><input type="color" id="brPrimary" value="' + esc(b.primaryColor) + '" style="width:100%;height:44px;border:2px solid var(--border);border-radius:8px"></div>' +
+    '<div class="form-group"><label>Secondary Color</label><input type="color" id="brSecondary" value="' + esc(b.secondaryColor) + '" style="width:100%;height:44px;border:2px solid var(--border);border-radius:8px"></div>' +
+    '<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px" onclick="NCX_P9.saveBranding()"><i class="fas fa-save"></i> Save</button>' +
+    '<button class="btn btn-secondary btn-sm" style="width:100%" onclick="NCX_P9.resetBranding()"><i class="fas fa-undo"></i> Reset</button>' +
+    '</div>' +
+    '<div style="background:var(--light);padding:20px;border-radius:12px">' +
+    '<h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-eye"></i> Preview</h4>' +
+    '<div style="background:white;padding:20px;border-radius:10px">' +
+    '<div style="font-size:20px;font-weight:800;margin-bottom:14px">' + esc(b.logoText) + '</div>' +
+    '<button style="padding:10px 18px;border:none;border-radius:8px;color:white;font-weight:700;background:linear-gradient(135deg,' + esc(b.primaryColor) + ',' + esc(b.secondaryColor) + ');cursor:pointer;font-family:inherit">Primary Button</button>' +
+    '</div></div>' +
+    '</div>';
+}
+
+function renderPaneData() {
+  return '<div><h4 style="font-size:14px;font-weight:800;margin-bottom:14px"><i class="fas fa-database"></i> Data & Backup</h4>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">' +
+    '<div style="background:var(--light);padding:20px;border-radius:12px">' +
+    '<h5 style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--gray);margin-bottom:12px">Export</h5>' +
+    '<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px" onclick="NCX_P9.exportAllJSON()"><i class="fas fa-file-export"></i> Export All (JSON)</button>' +
+    '<button class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:8px" onclick="NCX_P9.exportChequesCSV()"><i class="fas fa-file-csv"></i> Cheques (CSV)</button>' +
+    '<button class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:8px" onclick="NCX_P9.exportEntriesCSV()"><i class="fas fa-file-csv"></i> Entries (CSV)</button>' +
+    '<button class="btn btn-secondary btn-sm" style="width:100%" onclick="NCX_P9.exportProjectsCSV()"><i class="fas fa-file-csv"></i> Projects (CSV)</button>' +
+    '</div>' +
+    '<div style="background:var(--light);padding:20px;border-radius:12px">' +
+    '<h5 style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--gray);margin-bottom:12px">Diagnostic</h5>' +
+    '<p style="font-size:12.5px;color:var(--gray);margin-bottom:12px">Check data loading status</p>' +
+    '<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px" onclick="NCX_P9.runDiagnostic()"><i class="fas fa-stethoscope"></i> Run Diagnostic</button>' +
+    '<button class="btn btn-warning btn-sm" style="width:100%" onclick="NCX_P9.forceReload()"><i class="fas fa-sync"></i> Force Reload All</button>' +
+    '</div>' +
+    '</div>' +
+    '<div style="background:linear-gradient(135deg,#fee2e2,#fecaca);border:2px solid #ef4444;border-radius:12px;padding:20px">' +
+    '<h5 style="font-size:13px;color:#991b1b;font-weight:800;margin-bottom:12px"><i class="fas fa-exclamation-triangle"></i> Danger Zone</h5>' +
+    '<p style="font-size:12.5px;color:#991b1b;margin-bottom:14px">These operations are permanent and cannot be undone.</p>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+    '<button class="btn btn-danger btn-sm" onclick="NCX_P9.purgeFinance()"><i class="fas fa-car"></i> Purge Finance</button>' +
+    '<button class="btn btn-danger btn-sm" onclick="NCX_P9.purgeDiscounts()"><i class="fas fa-percentage"></i> Purge Discounts</button>' +
+    '<button class="btn btn-danger btn-sm" onclick="NCX_P9.purgeEntries()"><i class="fas fa-book-open"></i> Purge Entries</button>' +
+    '</div></div>' +
+    '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 5 · SETTINGS HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
+function saveGeneralSettings() {
+  setLS('ncx_general', {
+    companyName: ($('gCompanyName') || {}).value || 'Main Company',
+    currency: ($('gCurrency') || {}).value || 'Rs. ',
+    fiscalYear: ($('gFiscalYear') || {}).value || ''
+  });
+  toast('General settings saved', 'success');
+}
+
+function savePreferences() {
+  setLS('ncx_preferences', {
+    defaultTab: ($('pDefaultTab') || {}).value || 'dashboard',
+    rowsPerPage: parseInt(($('pRowsPerPage') || {}).value, 10) || 50,
+    dateFormat: 'dd-mmm-yyyy'
+  });
+  toast('Preferences saved', 'success');
+}
+
+function saveAllSettings() {
+  try { saveGeneralSettings(); } catch (e) {}
+  try { savePreferences(); } catch (e) {}
+  try { saveBranding(); } catch (e) {}
+  toast('All settings saved', 'success');
+}
+
+function saveBranding() {
+  var b = {
+    logoText: ($('brLogoText') || {}).value || 'NeonCheque',
+    primaryColor: ($('brPrimary') || {}).value || '#6366f1',
+    secondaryColor: ($('brSecondary') || {}).value || '#06b6d4'
+  };
+  setLS('ncx_branding', b);
+  document.documentElement.style.setProperty('--primary', b.primaryColor);
+  document.documentElement.style.setProperty('--secondary', b.secondaryColor);
+  var bn = $('brandName'); if (bn) bn.textContent = b.logoText;
+  var t = document.querySelector('title'); if (t) t.textContent = b.logoText;
+  toast('Branding applied', 'success');
+}
+
+function resetBranding() {
+  if (!confirm('Reset branding?')) return;
+  var def = { logoText: 'NeonCheque', primaryColor: '#6366f1', secondaryColor: '#06b6d4' };
+  setLS('ncx_branding', def);
+  document.documentElement.style.setProperty('--primary', def.primaryColor);
+  document.documentElement.style.setProperty('--secondary', def.secondaryColor);
+  var bn = $('brandName'); if (bn) bn.textContent = def.logoText;
+  toast('Branding reset', 'success');
+  NCX.showView('settings');
+}
+
+function openInviteModal() {
+  var name = prompt('Full name:');
+  if (!name) return;
+  var email = prompt('Email:');
+  if (!email) return;
+  var role = prompt('Role (Maker / Checker / Admin):', 'Maker') || 'Maker';
+  var users = getLS('ncx_users', []);
+  users.push({ id: 'u_' + Date.now(), name: name, email: email, role: role, invitedAt: new Date().toISOString() });
+  setLS('ncx_users', users);
+  toast('User invited', 'success');
+  NCX.showView('settings');
+}
+
+function editLocalUser(i) {
+  var users = getLS('ncx_users', []);
+  if (!users[i]) return;
+  var r = prompt('New role:', users[i].role);
+  if (!r) return;
+  users[i].role = r;
+  setLS('ncx_users', users);
+  toast('Role updated', 'success');
+  NCX.showView('settings');
+}
+
+function deleteLocalUser(i) {
+  var users = getLS('ncx_users', []);
+  if (!users[i]) return;
+  if (!confirm('Remove ' + users[i].name + '?')) return;
+  users.splice(i, 1);
+  setLS('ncx_users', users);
+  toast('Removed', 'success');
+  NCX.showView('settings');
+}
+
+function addEscRule() {
+  var c = ($('escCond') || {}).value;
+  var v = ($('escVal') || {}).value;
+  var a = ($('escAction') || {}).value;
+  if (!v) return toast('Enter a value', 'error');
+  var rules = getLS('ncx_escalation_rules', []);
+  rules.push({ condition: c, value: v, action: a });
+  setLS('ncx_escalation_rules', rules);
+  toast('Rule added', 'success');
+  NCX.showView('settings');
+}
+
+function deleteEscRule(i) {
+  var rules = getLS('ncx_escalation_rules', []);
+  rules.splice(i, 1);
+  setLS('ncx_escalation_rules', rules);
+  toast('Rule deleted', 'success');
+  NCX.showView('settings');
+}
+
+function addCustomField() {
+  var n = ($('cfName') || {}).value;
+  var t = ($('cfType') || {}).value;
+  if (!n) return toast('Enter field name', 'error');
+  var fields = getLS('ncx_custom_fields', []);
+  fields.push({ name: n, type: t });
+  setLS('ncx_custom_fields', fields);
+  toast('Field added', 'success');
+  NCX.showView('settings');
+}
+
+function deleteCustomField(i) {
+  var fields = getLS('ncx_custom_fields', []);
+  fields.splice(i, 1);
+  setLS('ncx_custom_fields', fields);
+  toast('Deleted', 'success');
+  NCX.showView('settings');
+}
+
+function addCustomStatus() {
+  var n = ($('csName') || {}).value;
+  var c = ($('csColor') || {}).value || '#6366f1';
+  if (!n) return toast('Enter status name', 'error');
+  var s = getLS('ncx_custom_statuses', []);
+  s.push({ name: n, color: c });
+  setLS('ncx_custom_statuses', s);
+  toast('Status added', 'success');
+  NCX.showView('settings');
+}
+
+function deleteCustomStatus(i) {
+  var s = getLS('ncx_custom_statuses', []);
+  s.splice(i, 1);
+  setLS('ncx_custom_statuses', s);
+  toast('Deleted', 'success');
+  NCX.showView('settings');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 6 · EXPORT HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
+function exportAllJSON() {
+  toast('Gathering data...', 'info');
+  Promise.all([
+    db.collection('cheques').get(), db.collection('parties').get(), db.collection('projects').get(),
+    db.collection('project_entries').get(), db.collection('accounts').get(),
+    db.collection('cheque_discounts').get(), db.collection('finance_plans').get(),
+    db.collection('finance_payments').get(), db.collection('finance_deductions').get(),
+    db.collection('cheque_books').get()
+  ]).then(function (res) {
+    var dump = {
+      exportedAt: new Date().toISOString(),
+      user: S.user ? S.user.email : '—',
+      settings: {
+        general: getLS('ncx_general', {}),
+        preferences: getLS('ncx_preferences', {}),
+        branding: getLS('ncx_branding', {}),
+        customFields: getLS('ncx_custom_fields', []),
+        customStatuses: getLS('ncx_custom_statuses', []),
+        escalationRules: getLS('ncx_escalation_rules', []),
+        users: getLS('ncx_users', [])
+      },
+      cheques: res[0].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      parties: res[1].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      projects: res[2].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      entries: res[3].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      accounts: res[4].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      discounts: res[5].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      financePlans: res[6].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      financePayments: res[7].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      financeDeductions: res[8].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+      books: res[9].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); })
+    };
+    var blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'neoncheque_backup_' + today() + '.json';
+    a.click(); URL.revokeObjectURL(url);
+    toast('Backup downloaded', 'success');
+  }).catch(function (e) { toast('Error: ' + e.message, 'error'); });
+}
+
+function exportChequesCSV() {
+  var csv = 'Number,Payee,IssuedTo,Amount,Bank,Date,Status,Notes\n';
+  S.cheques.forEach(function (c) {
+    csv += '"' + c.number + '","' + String(c.payee || '').replace(/"/g, '""') + '","' + String(c.issuedTo || c.issuer || '').replace(/"/g, '""') + '",' + num(c.amount) + ',"' + String(c.bank || '').replace(/"/g, '""') + '",' + (c.date || '') + ',' + c.status + ',"' + String(c.notes || '').replace(/"/g, '""') + '"\n';
+  });
+  downloadCSV(csv, 'cheques_' + today() + '.csv');
+  toast('Exported', 'success');
+}
+
+function exportEntriesCSV() {
+  var csv = 'Date,Type,Project,Party,Account,Amount,Status,Notes\n';
+  S.entries.forEach(function (e) {
+    var proj = S.projects.filter(function (p) { return p.id === e.projectId; })[0];
+    var party = S.parties.filter(function (p) { return p.id === e.partyId; })[0];
+    var acct = S.accounts.filter(function (a) { return a.id === e.accountId; })[0];
+    csv += [
+      e.effectiveDate || e.date, e.type,
+      '"' + ((proj && proj.name) || '') + '"',
+      '"' + ((party && party.name) || '') + '"',
+      '"' + ((acct && acct.name) || '') + '"',
+      num(e.amount), e.status || 'cleared',
+      '"' + String(e.notes || '').replace(/"/g, '""') + '"'
+    ].join(',') + '\n';
+  });
+  downloadCSV(csv, 'entries_' + today() + '.csv');
+  toast('Exported', 'success');
+}
+
+function exportProjectsCSV() {
+  var csv = 'Project,Status,StartDate,Description\n';
+  S.projects.forEach(function (p) {
+    csv += '"' + String(p.name || '').replace(/"/g, '""') + '",' + (p.status || 'open') + ',' + (p.startedAt || '') + ',"' + String(p.description || '').replace(/"/g, '""') + '"\n';
+  });
+  downloadCSV(csv, 'projects_' + today() + '.csv');
+  toast('Exported', 'success');
+}
+
+function purgeFinance() {
+  var total = S.financePlans.length + S.financePayments.length + S.financeDeductions.length;
+  if (!total) return toast('Finance module is empty', 'info');
+  if (!confirm('Purge ' + total + ' finance documents?')) return;
+  var code = prompt('Type DELETE FINANCE to confirm:');
+  if (code !== 'DELETE FINANCE') return toast('Cancelled', 'info');
+  var tasks = [];
+  S.financePlans.forEach(function (x) { tasks.push(db.collection('finance_plans').doc(x.id).delete()); });
+  S.financePayments.forEach(function (x) { tasks.push(db.collection('finance_payments').doc(x.id).delete()); });
+  S.financeDeductions.forEach(function (x) { tasks.push(db.collection('finance_deductions').doc(x.id).delete()); });
+  Promise.all(tasks).then(function () { toast('Finance purged', 'success'); return NCX.loadAll(); })
+    .then(function () { NCX.showView('settings'); })
+    .catch(function (e) { toast('Error: ' + e.message, 'error'); });
+}
+
+function purgeDiscounts() {
+  if (!S.discounts.length) return toast('No discounts', 'info');
+  if (!confirm('Purge ' + S.discounts.length + ' discounts?')) return;
+  var code = prompt('Type DELETE DISCOUNTS to confirm:');
+  if (code !== 'DELETE DISCOUNTS') return toast('Cancelled', 'info');
+  Promise.all(S.discounts.map(function (x) { return db.collection('cheque_discounts').doc(x.id).delete(); }))
+    .then(function () { toast('Discounts purged', 'success'); return NCX.loadAll(); })
+    .then(function () { NCX.showView('settings'); })
+    .catch(function (e) { toast('Error: ' + e.message, 'error'); });
+}
+
+function purgeEntries() {
+  if (!S.entries.length) return toast('No entries', 'info');
+  if (!confirm('Purge ' + S.entries.length + ' entries? Account balances will reset.')) return;
+  var code = prompt('Type DELETE ENTRIES to confirm:');
+  if (code !== 'DELETE ENTRIES') return toast('Cancelled', 'info');
+  Promise.all(S.entries.map(function (x) { return db.collection('project_entries').doc(x.id).delete(); }))
+    .then(function () { toast('Entries purged', 'success'); return NCX.loadAll(); })
+    .then(function () { NCX.showView('settings'); })
+    .catch(function (e) { toast('Error: ' + e.message, 'error'); });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 7 · HOOK PAYEE/ISSUER CLICKS VIA EVENT DELEGATION
+   ═══════════════════════════════════════════════════════════════════ */
+document.addEventListener('click', function (e) {
+  var row = e.target.closest('tr');
+  if (!row) return;
+  var table = row.closest('table');
+  if (!table) return;
+
+  // Payees view
+  var pv = document.getElementById('payeesView');
+  if (pv && pv.classList.contains('active') && pv.contains(table)) {
+    var cell = row.querySelector('td:first-child');
+    if (cell && !e.target.closest('button') && !e.target.closest('a')) {
+      var name = cell.textContent.trim();
+      if (name && name !== '—' && name.length > 1) {
+        e.stopPropagation();
+        e.preventDefault();
+        openPayeeDetail(name);
+      }
+    }
+  }
+
+  // Issuers view
+  var iv = document.getElementById('issuersView');
+  if (iv && iv.classList.contains('active') && iv.contains(table)) {
+    var cell2 = row.querySelector('td:first-child');
+    if (cell2 && !e.target.closest('button') && !e.target.closest('a')) {
+      var name2 = cell2.textContent.trim();
+      if (name2 && name2 !== '—' && name2.length > 1) {
+        e.stopPropagation();
+        e.preventDefault();
+        openIssuerDetail(name2);
+      }
+    }
+  }
+}, true);
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 8 · REPLACE SETTINGS RENDERER
+   ═══════════════════════════════════════════════════════════════════ */
+setTimeout(function () {
+  NCX.registerRenderer('settings', renderSettingsV2);
+  console.log('[Part 9] Settings renderer replaced with robust v2');
+}, 800);
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 9 · FINANCE DEBUG PANEL (inject if empty)
+   ═══════════════════════════════════════════════════════════════════ */
+var _origShowView = NCX.showView;
+NCX.showView = function (name, el) {
+  var r = _origShowView.call(NCX, name, el);
+  if (name === 'finance') {
+    setTimeout(patchFinanceView, 400);
+  }
+  return r;
+};
+
+function patchFinanceView() {
+  var host = document.getElementById('financeView');
+  if (!host || !host.classList.contains('active')) return;
+  if (document.getElementById('financeDebugPanel')) return;
+
+  var isEmpty = host.textContent.indexOf('No finance plans yet') !== -1;
+  if (isEmpty && (S.financePlans || []).length === 0) {
+    var panel = document.createElement('div');
+    panel.id = 'financeDebugPanel';
+    panel.style.cssText = 'background:linear-gradient(135deg,#fef3c7,#fed7aa);border:1.5px solid #f59e0b;border-radius:10px;padding:14px 18px;margin-bottom:16px;font-size:12.5px;color:#92400e';
+    panel.innerHTML = '<div style="display:flex;gap:10px;align-items:flex-start">' +
+      '<i class="fas fa-exclamation-triangle" style="font-size:18px;margin-top:1px"></i>' +
+      '<div style="flex:1">' +
+      '<strong>Finance data is empty in memory.</strong><br>' +
+      '<span style="font-size:11.5px">' +
+      'Plans: ' + ((S.financePlans || []).length) + ' · ' +
+      'Payments: ' + ((S.financePayments || []).length) + ' · ' +
+      'Deductions: ' + ((S.financeDeductions || []).length) +
+      '</span>' +
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primary btn-sm" onclick="NCX_P9.runDiagnostic()"><i class="fas fa-stethoscope"></i> Run Diagnostic</button>' +
+      '<button class="btn btn-warning btn-sm" onclick="NCX_P9.forceReload()"><i class="fas fa-sync"></i> Force Reload</button>' +
+      '</div></div></div>';
+    var card = host.querySelector('.card');
+    if (card) card.insertBefore(panel, card.firstChild);
+    else host.insertBefore(panel, host.firstChild);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 10 · ADD DIAGNOSTIC BUTTON TO SIDEBAR
+   ═══════════════════════════════════════════════════════════════════ */
+function addDiagnosticButton() {
+  var nav = document.getElementById('mainNav');
+  if (!nav || document.getElementById('ncxDiagSection')) return;
+  var section = document.createElement('div');
+  section.className = 'nav-section';
+  section.id = 'ncxDiagSection';
+  section.innerHTML = '<div class="nav-title">System</div>' +
+    '<div class="nav-item" onclick="NCX_P9.runDiagnostic()">' +
+    '<i class="fas fa-stethoscope"></i><span>Run Diagnostic</span></div>';
+  nav.appendChild(section);
+}
+
+setTimeout(addDiagnosticButton, 2000);
+setTimeout(addDiagnosticButton, 5000);
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION 11 · EXPOSE API
+   ═══════════════════════════════════════════════════════════════════ */
+window.NCX_P9 = {
+  // Diagnostic
+  runDiagnostic: runDiagnostic,
+  closeDiagnostic: closeDiagnostic,
+  forceReload: forceReload,
+
+  // Payee / Issuer drill-down
+  openPayeeDetail: openPayeeDetail,
+  openIssuerDetail: openIssuerDetail,
+  exportPayeeCSV: exportPayeeCSV,
+  exportIssuerCSV: exportIssuerCSV,
+
+  // Modal helper
+  closeAnyModal: closeAnyModal,
+
+  // Settings helpers
+  saveAllSettings: saveAllSettings,
+  saveGeneralSettings: saveGeneralSettings,
+  savePreferences: savePreferences,
+  saveBranding: saveBranding,
+  resetBranding: resetBranding,
+
+  // Users
+  openInviteModal: openInviteModal,
+  editLocalUser: editLocalUser,
+  deleteLocalUser: deleteLocalUser,
+
+  // Rules
+  addEscRule: addEscRule,
+  deleteEscRule: deleteEscRule,
+
+  // Custom fields/statuses
+  addCustomField: addCustomField,
+  deleteCustomField: deleteCustomField,
+  addCustomStatus: addCustomStatus,
+  deleteCustomStatus: deleteCustomStatus,
+
+  // Export
+  exportAllJSON: exportAllJSON,
+  exportChequesCSV: exportChequesCSV,
+  exportEntriesCSV: exportEntriesCSV,
+  exportProjectsCSV: exportProjectsCSV,
+
+  // Purge
+  purgeFinance: purgeFinance,
+  purgeDiscounts: purgeDiscounts,
+  purgeEntries: purgeEntries
+};
+
+/* Ready marker */
+(function () {
+  var m = document.createElement('div');
+  m.id = '__ncx_part9_ready';
+  m.style.cssText = 'position:fixed;bottom:1px;left:360px;font-size:1px;color:transparent;pointer-events:none';
+  m.textContent = 'ncx-p9-ready';
+  document.body.appendChild(m);
+  console.log('[NeonCheque Part 9] ✅ Diagnostic + Drill-downs + Settings v2 installed');
+  console.log('  • Sidebar → System → Run Diagnostic');
+  console.log('  • Click payee name → full drill-down modal');
+  console.log('  • Click issuer name → full drill-down modal');
+  console.log('  • Settings tabs rewritten with robust switching');
+  console.log('  • Finance empty state shows debug panel with reload button');
+})();
+
+})();
+</script>
 </body>
 </html>
