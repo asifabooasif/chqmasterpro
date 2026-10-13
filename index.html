@@ -12283,63 +12283,51 @@ else p6Boot();
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
-     PROJECTS MODULE v1.0 — PART 8: DISCOUNTER DASHBOARD & REPORTS
-     Per-discounter ledger · Per-project · Per-month · Full audit
+     PROJECTS MODULE v1.0 — PART 8 (v2): DISCOUNTER DASHBOARD — FIXED
+     Self-healing view container + visible error reporting
      ═══════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__projectsModuleV1_part8) return;
-window.__projectsModuleV1_part8 = true;
+if (window.__projectsModuleV1_part8_v2) return;
+window.__projectsModuleV1_part8_v2 = true;
 
-if (!window.__PJ) { console.error('[P8] Part 1 not loaded'); return; }
+if (!window.__PJ) {
+  console.error('[P8] Part 1 not loaded — cannot install discounter reports');
+  return;
+}
 
 const PJ = window.__PJ;
-const {
-  pjFmt, pjFmtExact, pjDate, pjToday, pjToast, pjEsc,
-  pjPartyName, TYPE_LABELS,
-  pjLoadAll, pjSaveDoc
-} = window;
 
-/* ═══════════════════ 1 · ADD "discounter" PARTY ROLE ═══════════════════ */
-(function patchRolePill(){
-  // Extend party modal to include "discounter" role
-  const origOpenPartyModal = window.pjOpenPartyModal;
-  window.pjOpenPartyModal = function (id) {
-    origOpenPartyModal.apply(this, arguments);
-    setTimeout(() => {
-      const container = document.querySelector('#pjPartyModal .pj-role-pill')?.parentElement;
-      if (!container) return;
-      if (container.querySelector('input[value="discounter"]')) return;
-      const pill = document.createElement('label');
-      pill.className = 'pj-role-pill';
-      pill.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--light);border-radius:9px;cursor:pointer;font-size:13px;font-weight:600;border:2px solid transparent';
-      pill.innerHTML = `
-        <input type="checkbox" class="pj-role-cb" value="discounter">
-        <span style="text-transform:capitalize">discounter</span>
-      `;
-      container.appendChild(pill);
-      // If editing, check the state
-      if (id) {
-        const p = PJ.parties.find(x => x.id === id);
-        if (p && (p.types || []).indexOf('discounter') !== -1) {
-          pill.querySelector('input').checked = true;
-        }
-      }
-    }, 60);
-  };
-})();
+/* ─────────────── Safe helper resolution ─────────────── */
+function H(name, fallback) {
+  if (typeof window[name] === 'function') return window[name];
+  if (fallback && typeof fallback === 'function') return fallback;
+  return function () { return ''; };
+}
+const pjFmt      = H('pjFmt',      n => 'Rs. ' + Math.round(parseFloat(n) || 0).toLocaleString('en-IN'));
+const pjFmtExact = H('pjFmtExact', n => 'Rs. ' + (parseFloat(n) || 0).toLocaleString('en-IN'));
+const pjDate     = H('pjDate',     d => d ? String(d).slice(0, 10) : '—');
+const pjToday    = H('pjToday',    () => new Date().toISOString().split('T')[0]);
+const pjToast    = H('pjToast',    (m, t) => { if (window.showToast) window.showToast(m, t || 'info'); });
+const pjEsc      = H('pjEsc',      s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+const pjPartyName = H('pjPartyName', id => {
+  const p = (PJ.parties || []).find(x => x.id === id);
+  return p ? p.name : '—';
+});
+const pjLoadAll  = H('pjLoadAll',  async () => {});
+const pjSaveDoc  = H('pjSaveDoc',  async () => null);
 
-/* Also update the party types validation client-side */
-(function patchPartyTypes(){
-  const origSave = window.pjSaveParty;
-  window.pjSaveParty = async function () {
-    // The save handler reads .pj-role-cb:checked, which now includes discounter
-    return origSave.apply(this, arguments);
-  };
-})();
+/* ─────────────── Ensure PJ arrays exist ─────────────── */
+PJ.discounts = PJ.discounts || [];
+PJ.discountsLoaded = PJ.discountsLoaded || false;
+PJ.parties = PJ.parties || [];
+PJ.projects = PJ.projects || [];
+PJ.accounts = PJ.accounts || [];
+PJ.cheques = PJ.cheques || [];
+PJ.entries = PJ.entries || [];
 
-/* ═══════════════════ 2 · STYLES ═══════════════════ */
+/* ═══════════════════ 1 · STYLES ═══════════════════ */
 (function injectStyles(){
   document.querySelectorAll('#__proj_p8_styles').forEach(e => e.remove());
   const s = document.createElement('style');
@@ -12370,7 +12358,7 @@ const {
     .p8-bar-track{background:var(--border);height:8px;border-radius:4px;overflow:hidden}
     .p8-bar-fill{height:100%;transition:width .8s ease;border-radius:4px}
     .p8-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
-    .p8-tbl th{background:var(--light);padding:11px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray);font-weight:700;border-bottom:2px solid var(--border);position:sticky;top:0;z-index:2}
+    .p8-tbl th{background:var(--light);padding:11px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray);font-weight:700;border-bottom:2px solid var(--border)}
     .p8-tbl td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle}
     .p8-tbl tbody tr:hover{background:var(--light)}
     .p8-tbl .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}
@@ -12381,6 +12369,9 @@ const {
     .p8-month-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
     .p8-month-tbl th{background:var(--light);padding:10px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray);font-weight:700;border-bottom:1px solid var(--border)}
     .p8-month-tbl td{padding:9px 8px;border-bottom:1px solid var(--border)}
+    .p8-err{background:linear-gradient(135deg,#fee2e2,#fecaca);border:1.5px solid #ef4444;border-radius:12px;padding:20px;margin-bottom:16px;color:#991b1b}
+    .p8-err h3{font-size:15px;font-weight:800;margin-bottom:8px}
+    .p8-err pre{background:white;padding:12px;border-radius:8px;font-size:11.5px;overflow:auto;max-height:220px;white-space:pre-wrap;color:#7f1d1d}
     @media(max-width:900px){
       .p8-disc-row{grid-template-columns:1fr !important}
       .p8-breakdown{grid-template-columns:1fr !important}
@@ -12390,19 +12381,17 @@ const {
   document.head.appendChild(s);
 })();
 
-/* ═══════════════════ 3 · CALCULATIONS ═══════════════════ */
+/* ═══════════════════ 2 · CALC ENGINE (defensive) ═══════════════════ */
+function p8SafeNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 
-/**
- * Full statistics for a discounter (party of type 'discounter' OR providerPartyId match).
- */
 function p8DiscounterStats(discounterId) {
-  const list = PJ.discounts.filter(d =>
-    d.providerPartyId === discounterId ||
-    (d.providerName && !d.providerPartyId && pjPartyName(discounterId).toLowerCase() === d.providerName.toLowerCase())
+  const party = PJ.parties.find(p => p.id === discounterId) || { id: discounterId, name: '—' };
+  const list = (PJ.discounts || []).filter(d =>
+    d.providerPartyId === discounterId
   );
 
   const stats = {
-    discounter: PJ.parties.find(p => p.id === discounterId),
+    discounter: party,
     records: list,
     count: list.length,
     totalChequeValue: 0,
@@ -12414,353 +12403,45 @@ function p8DiscounterStats(discounterId) {
     settledCount: 0,
     activeCount: 0,
     bouncedCount: 0,
-    netReceived: 0
+    netReceived: 0,
+    effectiveFeePercent: 0
   };
 
   list.forEach(d => {
-    stats.totalChequeValue += parseFloat(d.chequeAmount) || 0;
-    stats.totalAdvanced += parseFloat(d.advanceAmount) || 0;
-    stats.totalHold += parseFloat(d.holdAmount) || 0;
-    stats.totalReturned += parseFloat(d.settlementAmount) || 0;
-    stats.totalFees += parseFloat(d.feeAmount) || 0;
-    stats.totalRecovered += parseFloat(d.recoveryAmount) || 0;
+    stats.totalChequeValue += p8SafeNum(d.chequeAmount);
+    stats.totalAdvanced    += p8SafeNum(d.advanceAmount);
+    stats.totalHold        += p8SafeNum(d.holdAmount);
+    stats.totalReturned    += p8SafeNum(d.settlementAmount);
+    stats.totalFees        += p8SafeNum(d.feeAmount);
+    stats.totalRecovered   += p8SafeNum(d.recoveryAmount);
     if (d.status === 'settled') stats.settledCount++;
-    else if (d.status === 'submitted' || d.status === 'advanced' || d.status === 'cleared') stats.activeCount++;
     else if (d.status === 'bounced') stats.bouncedCount++;
+    else stats.activeCount++;
   });
 
   stats.netReceived = stats.totalAdvanced + stats.totalReturned - stats.totalFees - stats.totalRecovered;
   stats.effectiveFeePercent = stats.totalChequeValue > 0 ? (stats.totalFees / stats.totalChequeValue) * 100 : 0;
-
   return stats;
 }
 
-/**
- * Aggregate discounting by project.
- */
-function p8ProjectDiscounting() {
-  const map = {};
-  PJ.discounts.forEach(d => {
-    const pid = d.projectId || '__none__';
-    if (!map[pid]) {
-      map[pid] = {
-        projectId: d.projectId || null,
-        name: d.projectId ? (PJ.projects.find(p => p.id === d.projectId)?.name || 'Unknown') : 'Unassigned',
-        count: 0,
-        chequeValue: 0,
-        advanced: 0,
-        held: 0,
-        returned: 0,
-        fees: 0,
-        recovered: 0,
-        net: 0
-      };
-    }
-    const m = map[pid];
-    m.count++;
-    m.chequeValue += parseFloat(d.chequeAmount) || 0;
-    m.advanced += parseFloat(d.advanceAmount) || 0;
-    m.held += parseFloat(d.holdAmount) || 0;
-    m.returned += parseFloat(d.settlementAmount) || 0;
-    m.fees += parseFloat(d.feeAmount) || 0;
-    m.recovered += parseFloat(d.recoveryAmount) || 0;
-    m.net = m.advanced + m.returned - m.fees - m.recovered;
-  });
-  return Object.values(map).sort((a, b) => b.chequeValue - a.chequeValue);
-}
-
-/**
- * Monthly breakdown.
- */
-function p8MonthlyDiscounting() {
-  const map = {};
-  PJ.discounts.forEach(d => {
-    const dateStr = d.submittedDate || d.chequeDate;
-    if (!dateStr) return;
-    const month = dateStr.slice(0, 7); // YYYY-MM
-    if (!map[month]) {
-      map[month] = { month, count: 0, chequeValue: 0, advanced: 0, returned: 0, fees: 0, recovered: 0, net: 0 };
-    }
-    const m = map[month];
-    m.count++;
-    m.chequeValue += parseFloat(d.chequeAmount) || 0;
-    m.advanced += parseFloat(d.advanceAmount) || 0;
-    m.returned += parseFloat(d.settlementAmount) || 0;
-    m.fees += parseFloat(d.feeAmount) || 0;
-    m.recovered += parseFloat(d.recoveryAmount) || 0;
-    m.net = m.advanced + m.returned - m.fees - m.recovered;
-  });
-  return Object.values(map).sort((a, b) => b.month.localeCompare(a.month));
-}
-
-/* ═══════════════════ 4 · ADD DASHBOARD VIEW ═══════════════════ */
-function p8BuildViews() {
-  const main = document.querySelector('.main-content');
-  if (!main) return;
-  document.querySelectorAll('#__p8_views_root').forEach(el => el.remove());
-  const wrap = document.createElement('div');
-  wrap.id = '__p8_views_root';
-  wrap.innerHTML = `
-    <div id="discountersView" class="view-content"></div>
-    <div id="discounterDetailView" class="view-content"></div>
-  `;
-  main.appendChild(wrap);
-}
-
-/* ═══════════════════ 5 · ADD NAV ITEMS ═══════════════════ */
-function p8BuildNav() {
-  const section = document.getElementById('pjNavSection');
-  if (!section) return;
-  if (document.getElementById('p8DiscountersNavItem')) return;
-
-  const item = document.createElement('div');
-  item.className = 'nav-item';
-  item.id = 'p8DiscountersNavItem';
-  item.innerHTML = '<i class="fas fa-building"></i><span>Discounters</span>';
-  item.onclick = function () { window.showView('discounters', this); };
-  section.appendChild(item);
-}
-
-/* ═══════════════════ 6 · ROUTER PATCH ═══════════════════ */
-const _origShowViewP8 = window.showView;
-
-window.showView = function (viewName, navElement) {
-  if (['discounters', 'discounter-detail'].indexOf(viewName) === -1) {
-    return _origShowViewP8.apply(this, arguments);
-  }
-
-  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  const navEl = navElement || document.getElementById('p8DiscountersNavItem');
-  if (navEl) navEl.classList.add('active');
-
-  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
-  const idMap = { 'discounters': 'discountersView', 'discounter-detail': 'discounterDetailView' };
-  const el = document.getElementById(idMap[viewName]);
-  if (el) el.classList.add('active');
-  document.getElementById('pageTitle').textContent =
-    viewName === 'discounters' ? 'Discounters' : 'Discounter Details';
-
-  if (window.innerWidth <= 768) {
-    const sb = document.getElementById('sidebar');
-    const ov = document.getElementById('sidebarOverlay');
-    if (sb) sb.classList.remove('active');
-    if (ov) ov.classList.remove('active');
-  }
-
-  (async () => {
-    if (!PJ.loaded) await pjLoadAll();
-    if (!PJ.discountsLoaded && window.p7LoadDiscounts) await window.p7LoadDiscounts();
-    if (viewName === 'discounters') p8RenderDiscounters();
-    else if (viewName === 'discounter-detail' && PJ.activeDiscounterId) p8RenderDiscounterDetail(PJ.activeDiscounterId);
-  })();
-};
-
-/* ═══════════════════ 7 · DISCOUNTERS LIST VIEW ═══════════════════ */
-window.p8RenderDiscounters = function () {
-  const host = document.getElementById('discountersView');
-  if (!host) return;
-
-  // Find all parties who are discounters
-  const discounters = PJ.parties.filter(p => (p.types || []).indexOf('discounter') !== -1);
-
-  // Also include any provider names from discount records that aren't in parties
-  const orphanNames = new Set();
-  PJ.discounts.forEach(d => {
-    if (!d.providerPartyId && d.providerName) orphanNames.add(d.providerName);
-  });
-
-  // Aggregate global stats
-  let globalStats = {
-    count: PJ.discounts.length,
-    chequeValue: 0,
-    advanced: 0,
-    held: 0,
-    returned: 0,
-    fees: 0,
-    recovered: 0,
-    net: 0
-  };
-  PJ.discounts.forEach(d => {
-    globalStats.chequeValue += parseFloat(d.chequeAmount) || 0;
-    globalStats.advanced += parseFloat(d.advanceAmount) || 0;
-    globalStats.held += parseFloat(d.holdAmount) || 0;
-    globalStats.returned += parseFloat(d.settlementAmount) || 0;
-    globalStats.fees += parseFloat(d.feeAmount) || 0;
-    globalStats.recovered += parseFloat(d.recoveryAmount) || 0;
-  });
-  globalStats.net = globalStats.advanced + globalStats.returned - globalStats.fees - globalStats.recovered;
-
-  if (!PJ.discounts.length) {
-    host.innerHTML = `
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title"><i class="fas fa-building" style="color:var(--primary);margin-right:8px"></i>Discounters</h2>
-          <button class="btn btn-primary btn-sm" onclick="pjOpenPartyModal()"><i class="fas fa-plus"></i> Add Discounter</button>
-        </div>
-        <div class="pj-empty">
-          <i class="fas fa-building"></i>
-          <h3>No discounted cheques yet</h3>
-          <p style="margin-top:8px">Add a discounter as a party (with role "discounter"), then create a discount record from the Discounting page.</p>
-          <button class="btn btn-primary" style="margin-top:14px" onclick="window.showView('discounting')">
-            <i class="fas fa-percentage"></i> Go to Discounting
-          </button>
-        </div>
-      </div>`;
-    return;
-  }
-
-  const totalActiveChequeValue = PJ.discounts
-    .filter(d => d.status === 'submitted' || d.status === 'advanced' || d.status === 'cleared')
-    .reduce((s, d) => s + (parseFloat(d.chequeAmount) || 0), 0);
-
-  host.innerHTML = `
-    <div class="p8-hero">
-      <div class="p8-hero-title"><i class="fas fa-percentage"></i> Discounting Portfolio</div>
-      <div class="p8-hero-value">${pjFmt(globalStats.chequeValue)}</div>
-      <div class="p8-hero-sub">across ${globalStats.count} cheque(s) through ${discounters.length + orphanNames.size} discounter(s)</div>
-      <div class="p8-hero-kpis">
-        <div class="p8-hero-kpi">
-          <div class="lbl">Total Advanced</div>
-          <div class="val" style="color:#a7f3d0">${pjFmt(globalStats.advanced)}</div>
-          <div class="sub">received from providers</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Total Returned</div>
-          <div class="val" style="color:#93c5fd">${pjFmt(globalStats.returned)}</div>
-          <div class="sub">hold returned at settlement</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Total Fees Paid</div>
-          <div class="val" style="color:#fca5a5">${pjFmt(globalStats.fees)}</div>
-          <div class="sub">${globalStats.chequeValue > 0 ? (globalStats.fees / globalStats.chequeValue * 100).toFixed(2) + '% effective' : '—'}</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Currently Held</div>
-          <div class="val" style="color:#fde68a">${pjFmt(totalActiveChequeValue * 0.2)}</div>
-          <div class="sub">estimated open hold</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Recovered (Bounces)</div>
-          <div class="val" style="color:#fca5a5">${pjFmt(globalStats.recovered)}</div>
-          <div class="sub">clawed back from bank</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Net Received</div>
-          <div class="val" style="color:#a7f3d0">${pjFmt(globalStats.net)}</div>
-          <div class="sub">after all fees + recoveries</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title"><i class="fas fa-building" style="color:var(--primary);margin-right:8px"></i>By Discounter</h2>
-        <button class="btn btn-primary btn-sm" onclick="pjOpenPartyModal()">
-          <i class="fas fa-plus"></i> Add Discounter
-        </button>
-      </div>
-      ${discounters.length === 0 ? `
-        <div class="pj-info-banner" style="margin-bottom:16px">
-          <i class="fas fa-info-circle"></i>
-          <div>No discounter parties found. Add LOLC (or others) as a party with role <strong>discounter</strong> to see them here.</div>
-        </div>
-      ` : discounters.map(party => {
-        const s = p8DiscounterStats(party.id);
-        if (s.count === 0) return '';
-        return p8DiscounterRowHTML(s);
-      }).join('')}
-      ${orphanNames.size ? Array.from(orphanNames).map(name => {
-        const s = p8OrphanStats(name);
-        return p8DiscounterRowHTML(s, true);
-      }).join('') : ''}
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title"><i class="fas fa-project-diagram" style="color:var(--primary);margin-right:8px"></i>By Project</h2>
-      </div>
-      ${(() => {
-        const projList = p8ProjectDiscounting();
-        if (!projList.length) return '<div class="pj-empty"><i class="fas fa-folder"></i><h3>No project data</h3></div>';
-        return `<div class="table-container"><table class="p8-tbl">
-          <thead><tr>
-            <th>Project</th>
-            <th class="num">Cheques</th>
-            <th class="num">Cheque Value</th>
-            <th class="num">Advanced</th>
-            <th class="num">Returned</th>
-            <th class="num">Fees</th>
-            <th class="num">Net Received</th>
-          </tr></thead>
-          <tbody>${projList.map(p => `
-            <tr>
-              <td>${p.projectId
-                ? `<a href="#" onclick="event.preventDefault();pjOpenProjectDetail('${p.projectId}')" style="color:var(--primary);font-weight:700">${pjEsc(p.name)}</a>`
-                : `<strong>${pjEsc(p.name)}</strong>`}</td>
-              <td class="num">${p.count}</td>
-              <td class="num">${pjFmt(p.chequeValue)}</td>
-              <td class="num in-amt">${pjFmt(p.advanced)}</td>
-              <td class="num" style="color:#2563eb">${pjFmt(p.returned)}</td>
-              <td class="num fee-amt">${pjFmt(p.fees)}</td>
-              <td class="num" style="color:${p.net >= 0 ? 'var(--success)' : 'var(--danger)'}">${pjFmt(p.net)}</td>
-            </tr>`).join('')}</tbody>
-        </table></div>`;
-      })()}
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title"><i class="fas fa-calendar-alt" style="color:var(--primary);margin-right:8px"></i>Monthly Breakdown</h2>
-      </div>
-      ${(() => {
-        const months = p8MonthlyDiscounting();
-        if (!months.length) return '<div class="pj-empty"><i class="fas fa-calendar"></i><h3>No monthly data</h3></div>';
-        return `<div class="table-container"><table class="p8-month-tbl">
-          <thead><tr>
-            <th>Month</th>
-            <th class="num">Cheques</th>
-            <th class="num">Cheque Value</th>
-            <th class="num">Advanced</th>
-            <th class="num">Returned</th>
-            <th class="num">Fees</th>
-            <th class="num">Net Received</th>
-          </tr></thead>
-          <tbody>${months.map(m => {
-            const [y, mo] = m.month.split('-');
-            const label = new Date(y, parseInt(mo) - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-            return `<tr>
-              <td><strong>${label}</strong></td>
-              <td class="num">${m.count}</td>
-              <td class="num">${pjFmt(m.chequeValue)}</td>
-              <td class="num in-amt">${pjFmt(m.advanced)}</td>
-              <td class="num" style="color:#2563eb">${pjFmt(m.returned)}</td>
-              <td class="num fee-amt">${pjFmt(m.fees)}</td>
-              <td class="num" style="color:${m.net >= 0 ? 'var(--success)' : 'var(--danger)'}">${pjFmt(m.net)}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table></div>`;
-      })()}
-    </div>
-  `;
-};
-
 function p8OrphanStats(name) {
-  const list = PJ.discounts.filter(d => !d.providerPartyId && d.providerName === name);
+  const list = (PJ.discounts || []).filter(d => !d.providerPartyId && d.providerName === name);
   const stats = {
-    discounter: { name },
+    discounter: { id: null, name: name || 'Unknown' },
     records: list,
     count: list.length,
     totalChequeValue: 0, totalAdvanced: 0, totalHold: 0,
     totalReturned: 0, totalFees: 0, totalRecovered: 0,
-    settledCount: 0, activeCount: 0, bouncedCount: 0, netReceived: 0
+    settledCount: 0, activeCount: 0, bouncedCount: 0, netReceived: 0,
+    effectiveFeePercent: 0
   };
   list.forEach(d => {
-    stats.totalChequeValue += parseFloat(d.chequeAmount) || 0;
-    stats.totalAdvanced += parseFloat(d.advanceAmount) || 0;
-    stats.totalHold += parseFloat(d.holdAmount) || 0;
-    stats.totalReturned += parseFloat(d.settlementAmount) || 0;
-    stats.totalFees += parseFloat(d.feeAmount) || 0;
-    stats.totalRecovered += parseFloat(d.recoveryAmount) || 0;
+    stats.totalChequeValue += p8SafeNum(d.chequeAmount);
+    stats.totalAdvanced    += p8SafeNum(d.advanceAmount);
+    stats.totalHold        += p8SafeNum(d.holdAmount);
+    stats.totalReturned    += p8SafeNum(d.settlementAmount);
+    stats.totalFees        += p8SafeNum(d.feeAmount);
+    stats.totalRecovered   += p8SafeNum(d.recoveryAmount);
     if (d.status === 'settled') stats.settledCount++;
     else if (d.status === 'bounced') stats.bouncedCount++;
     else stats.activeCount++;
@@ -12770,10 +12451,130 @@ function p8OrphanStats(name) {
   return stats;
 }
 
+function p8ProjectDiscounting() {
+  const map = {};
+  (PJ.discounts || []).forEach(d => {
+    const pid = d.projectId || '__none__';
+    if (!map[pid]) {
+      map[pid] = {
+        projectId: d.projectId || null,
+        name: d.projectId ? ((PJ.projects.find(p => p.id === d.projectId) || {}).name || 'Unknown') : 'Unassigned',
+        count: 0, chequeValue: 0, advanced: 0, held: 0, returned: 0, fees: 0, recovered: 0, net: 0
+      };
+    }
+    const m = map[pid];
+    m.count++;
+    m.chequeValue += p8SafeNum(d.chequeAmount);
+    m.advanced    += p8SafeNum(d.advanceAmount);
+    m.held        += p8SafeNum(d.holdAmount);
+    m.returned    += p8SafeNum(d.settlementAmount);
+    m.fees        += p8SafeNum(d.feeAmount);
+    m.recovered   += p8SafeNum(d.recoveryAmount);
+    m.net = m.advanced + m.returned - m.fees - m.recovered;
+  });
+  return Object.values(map).sort((a, b) => b.chequeValue - a.chequeValue);
+}
+
+function p8MonthlyDiscounting() {
+  const map = {};
+  (PJ.discounts || []).forEach(d => {
+    const dateStr = d.submittedDate || d.chequeDate;
+    if (!dateStr) return;
+    const month = String(dateStr).slice(0, 7);
+    if (!month.match(/^\d{4}-\d{2}$/)) return;
+    if (!map[month]) {
+      map[month] = { month, count: 0, chequeValue: 0, advanced: 0, returned: 0, fees: 0, recovered: 0, net: 0 };
+    }
+    const m = map[month];
+    m.count++;
+    m.chequeValue += p8SafeNum(d.chequeAmount);
+    m.advanced    += p8SafeNum(d.advanceAmount);
+    m.returned    += p8SafeNum(d.settlementAmount);
+    m.fees        += p8SafeNum(d.feeAmount);
+    m.recovered   += p8SafeNum(d.recoveryAmount);
+    m.net = m.advanced + m.returned - m.fees - m.recovered;
+  });
+  return Object.values(map).sort((a, b) => b.month.localeCompare(a.month));
+}
+
+/* ═══════════════════ 3 · VIEW CONTAINER (self-healing) ═══════════════════ */
+function p8EnsureViews() {
+  const main = document.querySelector('.main-content');
+  if (!main) {
+    console.error('[P8] .main-content not found in DOM');
+    return false;
+  }
+  // If both view divs already exist, we're good
+  if (document.getElementById('discountersView') && document.getElementById('discounterDetailView')) {
+    return true;
+  }
+  // Remove old broken root if it exists
+  const oldRoot = document.getElementById('__p8_views_root');
+  if (oldRoot) oldRoot.remove();
+  // Also remove stray stray divs (in case previous version created them elsewhere)
+  ['discountersView', 'discounterDetailView'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+
+  const wrap = document.createElement('div');
+  wrap.id = '__p8_views_root';
+  wrap.innerHTML = `
+    <div id="discountersView" class="view-content"></div>
+    <div id="discounterDetailView" class="view-content"></div>
+  `;
+  main.appendChild(wrap);
+  return true;
+}
+
+/* ═══════════════════ 4 · NAV (self-healing) ═══════════════════ */
+function p8EnsureNav() {
+  const pjSection = document.getElementById('pjNavSection');
+  if (!pjSection) {
+    console.warn('[P8] pjNavSection not found — discounter nav item skipped');
+    return false;
+  }
+  if (document.getElementById('p8DiscountersNavItem')) return true;
+  const item = document.createElement('div');
+  item.className = 'nav-item';
+  item.id = 'p8DiscountersNavItem';
+  item.innerHTML = '<i class="fas fa-building"></i><span>Discounters</span>';
+  item.onclick = function () { window.showView('discounters', this); };
+  pjSection.appendChild(item);
+  return true;
+}
+
+/* ═══════════════════ 5 · RENDER HELPERS ═══════════════════ */
+function p8RenderError(host, err) {
+  if (!host) return;
+  const stack = err && (err.stack || err.message || String(err));
+  host.innerHTML = `
+    <div class="p8-err">
+      <h3><i class="fas fa-exclamation-triangle"></i> Discounters view error</h3>
+      <pre>${pjEsc(stack)}</pre>
+      <div style="margin-top:10px;font-size:12px">Send this error text so the fix can be applied.</div>
+    </div>`;
+}
+
+function p8BarRowHTML(label, value, total, color) {
+  const pct = total > 0 ? (value / total * 100) : 0;
+  return `<div class="p8-bar-row">
+    <div class="p8-bar-label">
+      <span>${label}</span>
+      <span>${pjFmt(value)} <span style="color:var(--gray);font-weight:400;font-size:10.5px">(${pct.toFixed(1)}%)</span></span>
+    </div>
+    <div class="p8-bar-track">
+      <div class="p8-bar-fill" style="width:${Math.min(pct, 100)}%;background:${color}"></div>
+    </div>
+  </div>`;
+}
+
 function p8DiscounterRowHTML(s, orphan) {
-  const name = s.discounter.name || '—';
-  const clickAttr = orphan ? '' : `onclick="p8OpenDiscounterDetail('${s.discounter.id}')"`;
-  const cursor = orphan ? 'cursor:default' : '';
+  const name = (s.discounter && s.discounter.name) || '—';
+  const id = s.discounter && s.discounter.id;
+  const clickAttr = (!orphan && id) ? `onclick="p8OpenDiscounterDetail('${id}')"` : '';
+  const cursor = (orphan || !id) ? 'cursor:default' : '';
+
   return `
     <div class="p8-disc-row" ${clickAttr} style="${cursor}">
       <div>
@@ -12810,229 +12611,436 @@ function p8DiscounterRowHTML(s, orphan) {
     </div>`;
 }
 
-/* ═══════════════════ 8 · DISCOUNTER DETAIL VIEW ═══════════════════ */
+/* ═══════════════════ 6 · MAIN RENDER (bulletproof) ═══════════════════ */
+window.p8RenderDiscounters = function () {
+  p8EnsureViews();
+  const host = document.getElementById('discountersView');
+  if (!host) { console.error('[P8] Cannot find/create discountersView'); return; }
+
+  try {
+    const discounters = (PJ.parties || []).filter(p => Array.isArray(p.types) && p.types.indexOf('discounter') !== -1);
+
+    const orphanNames = new Set();
+    (PJ.discounts || []).forEach(d => {
+      if (!d.providerPartyId && d.providerName) orphanNames.add(d.providerName);
+    });
+
+    // Global stats
+    const globalStats = {
+      count: (PJ.discounts || []).length,
+      chequeValue: 0, advanced: 0, held: 0, returned: 0, fees: 0, recovered: 0, net: 0
+    };
+    (PJ.discounts || []).forEach(d => {
+      globalStats.chequeValue += p8SafeNum(d.chequeAmount);
+      globalStats.advanced    += p8SafeNum(d.advanceAmount);
+      globalStats.held        += p8SafeNum(d.holdAmount);
+      globalStats.returned    += p8SafeNum(d.settlementAmount);
+      globalStats.fees        += p8SafeNum(d.feeAmount);
+      globalStats.recovered   += p8SafeNum(d.recoveryAmount);
+    });
+    globalStats.net = globalStats.advanced + globalStats.returned - globalStats.fees - globalStats.recovered;
+
+    // ─── Empty state ───
+    if (!PJ.discounts.length) {
+      host.innerHTML = `
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title"><i class="fas fa-building" style="color:var(--primary);margin-right:8px"></i>Discounters</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="pjOpenPartyModal()"><i class="fas fa-plus"></i> Add Discounter Party</button>
+              <button class="btn btn-primary btn-sm" onclick="window.showView('discounting')"><i class="fas fa-percentage"></i> Go to Discounting</button>
+            </div>
+          </div>
+          <div class="pj-empty">
+            <i class="fas fa-building"></i>
+            <h3>No discounted cheques yet</h3>
+            <p style="margin-top:8px">Two steps to get started:</p>
+            <ol style="text-align:left;max-width:520px;margin:14px auto 0;font-size:13.5px;line-height:1.7">
+              <li>Add <strong>LOLC</strong> (or any discounter) as a <strong>Party</strong> with role <em>discounter</em>.</li>
+              <li>Go to <strong>Discounting → Send Cheque to Discounter</strong> and log your first cheque.</li>
+            </ol>
+          </div>
+        </div>`;
+      return;
+    }
+
+    // ─── KPI values ───
+    const totalActiveChequeValue = (PJ.discounts || [])
+      .filter(d => ['submitted','advanced','cleared'].indexOf(d.status) !== -1)
+      .reduce((s, d) => s + p8SafeNum(d.chequeAmount), 0);
+
+    // ─── Discounter rows ───
+    let discounterRowsHTML = '';
+    if (discounters.length === 0 && orphanNames.size === 0) {
+      discounterRowsHTML = `<div class="pj-info-banner" style="margin-bottom:16px">
+        <i class="fas fa-info-circle"></i>
+        <div>No discounter parties found. Add LOLC (or others) as a party with role <strong>discounter</strong> to see them here.</div>
+      </div>`;
+    } else {
+      discounterRowsHTML = discounters.map(party => {
+        const s = p8DiscounterStats(party.id);
+        if (s.count === 0) return '';
+        return p8DiscounterRowHTML(s, false);
+      }).join('');
+
+      if (orphanNames.size > 0) {
+        discounterRowsHTML += Array.from(orphanNames).map(name => {
+          const s = p8OrphanStats(name);
+          return p8DiscounterRowHTML(s, true);
+        }).join('');
+      }
+    }
+
+    // ─── By Project ───
+    let projectSectionHTML = '';
+    try {
+      const projList = p8ProjectDiscounting();
+      if (projList.length === 0) {
+        projectSectionHTML = '<div class="pj-empty"><i class="fas fa-folder"></i><h3>No project data</h3></div>';
+      } else {
+        projectSectionHTML = '<div class="table-container"><table class="p8-tbl"><thead><tr>' +
+          '<th>Project</th><th class="num">Cheques</th><th class="num">Cheque Value</th>' +
+          '<th class="num">Advanced</th><th class="num">Returned</th><th class="num">Fees</th><th class="num">Net Received</th>' +
+          '</tr></thead><tbody>';
+        projList.forEach(p => {
+          const nameCell = p.projectId
+            ? `<a href="#" onclick="event.preventDefault();pjOpenProjectDetail('${p.projectId}')" style="color:var(--primary);font-weight:700">${pjEsc(p.name)}</a>`
+            : `<strong>${pjEsc(p.name)}</strong>`;
+          projectSectionHTML += '<tr>' +
+            '<td>' + nameCell + '</td>' +
+            '<td class="num">' + p.count + '</td>' +
+            '<td class="num">' + pjFmt(p.chequeValue) + '</td>' +
+            '<td class="num in-amt">' + pjFmt(p.advanced) + '</td>' +
+            '<td class="num" style="color:#2563eb">' + pjFmt(p.returned) + '</td>' +
+            '<td class="num fee-amt">' + pjFmt(p.fees) + '</td>' +
+            '<td class="num" style="color:' + (p.net >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + pjFmt(p.net) + '</td>' +
+            '</tr>';
+        });
+        projectSectionHTML += '</tbody></table></div>';
+      }
+    } catch (e) {
+      console.error('[P8] project section failed:', e);
+      projectSectionHTML = '<div class="p8-err"><h3>Project section error</h3><pre>' + pjEsc(e.message || String(e)) + '</pre></div>';
+    }
+
+    // ─── Monthly ───
+    let monthSectionHTML = '';
+    try {
+      const months = p8MonthlyDiscounting();
+      if (months.length === 0) {
+        monthSectionHTML = '<div class="pj-empty"><i class="fas fa-calendar"></i><h3>No monthly data</h3></div>';
+      } else {
+        monthSectionHTML = '<div class="table-container"><table class="p8-month-tbl"><thead><tr>' +
+          '<th>Month</th><th class="num">Cheques</th><th class="num">Cheque Value</th>' +
+          '<th class="num">Advanced</th><th class="num">Returned</th><th class="num">Fees</th><th class="num">Net Received</th>' +
+          '</tr></thead><tbody>';
+        months.forEach(m => {
+          let label = m.month;
+          try {
+            const parts = m.month.split('-');
+            const y = parseInt(parts[0], 10);
+            const mo = parseInt(parts[1], 10) - 1;
+            label = new Date(y, mo, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+          } catch (err) {}
+          monthSectionHTML += '<tr>' +
+            '<td><strong>' + label + '</strong></td>' +
+            '<td class="num">' + m.count + '</td>' +
+            '<td class="num">' + pjFmt(m.chequeValue) + '</td>' +
+            '<td class="num in-amt">' + pjFmt(m.advanced) + '</td>' +
+            '<td class="num" style="color:#2563eb">' + pjFmt(m.returned) + '</td>' +
+            '<td class="num fee-amt">' + pjFmt(m.fees) + '</td>' +
+            '<td class="num" style="color:' + (m.net >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + pjFmt(m.net) + '</td>' +
+            '</tr>';
+        });
+        monthSectionHTML += '</tbody></table></div>';
+      }
+    } catch (e) {
+      console.error('[P8] month section failed:', e);
+      monthSectionHTML = '<div class="p8-err"><h3>Monthly section error</h3><pre>' + pjEsc(e.message || String(e)) + '</pre></div>';
+    }
+
+    // ─── Final HTML ───
+    host.innerHTML = `
+      <div class="p8-hero">
+        <div class="p8-hero-title"><i class="fas fa-percentage"></i> Discounting Portfolio</div>
+        <div class="p8-hero-value">${pjFmt(globalStats.chequeValue)}</div>
+        <div class="p8-hero-sub">across ${globalStats.count} cheque(s) through ${discounters.length + orphanNames.size} discounter(s)</div>
+        <div class="p8-hero-kpis">
+          <div class="p8-hero-kpi">
+            <div class="lbl">Total Advanced</div>
+            <div class="val" style="color:#a7f3d0">${pjFmt(globalStats.advanced)}</div>
+            <div class="sub">received from providers</div>
+          </div>
+          <div class="p8-hero-kpi">
+            <div class="lbl">Total Returned</div>
+            <div class="val" style="color:#93c5fd">${pjFmt(globalStats.returned)}</div>
+            <div class="sub">hold returned at settlement</div>
+          </div>
+          <div class="p8-hero-kpi">
+            <div class="lbl">Total Fees Paid</div>
+            <div class="val" style="color:#fca5a5">${pjFmt(globalStats.fees)}</div>
+            <div class="sub">${globalStats.chequeValue > 0 ? (globalStats.fees / globalStats.chequeValue * 100).toFixed(2) + '% effective' : '—'}</div>
+          </div>
+          <div class="p8-hero-kpi">
+            <div class="lbl">Currently Held</div>
+            <div class="val" style="color:#fde68a">${pjFmt(totalActiveChequeValue * 0.2)}</div>
+            <div class="sub">estimated open hold</div>
+          </div>
+          <div class="p8-hero-kpi">
+            <div class="lbl">Recovered (Bounces)</div>
+            <div class="val" style="color:#fca5a5">${pjFmt(globalStats.recovered)}</div>
+            <div class="sub">clawed back from bank</div>
+          </div>
+          <div class="p8-hero-kpi">
+            <div class="lbl">Net Received</div>
+            <div class="val" style="color:#a7f3d0">${pjFmt(globalStats.net)}</div>
+            <div class="sub">after all fees + recoveries</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-building" style="color:var(--primary);margin-right:8px"></i>By Discounter</h2>
+          <button class="btn btn-primary btn-sm" onclick="pjOpenPartyModal()">
+            <i class="fas fa-plus"></i> Add Discounter
+          </button>
+        </div>
+        ${discounterRowsHTML}
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-project-diagram" style="color:var(--primary);margin-right:8px"></i>By Project</h2>
+        </div>
+        ${projectSectionHTML}
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-calendar-alt" style="color:var(--primary);margin-right:8px"></i>Monthly Breakdown</h2>
+        </div>
+        ${monthSectionHTML}
+      </div>
+    `;
+
+    console.log('[P8] Discounters rendered:', globalStats.count, 'records');
+  } catch (e) {
+    console.error('[P8] render failed:', e);
+    p8RenderError(host, e);
+  }
+};
+
+/* ═══════════════════ 7 · DISCOUNTER DETAIL ═══════════════════ */
 window.p8OpenDiscounterDetail = function (partyId) {
   PJ.activeDiscounterId = partyId;
   window.showView('discounter-detail');
 };
 
 window.p8RenderDiscounterDetail = function (partyId) {
+  p8EnsureViews();
   const host = document.getElementById('discounterDetailView');
   if (!host) return;
 
-  const party = PJ.parties.find(p => p.id === partyId);
-  if (!party) {
-    host.innerHTML = '<div class="card"><div class="pj-empty"><i class="fas fa-exclamation-circle"></i><h3>Discounter not found</h3></div></div>';
-    return;
+  try {
+    const party = PJ.parties.find(p => p.id === partyId);
+    if (!party) {
+      host.innerHTML = '<div class="card"><div class="pj-empty"><i class="fas fa-exclamation-circle"></i><h3>Discounter not found</h3></div></div>';
+      return;
+    }
+
+    const s = p8DiscounterStats(partyId);
+    const records = s.records.slice().sort((a, b) => {
+      const da = new Date(a.submittedDate || 0).getTime();
+      const db = new Date(b.submittedDate || 0).getTime();
+      return db - da;
+    });
+
+    const ledgerRows = records.map(d => {
+      const proj = PJ.projects.find(p => p.id === d.projectId);
+      const net = p8SafeNum(d.advanceAmount) + p8SafeNum(d.settlementAmount)
+                - p8SafeNum(d.feeAmount) - p8SafeNum(d.recoveryAmount);
+      return '<tr>' +
+        '<td>' + pjDate(d.submittedDate) + '</td>' +
+        '<td><strong>#' + pjEsc(d.chequeNumber) + '</strong></td>' +
+        '<td>' + pjEsc(d.shopName || pjPartyName(d.shopPartyId)) + '</td>' +
+        '<td>' + (proj ? '<a href="#" onclick="event.preventDefault();pjOpenProjectDetail(\'' + proj.id + '\')" style="color:var(--primary);font-weight:600">' + pjEsc(proj.name) + '</a>' : '—') + '</td>' +
+        '<td class="num">' + pjFmt(d.chequeAmount) + '</td>' +
+        '<td class="num in-amt">' + pjFmt(d.advanceAmount) + '</td>' +
+        '<td class="num" style="color:#2563eb">' + (d.settlementAmount ? pjFmt(d.settlementAmount) : '—') + '</td>' +
+        '<td class="num fee-amt">' + (d.feeAmount ? pjFmt(d.feeAmount) : '—') + '</td>' +
+        '<td class="num" style="color:' + (net >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + pjFmt(net) + '</td>' +
+        '<td><span class="p7-disc-stage ' + (d.status || 'submitted') + '">' + pjEsc(d.status || 'submitted') + '</span></td>' +
+        '<td><button class="pj-icon-btn secondary" style="width:28px;height:28px" onclick="p7OpenDiscountDetail(\'' + d.id + '\')" data-tip="View"><i class="fas fa-eye" style="font-size:10px"></i></button></td>' +
+        '</tr>';
+    }).join('');
+
+    host.innerHTML = `
+      <div class="p8-hero">
+        <div class="p8-hero-title"><i class="fas fa-building"></i> Discounter</div>
+        <div class="p8-hero-value">${pjEsc(party.name)}</div>
+        <div class="p8-hero-sub">
+          ${s.count} cheque(s) · Active ${s.activeCount} · Settled ${s.settledCount}
+          ${s.bouncedCount ? ' · Bounced ' + s.bouncedCount : ''}
+          ${s.effectiveFeePercent > 0 ? ' · Effective fee ' + s.effectiveFeePercent.toFixed(2) + '%' : ''}
+        </div>
+        <div class="p8-hero-kpis">
+          <div class="p8-hero-kpi"><div class="lbl">Cheque Value</div><div class="val">${pjFmt(s.totalChequeValue)}</div><div class="sub">total given to ${pjEsc(party.name)}</div></div>
+          <div class="p8-hero-kpi"><div class="lbl">Total Advanced</div><div class="val" style="color:#a7f3d0">${pjFmt(s.totalAdvanced)}</div><div class="sub">received upfront</div></div>
+          <div class="p8-hero-kpi"><div class="lbl">Total Returned</div><div class="val" style="color:#93c5fd">${pjFmt(s.totalReturned)}</div><div class="sub">hold returned at settlement</div></div>
+          <div class="p8-hero-kpi"><div class="lbl">Total Fees Paid</div><div class="val" style="color:#fca5a5">${pjFmt(s.totalFees)}</div><div class="sub">kept by ${pjEsc(party.name)}</div></div>
+          <div class="p8-hero-kpi"><div class="lbl">Total Recovered</div><div class="val" style="color:#fca5a5">${pjFmt(s.totalRecovered)}</div><div class="sub">bounced clawbacks</div></div>
+          <div class="p8-hero-kpi"><div class="lbl">Net Received</div><div class="val" style="color:#a7f3d0">${pjFmt(s.netReceived)}</div><div class="sub">final take-home</div></div>
+        </div>
+      </div>
+
+      <div class="p8-breakdown">
+        <div class="p8-breakdown-card">
+          <div class="p8-breakdown-title">Money Flow</div>
+          ${p8BarRowHTML('Advanced to us', s.totalAdvanced, s.totalChequeValue, '#10b981')}
+          ${p8BarRowHTML('Returned at settlement', s.totalReturned, s.totalChequeValue, '#3b82f6')}
+          ${p8BarRowHTML('Fees kept by provider', s.totalFees, s.totalChequeValue, '#f59e0b')}
+          ${p8BarRowHTML('Clawed back (bounces)', s.totalRecovered, s.totalChequeValue, '#ef4444')}
+        </div>
+        <div class="p8-breakdown-card">
+          <div class="p8-breakdown-title">Status Breakdown</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><div style="font-size:10.5px;color:var(--gray);text-transform:uppercase;font-weight:700">Active</div><div style="font-size:22px;font-weight:800;color:#3b82f6;margin-top:4px">${s.activeCount}</div></div>
+            <div><div style="font-size:10.5px;color:var(--gray);text-transform:uppercase;font-weight:700">Settled</div><div style="font-size:22px;font-weight:800;color:var(--success);margin-top:4px">${s.settledCount}</div></div>
+            <div><div style="font-size:10.5px;color:var(--gray);text-transform:uppercase;font-weight:700">Bounced</div><div style="font-size:22px;font-weight:800;color:var(--danger);margin-top:4px">${s.bouncedCount}</div></div>
+            <div><div style="font-size:10.5px;color:var(--gray);text-transform:uppercase;font-weight:700">Effective Fee</div><div style="font-size:22px;font-weight:800;color:#f59e0b;margin-top:4px">${s.effectiveFeePercent.toFixed(2)}%</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-list-ol" style="color:var(--primary);margin-right:8px"></i>Full Cheque Ledger</h2>
+          <button class="btn btn-secondary btn-sm" onclick="p8ExportDiscounterCSV('${partyId}')">
+            <i class="fas fa-file-csv"></i> Export CSV
+          </button>
+        </div>
+        ${records.length === 0
+          ? '<div class="pj-empty"><i class="fas fa-inbox"></i><h3>No records</h3></div>'
+          : '<div class="p8-tbl-wrap"><table class="p8-tbl"><thead><tr><th>Date</th><th>Cheque #</th><th>Shop</th><th>Project</th><th class="num">Cheque Amt</th><th class="num">Advance</th><th class="num">Returned</th><th class="num">Fee</th><th class="num">Net</th><th>Status</th><th></th></tr></thead><tbody>' + ledgerRows + '</tbody></table></div>'}
+      </div>
+    `;
+  } catch (e) {
+    console.error('[P8] detail render failed:', e);
+    p8RenderError(host, e);
   }
-
-  const s = p8DiscounterStats(partyId);
-  const records = s.records.slice().sort((a,b) => new Date(b.submittedDate || 0) - new Date(a.submittedDate || 0));
-
-  host.innerHTML = `
-    <div class="p8-hero">
-      <div class="p8-hero-title"><i class="fas fa-building"></i> Discounter</div>
-      <div class="p8-hero-value">${pjEsc(party.name)}</div>
-      <div class="p8-hero-sub">
-        ${s.count} cheque(s) discounted
-        · Active ${s.activeCount} · Settled ${s.settledCount}
-        ${s.bouncedCount ? ` · Bounced ${s.bouncedCount}` : ''}
-        ${s.effectiveFeePercent > 0 ? ` · Effective fee ${s.effectiveFeePercent.toFixed(2)}%` : ''}
-      </div>
-      <div class="p8-hero-kpis">
-        <div class="p8-hero-kpi">
-          <div class="lbl">Cheque Value</div>
-          <div class="val">${pjFmt(s.totalChequeValue)}</div>
-          <div class="sub">total given to ${pjEsc(party.name)}</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Total Advanced</div>
-          <div class="val" style="color:#a7f3d0">${pjFmt(s.totalAdvanced)}</div>
-          <div class="sub">received upfront</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Total Returned</div>
-          <div class="val" style="color:#93c5fd">${pjFmt(s.totalReturned)}</div>
-          <div class="sub">hold returned at settlement</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Total Fees Paid</div>
-          <div class="val" style="color:#fca5a5">${pjFmt(s.totalFees)}</div>
-          <div class="sub">kept by ${pjEsc(party.name)}</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Total Recovered</div>
-          <div class="val" style="color:#fca5a5">${pjFmt(s.totalRecovered)}</div>
-          <div class="sub">bounced clawbacks</div>
-        </div>
-        <div class="p8-hero-kpi">
-          <div class="lbl">Net Received</div>
-          <div class="val" style="color:#a7f3d0">${pjFmt(s.netReceived)}</div>
-          <div class="sub">final take-home</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="p8-breakdown">
-      <div class="p8-breakdown-card">
-        <div class="p8-breakdown-title">Money Flow</div>
-        ${p8BarRowHTML('Advanced to us', s.totalAdvanced, s.totalChequeValue, '#10b981')}
-        ${p8BarRowHTML('Returned at settlement', s.totalReturned, s.totalChequeValue, '#3b82f6')}
-        ${p8BarRowHTML('Fees kept by provider', s.totalFees, s.totalChequeValue, '#f59e0b')}
-        ${p8BarRowHTML('Clawed back (bounces)', s.totalRecovered, s.totalChequeValue, '#ef4444')}
-        <div style="padding-top:12px;border-top:1px dashed var(--border);margin-top:8px">
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="font-weight:700">Net Received</span>
-            <span style="font-weight:800;color:var(--success)">${pjFmt(s.netReceived)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="p8-breakdown-card">
-        <div class="p8-breakdown-title">Status Breakdown</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div>
-            <div style="font-size:10.5px;color:var(--gray);text-transform:uppercase;font-weight:700">Active</div>
-            <div style="font-size:22px;font-weight:800;color:#3b82f6;margin-top:4px">${s.activeCount}</div>
-          </div>
-          <div>
-            <div style="font-size:10.5px;color:var(--gray);text-transform:uppercase;font-weight:700">Settled</div>
-            <div style="font-size:22px;font-weight:800;color:var(--success);margin-top:4px">${s.settledCount}</div>
-          </div>
-          <div>
-            <div style="font-size:10.5px;color:var(--gray);text-transform:uppercase;font-weight:700">Bounced</div>
-            <div style="font-size:22px;font-weight:800;color:var(--danger);margin-top:4px">${s.bouncedCount}</div>
-          </div>
-          <div>
-            <div style="font-size:10.5px;color:var(--gray);text-transform:uppercase;font-weight:700">Effective Fee</div>
-            <div style="font-size:22px;font-weight:800;color:#f59e0b;margin-top:4px">${s.effectiveFeePercent.toFixed(2)}%</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title"><i class="fas fa-list-ol" style="color:var(--primary);margin-right:8px"></i>Full Cheque Ledger</h2>
-        <button class="btn btn-secondary btn-sm" onclick="p8ExportDiscounterCSV('${partyId}')">
-          <i class="fas fa-file-csv"></i> Export CSV
-        </button>
-      </div>
-      ${records.length === 0
-        ? '<div class="pj-empty"><i class="fas fa-inbox"></i><h3>No records</h3></div>'
-        : `<div class="p8-tbl-wrap"><table class="p8-tbl">
-            <thead><tr>
-              <th>Date</th>
-              <th>Cheque #</th>
-              <th>Shop</th>
-              <th>Project</th>
-              <th class="num">Cheque Amt</th>
-              <th class="num">Advance</th>
-              <th class="num">Returned</th>
-              <th class="num">Fee</th>
-              <th class="num">Net</th>
-              <th>Status</th>
-              <th></th>
-            </tr></thead>
-            <tbody>${records.map(d => {
-              const proj = PJ.projects.find(p => p.id === d.projectId);
-              const net = (parseFloat(d.advanceAmount)||0) + (parseFloat(d.settlementAmount)||0)
-                        - (parseFloat(d.feeAmount)||0) - (parseFloat(d.recoveryAmount)||0);
-              return `<tr>
-                <td>${pjDate(d.submittedDate)}</td>
-                <td><strong>#${pjEsc(d.chequeNumber)}</strong></td>
-                <td>${pjEsc(d.shopName || pjPartyName(d.shopPartyId))}</td>
-                <td>${proj ? `<a href="#" onclick="event.preventDefault();pjOpenProjectDetail('${proj.id}')" style="color:var(--primary);font-weight:600">${pjEsc(proj.name)}</a>` : '—'}</td>
-                <td class="num">${pjFmt(d.chequeAmount)}</td>
-                <td class="num in-amt">${pjFmt(d.advanceAmount)}</td>
-                <td class="num" style="color:#2563eb">${d.settlementAmount ? pjFmt(d.settlementAmount) : '—'}</td>
-                <td class="num fee-amt">${d.feeAmount ? pjFmt(d.feeAmount) : '—'}</td>
-                <td class="num" style="color:${net >= 0 ? 'var(--success)' : 'var(--danger)'}">${pjFmt(net)}</td>
-                <td><span class="p7-disc-stage ${d.status}">${d.status}</span></td>
-                <td>
-                  <button class="pj-icon-btn secondary" style="width:28px;height:28px" onclick="p7OpenDiscountDetail('${d.id}')" data-tip="View">
-                    <i class="fas fa-eye" style="font-size:10px"></i>
-                  </button>
-                </td>
-              </tr>`;
-            }).join('')}</tbody>
-          </table></div>`}
-    </div>
-  `;
 };
 
-function p8BarRowHTML(label, value, total, color) {
-  const pct = total > 0 ? (value / total * 100) : 0;
-  return `<div class="p8-bar-row">
-    <div class="p8-bar-label">
-      <span>${label}</span>
-      <span>${pjFmt(value)} <span style="color:var(--gray);font-weight:400;font-size:10.5px">(${pct.toFixed(1)}%)</span></span>
-    </div>
-    <div class="p8-bar-track">
-      <div class="p8-bar-fill" style="width:${Math.min(pct, 100)}%;background:${color}"></div>
-    </div>
-  </div>`;
-}
-
-/* ═══════════════════ 9 · CSV EXPORT PER DISCOUNTER ═══════════════════ */
+/* ═══════════════════ 8 · CSV EXPORT ═══════════════════ */
 window.p8ExportDiscounterCSV = function (partyId) {
   const s = p8DiscounterStats(partyId);
   if (!s.records.length) return pjToast('No records to export', 'error');
-
   let csv = `Discounter: ${s.discounter.name}\n`;
-  csv += `Total Cheques,${s.count}\n`;
-  csv += `Total Cheque Value,${s.totalChequeValue}\n`;
-  csv += `Total Advanced,${s.totalAdvanced}\n`;
-  csv += `Total Returned,${s.totalReturned}\n`;
-  csv += `Total Fees,${s.totalFees}\n`;
-  csv += `Total Recovered,${s.totalRecovered}\n`;
-  csv += `Net Received,${s.netReceived}\n`;
-  csv += `Generated,${new Date().toLocaleString()}\n\n`;
+  csv += `Total Cheques,${s.count}\nTotal Cheque Value,${s.totalChequeValue}\n`;
+  csv += `Total Advanced,${s.totalAdvanced}\nTotal Returned,${s.totalReturned}\n`;
+  csv += `Total Fees,${s.totalFees}\nTotal Recovered,${s.totalRecovered}\n`;
+  csv += `Net Received,${s.netReceived}\nGenerated,${new Date().toLocaleString()}\n\n`;
   csv += `Date,ChequeNo,Shop,Project,ChequeValue,Advance,Hold,Returned,Fee,Recovered,Net,Status,Notes\n`;
-
   s.records.forEach(d => {
     const proj = PJ.projects.find(p => p.id === d.projectId);
-    const net = (parseFloat(d.advanceAmount)||0) + (parseFloat(d.settlementAmount)||0)
-              - (parseFloat(d.feeAmount)||0) - (parseFloat(d.recoveryAmount)||0);
+    const net = p8SafeNum(d.advanceAmount) + p8SafeNum(d.settlementAmount)
+              - p8SafeNum(d.feeAmount) - p8SafeNum(d.recoveryAmount);
     csv += [
-      d.submittedDate || '',
-      `"${d.chequeNumber}"`,
-      `"${d.shopName || pjPartyName(d.shopPartyId)}"`,
-      `"${proj?.name || ''}"`,
-      d.chequeAmount || 0,
-      d.advanceAmount || 0,
-      d.holdAmount || 0,
-      d.settlementAmount || 0,
-      d.feeAmount || 0,
-      d.recoveryAmount || 0,
-      net,
-      d.status || '',
-      `"${(d.notes || '').replace(/"/g, '""')}"`
+      d.submittedDate || '', `"${d.chequeNumber}"`,
+      `"${d.shopName || pjPartyName(d.shopPartyId)}"`, `"${proj ? proj.name : ''}"`,
+      d.chequeAmount || 0, d.advanceAmount || 0, d.holdAmount || 0,
+      d.settlementAmount || 0, d.feeAmount || 0, d.recoveryAmount || 0,
+      net, d.status || '', `"${(d.notes || '').replace(/"/g, '""')}"`
     ].join(',') + '\n';
   });
-
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${s.discounter.name.replace(/[^a-z0-9]/gi, '_')}_discounting_${pjToday()}.csv`;
+  a.download = `${(s.discounter.name || 'discounter').replace(/[^a-z0-9]/gi, '_')}_discounting_${pjToday()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   pjToast('CSV exported', 'success');
 };
 
+/* ═══════════════════ 9 · ROUTER PATCH (safe) ═══════════════════ */
+const _prevShowView = window.showView;
+if (typeof _prevShowView === 'function') {
+  window.showView = function (viewName, navElement) {
+    if (viewName !== 'discounters' && viewName !== 'discounter-detail') {
+      return _prevShowView.apply(this, arguments);
+    }
+
+    p8EnsureViews(); // make sure containers exist before we try to activate them
+
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    const navEl = navElement || document.getElementById('p8DiscountersNavItem');
+    if (navEl) navEl.classList.add('active');
+
+    document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+    const idMap = { 'discounters': 'discountersView', 'discounter-detail': 'discounterDetailView' };
+    const el = document.getElementById(idMap[viewName]);
+    if (el) el.classList.add('active');
+
+    document.getElementById('pageTitle').textContent =
+      viewName === 'discounters' ? 'Discounters' : 'Discounter Details';
+
+    if (window.innerWidth <= 768) {
+      const sb = document.getElementById('sidebar');
+      const ov = document.getElementById('sidebarOverlay');
+      if (sb) sb.classList.remove('active');
+      if (ov) ov.classList.remove('active');
+    }
+
+    (async () => {
+      try {
+        if (!PJ.loaded && typeof window.pjLoadAll === 'function') await window.pjLoadAll();
+        if (!PJ.discountsLoaded && typeof window.p7LoadDiscounts === 'function') await window.p7LoadDiscounts();
+      } catch (e) {
+        console.warn('[P8] data load failed (continuing anyway):', e);
+      }
+      if (viewName === 'discounters') window.p8RenderDiscounters();
+      else if (viewName === 'discounter-detail' && PJ.activeDiscounterId) window.p8RenderDiscounterDetail(PJ.activeDiscounterId);
+    })();
+  };
+}
+
 /* ═══════════════════ 10 · BOOT ═══════════════════ */
 function p8Boot() {
-  try { p8BuildViews(); } catch(e){ console.warn('[P8] views failed', e); }
-  try { p8BuildNav(); }   catch(e){ console.warn('[P8] nav failed', e); }
+  try { p8EnsureViews(); } catch (e) { console.warn('[P8] view ensure failed', e); }
+  try { p8EnsureNav(); }   catch (e) { console.warn('[P8] nav ensure failed', e); }
+
+  // Retry nav/views a few times (in case sidebar hasn't been built yet)
+  let tries = 0;
+  const t = setInterval(() => {
+    tries++;
+    const ok1 = !!document.getElementById('discountersView');
+    const ok2 = !!document.getElementById('pjNavSection') && !!document.getElementById('p8DiscountersNavItem');
+    if (ok1 && ok2) { clearInterval(t); return; }
+    try { p8EnsureViews(); } catch (e) {}
+    try { p8EnsureNav(); }   catch (e) {}
+    if (tries > 20) clearInterval(t);
+  }, 800);
+
+  // Preload discounts when auth is ready
+  let loadedOnce = false;
+  const check = setInterval(async () => {
+    if (typeof currentUser !== 'undefined' && currentUser && !loadedOnce) {
+      loadedOnce = true;
+      clearInterval(check);
+      try { if (typeof window.p7LoadDiscounts === 'function') await window.p7LoadDiscounts(); } catch (e) {}
+    }
+  }, 1100);
+  setTimeout(() => clearInterval(check), 30000);
+
   try {
     const m = document.createElement('div');
-    m.id = '__proj_p8_ready';
+    m.id = '__proj_p8_v2_ready';
     m.style.cssText = 'position:fixed;bottom:1px;left:540px;font-size:1px;color:transparent;pointer-events:none';
-    m.textContent = 'projects-p8-ready';
+    m.textContent = 'projects-p8-v2-ready';
     document.body.appendChild(m);
-    console.log('[Projects Module v1.0-P8] ✅ discounter reports installed');
-  } catch(e) {}
+    console.log('[Projects Module v1.0-P8 v2] ✅ fixed discounter dashboard installed');
+  } catch (e) {}
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', p8Boot);
