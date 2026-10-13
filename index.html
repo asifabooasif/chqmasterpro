@@ -8050,6 +8050,1962 @@ else finBoot();
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
+     PROJECTS & PARTIES MODULE v1.0
+     Trade-cycle tracker: loans → purchases → supplies → collections
+     Paste BEFORE the DevTools blocker script.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__projectsModuleV1) return;
+window.__projectsModuleV1 = true;
+
+/* ═══════════════════ 1 · STATE ═══════════════════ */
+const PJ = {
+  projects: [], parties: [], entries: [],
+  cheques: [], financePlans: [],
+  loaded: false, loading: false,
+  activeView: 'projects', activeProjectId: null,
+  filter: { projectId:'', partyId:'', type:'', dateFrom:'', dateTo:'' }
+};
+
+/* ═══════════════════ 2 · HELPERS ═══════════════════ */
+const pjFmt      = n => 'Rs. ' + Math.round(parseFloat(n)||0).toLocaleString('en-IN');
+const pjFmtExact = n => 'Rs. ' + (parseFloat(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pjDate = d => { if(!d) return '—'; const dt = d.toDate?d.toDate():new Date(d); return isNaN(dt)?'—':dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); };
+const pjToday = () => new Date().toISOString().split('T')[0];
+const pjToast = (m,t) => { if (typeof showToast === 'function') showToast(m, t||'info'); };
+const pjEsc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pjUid = p => (p||'x')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7);
+const pjDays = (a,b) => Math.round((new Date(b)-new Date(a))/86400000);
+
+const pjPartyName = id => {
+  const p = PJ.parties.find(x => x.id === id);
+  return p ? p.name : '—';
+};
+const pjPartyById = id => PJ.parties.find(x => x.id === id) || null;
+
+const TYPE_LABELS = {
+  'loan-in':      { label:'Loan Received',       dir:'in',  icon:'hand-holding-usd', color:'#8b5cf6' },
+  'capital-in':   { label:'Own Capital In',      dir:'in',  icon:'wallet',           color:'#06b6d4' },
+  'purchase-out': { label:'Purchase (Paid Out)', dir:'out', icon:'shopping-cart',    color:'#f59e0b' },
+  'supply-given': { label:'Goods Supplied',      dir:'out', icon:'truck-loading',    color:'#3b82f6' },
+  'payment-in':   { label:'Payment Received',    dir:'in',  icon:'money-bill-wave',  color:'#10b981' },
+  'payment-out':  { label:'Paid to Creditor',    dir:'out', icon:'file-invoice-dollar', color:'#ef4444' },
+  'expense-out':  { label:'Expense',             dir:'out', icon:'receipt',          color:'#64748b' }
+};
+
+const ALLOC_TARGETS = {
+  'creditor':     { label:'Pay Creditor',       icon:'user-tie',          needsId:'creditor' },
+  'finance-plan': { label:'Pay Finance Plan',   icon:'car',               needsId:'finance',   warn:true },
+  'personal':     { label:'Personal Use',       icon:'user',              needsId:null,        warn:true },
+  'capital':      { label:'Return to Capital',  icon:'undo-alt',          needsId:null }
+};
+
+/* ═══════════════════ 3 · STYLES ═══════════════════ */
+(function injectStyles(){
+  document.querySelectorAll('#__proj_styles').forEach(e => e.remove());
+  const s = document.createElement('style');
+  s.id = '__proj_styles';
+  s.textContent = `
+    .pj-hub-tabs{display:flex;gap:6px;border-bottom:2px solid var(--border);margin-bottom:22px;overflow-x:auto;padding-bottom:2px;align-items:center}
+    .pj-hub-tab{padding:11px 18px;border:none;background:transparent;font-weight:600;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;transition:.25s;white-space:nowrap;display:inline-flex;align-items:center;gap:8px;font-size:13.5px}
+    .pj-hub-tab:hover{color:var(--primary);transform:translateY(-2px)}
+    .pj-hub-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .pj-hub-pane{display:none;animation:fadeIn .3s ease}
+    .pj-hub-pane.active{display:block}
+    .pj-widgets{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:18px}
+    .pj-widget{background:white;border-radius:14px;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,.04);transition:.25s}
+    .pj-widget:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.08)}
+    .pj-widget-title{font-size:10px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+    .pj-widget-value{font-size:22px;font-weight:800}
+    .pj-widget-sub{font-size:10.5px;color:var(--gray);margin-top:3px}
+    .pj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+    .pj-card{background:white;border-radius:14px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,.04);transition:.25s;cursor:pointer;border-left:4px solid var(--primary)}
+    .pj-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(0,0,0,.1)}
+    .pj-card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px}
+    .pj-card-name{font-weight:800;font-size:15px;line-height:1.3}
+    .pj-card-desc{font-size:11.5px;color:var(--gray);margin-top:3px}
+    .pj-card-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+    .pj-stat{background:var(--light);padding:8px 10px;border-radius:7px}
+    .pj-stat-label{font-size:9.5px;color:var(--gray);font-weight:600;text-transform:uppercase}
+    .pj-stat-value{font-size:14px;font-weight:800;margin-top:2px}
+    .pj-progress{background:var(--border);height:6px;border-radius:3px;overflow:hidden;margin-top:8px}
+    .pj-progress-fill{height:100%;background:linear-gradient(90deg,var(--success),var(--primary));transition:width .8s ease}
+    .pj-chip{padding:3px 9px;border-radius:10px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:4px}
+    .pj-chip-in{background:#d1fae5;color:#065f46}
+    .pj-chip-out{background:#fee2e2;color:#991b1b}
+    .pj-chip-pending{background:#fef3c7;color:#b45309;border:1px dashed #b45309}
+    .pj-chip-cleared{background:#d1fae5;color:#065f46}
+    .pj-chip-bounced{background:#fee2e2;color:#b91c1c}
+    .pj-chip-open{background:#dbeafe;color:#1e40af}
+    .pj-chip-closed{background:#d1fae5;color:#065f46}
+    .pj-chip-loss{background:#fee2e2;color:#991b1b}
+    .pj-empty{text-align:center;padding:50px 20px;color:var(--gray)}
+    .pj-empty i{font-size:52px;opacity:.3;margin-bottom:14px;display:block}
+    .pj-loading{text-align:center;padding:60px 20px;color:var(--gray)}
+    .pj-loading i{font-size:36px;animation:rotate 1.2s linear infinite;display:block;margin-bottom:14px;color:var(--primary)}
+    .pj-icon-btn{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:14px;transition:.2s;position:relative}
+    .pj-icon-btn:hover{transform:translateY(-2px)}
+    .pj-icon-btn.primary{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff}
+    .pj-icon-btn.secondary{background:var(--light);color:var(--dark);border:1px solid var(--border)}
+    .pj-icon-btn.warning{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff}
+    .pj-icon-btn.danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff}
+    .pj-icon-btn.gray{background:#64748b;color:#fff}
+    .pj-icon-btn::after{content:attr(data-tip);position:absolute;bottom:-32px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.9);color:#fff;padding:4px 8px;border-radius:5px;font-size:10px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100;font-weight:600;letter-spacing:.3px}
+    .pj-icon-btn:hover::after{opacity:1}
+    .pj-section{background:white;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.04);margin-bottom:14px;overflow:hidden;border:1px solid var(--border)}
+    .pj-section > summary{cursor:pointer;list-style:none;padding:16px 20px;display:flex;align-items:center;gap:14px;transition:.2s;user-select:none}
+    .pj-section > summary::-webkit-details-marker{display:none}
+    .pj-section > summary::before{content:'▸';font-size:14px;color:var(--gray);transition:transform .25s;width:16px}
+    .pj-section[open] > summary::before{transform:rotate(90deg)}
+    .pj-section > summary:hover{background:var(--light)}
+    .pj-section[open] > summary{border-bottom:1px solid var(--border)}
+    .pj-section-title{font-size:15px;font-weight:800;color:var(--dark);display:flex;align-items:center;gap:10px}
+    .pj-section-badge{padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700}
+    .pj-section-meta{margin-left:auto;font-size:12px;color:var(--gray);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+    .pj-section-meta strong{color:var(--dark);font-weight:700}
+    .pj-section-body{padding:20px}
+    .pj-entry-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:11px 14px;background:var(--light);border-radius:10px;margin-bottom:8px;font-size:13px;transition:.2s}
+    .pj-entry-row:hover{transform:translateX(4px);box-shadow:0 4px 10px rgba(0,0,0,.06)}
+    .pj-entry-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;color:white;flex-shrink:0}
+    .pj-entry-main{min-width:0}
+    .pj-entry-title{font-weight:700;font-size:13px}
+    .pj-entry-sub{font-size:11.5px;color:var(--gray);margin-top:2px}
+    .pj-entry-amount{font-weight:800;font-size:14px;text-align:right}
+    .pj-entry-actions{display:flex;gap:4px}
+    .pj-info-banner{background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1.5px solid #3b82f6;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#1e40af;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start}
+    .pj-info-banner.warn{background:linear-gradient(135deg,#fef3c7,#fed7aa);border-color:#f59e0b;color:#92400e}
+    .pj-info-banner.danger{background:linear-gradient(135deg,#fee2e2,#fecaca);border-color:#ef4444;color:#991b1b}
+    .pj-info-banner.success{background:linear-gradient(135deg,#d1fae5,#a7f3d0);border-color:#10b981;color:#065f46}
+    .pj-info-banner i{font-size:16px;margin-top:1px}
+    .pj-detail-header{background:white;border-radius:14px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.04);margin-bottom:14px}
+    .pj-detail-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+    .pj-detail-title h2{font-size:22px;font-weight:800;margin-bottom:4px}
+    .pj-detail-title .meta{font-size:12px;color:var(--gray);margin-top:6px;display:flex;gap:14px;flex-wrap:wrap}
+    .pj-action-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .pj-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;padding-top:16px;border-top:1px solid var(--border)}
+    .pj-kpi{padding:12px 14px;border-radius:10px;background:var(--light)}
+    .pj-kpi .lbl{font-size:10px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.5px}
+    .pj-kpi .val{font-size:18px;font-weight:800;margin-top:4px}
+    .pj-kpi .sub{font-size:10.5px;color:var(--gray);margin-top:2px}
+    .pj-alloc-row{display:grid;grid-template-columns:1fr 130px 160px 38px;gap:8px;align-items:center;margin-bottom:8px;padding:10px;background:var(--light);border-radius:10px}
+    .pj-alloc-row select,.pj-alloc-row input{padding:8px 10px;border:2px solid var(--border);border-radius:8px;font-size:12.5px;width:100%}
+    .pj-alloc-total{display:flex;justify-content:space-between;padding:12px 14px;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:10px;font-weight:800;font-size:14px;margin-top:12px;border:1px dashed var(--info)}
+    .pj-alloc-total .diff.ok{color:var(--success)}
+    .pj-alloc-total .diff.warn{color:var(--warning)}
+    .pj-alloc-total .diff.err{color:var(--danger)}
+    .pj-type-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+    .pj-type-tab{padding:9px 14px;border:2px solid var(--border);background:white;border-radius:10px;cursor:pointer;font-weight:600;font-size:12.5px;transition:.2s;display:inline-flex;align-items:center;gap:6px}
+    .pj-type-tab:hover{border-color:var(--primary);transform:translateY(-2px)}
+    .pj-type-tab.active{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:white;border-color:transparent}
+    .pj-ledger-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+    .pj-ledger-tbl th{background:var(--light);padding:10px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray);font-weight:700;border-bottom:1px solid var(--border)}
+    .pj-ledger-tbl td{padding:10px 8px;border-bottom:1px solid var(--border)}
+    .pj-ledger-tbl tbody tr:hover{background:var(--light)}
+    .pj-warn-strike{background:linear-gradient(135deg,#fee2e2,#fecaca);border:2px solid #ef4444;border-radius:10px;padding:14px 18px;font-size:13px;color:#991b1b;margin-bottom:16px}
+    .pj-warn-strike i{font-size:18px;margin-right:8px}
+    @media(max-width:900px){
+      .pj-alloc-row{grid-template-columns:1fr !important}
+      .pj-entry-row{grid-template-columns:1fr !important}
+      .pj-entry-amount{text-align:left}
+    }
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ═══════════════════ 4 · FIRESTORE CRUD ═══════════════════ */
+async function pjLoadAll() {
+  if (PJ.loading) return;
+  PJ.loading = true;
+  try {
+    const [pSnap, aSnap, eSnap, cSnap, fSnap] = await Promise.all([
+      db.collection('projects').orderBy('createdAt','desc').get(),
+      db.collection('parties').orderBy('name').get(),
+      db.collection('project_entries').orderBy('date','desc').get(),
+      db.collection('cheques').get().catch(() => ({ docs: [] })),
+      db.collection('finance_plans').get().catch(() => ({ docs: [] }))
+    ]);
+    PJ.projects    = pSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    PJ.parties     = aSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    PJ.entries     = eSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    PJ.cheques     = cSnap.docs.map(d => ({ id:d.id, ...d.data() })).filter(c => !c.deletedAt);
+    PJ.financePlans = fSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    PJ.loaded = true;
+  } catch (e) {
+    console.error('Projects load error:', e);
+    pjToast('Error loading projects: ' + e.message, 'error');
+  } finally {
+    PJ.loading = false;
+  }
+}
+
+async function pjSaveDoc(coll, data) {
+  const ref = data.id ? db.collection(coll).doc(data.id) : db.collection(coll).doc();
+  const { id, ...payload } = data;
+  if (!data.id) {
+    payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    payload.createdBy = currentUser ? currentUser.email : 'anonymous';
+  }
+  payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  await ref.set(payload, { merge: true });
+  return ref.id;
+}
+
+async function pjDelete(coll, id) {
+  try { await db.collection(coll).doc(id).delete(); return true; }
+  catch (e) { console.warn('Delete failed', coll, id, e); return false; }
+}
+
+/* ═══════════════════ 5 · CALCULATION ENGINE ═══════════════════ */
+
+/** All entries for a project (non-deleted, chronological) */
+function pjProjectEntries(projectId) {
+  return PJ.entries
+    .filter(e => e.projectId === projectId)
+    .sort((a,b) => new Date(a.date || a.effectiveDate) - new Date(b.date || b.effectiveDate));
+}
+
+/** Core KPIs for a project */
+function pjProjectKPIs(projectId) {
+  const entries = pjProjectEntries(projectId);
+
+  // Cleared-only math (pending/bounced entries excluded from balance math)
+  const cleared = entries.filter(e => !e.status || e.status === 'cleared');
+
+  let loanIn = 0, capitalIn = 0, purchaseOut = 0, supplyGiven = 0,
+      paymentIn = 0, paymentOut = 0, expenseOut = 0;
+  let allocCreditor = 0, allocPersonal = 0, allocFinance = 0, allocCapital = 0;
+
+  cleared.forEach(e => {
+    const amt = parseFloat(e.amount) || 0;
+    if (e.type === 'loan-in')       loanIn       += amt;
+    if (e.type === 'capital-in')    capitalIn    += amt;
+    if (e.type === 'purchase-out')  purchaseOut  += amt;
+    if (e.type === 'supply-given')  supplyGiven  += amt;
+    if (e.type === 'payment-in')    paymentIn    += amt;
+    if (e.type === 'payment-out')   paymentOut   += amt;
+    if (e.type === 'expense-out')   expenseOut   += amt;
+
+    if (e.type === 'payment-in' && Array.isArray(e.allocations)) {
+      e.allocations.forEach(a => {
+        const aAmt = parseFloat(a.amount) || 0;
+        if (a.target === 'creditor')     allocCreditor += aAmt;
+        if (a.target === 'personal')     allocPersonal += aAmt;
+        if (a.target === 'finance-plan') allocFinance  += aAmt;
+        if (a.target === 'capital')      allocCapital  += aAmt;
+      });
+    }
+  });
+
+  const totalInvested   = loanIn + capitalIn;                 // money I put in
+  const totalSpent      = purchaseOut + expenseOut + paymentOut;
+  const totalReceived   = paymentIn;
+  const outstanding     = Math.max(0, supplyGiven - paymentIn); // shop still owes
+  const cashInHand      = totalInvested + totalReceived - totalSpent;
+  const netPosition     = totalReceived + outstanding - totalSpent;  // P&L estimate
+  const capitalReturned = allocCapital;
+  const personalTaken   = allocPersonal + allocFinance;       // pulled out for personal
+  const profitEstimate  = supplyGiven - purchaseOut - expenseOut; // gross margin
+
+  // Pending cheque exposure
+  const pending = entries.filter(e => e.status === 'pending');
+  const pendingIn  = pending.filter(e => e.direction === 'in').reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const pendingOut = pending.filter(e => e.direction === 'out').reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+
+  return {
+    entries, cleared, pending,
+    loanIn, capitalIn, purchaseOut, supplyGiven,
+    paymentIn, paymentOut, expenseOut,
+    totalInvested, totalSpent, totalReceived, outstanding,
+    cashInHand, netPosition, profitEstimate,
+    capitalReturned, personalTaken,
+    allocCreditor, allocPersonal, allocFinance, allocCapital,
+    pendingIn, pendingOut,
+    entryCount: entries.length
+  };
+}
+
+/** Portfolio-level totals across all projects */
+function pjPortfolioKPIs() {
+  let totalInvested = 0, totalReceived = 0, totalOutstanding = 0,
+      totalPending = 0, totalProfit = 0, openCount = 0;
+  PJ.projects.forEach(p => {
+    const k = pjProjectKPIs(p.id);
+    totalInvested    += k.totalInvested;
+    totalReceived    += k.totalReceived;
+    totalOutstanding += k.outstanding;
+    totalPending     += k.pendingIn;
+    totalProfit      += k.profitEstimate;
+    if (p.status === 'open') openCount++;
+  });
+  return { totalInvested, totalReceived, totalOutstanding, totalPending, totalProfit, openCount };
+}
+
+/* ═══════════════════ 6 · BOOTSTRAP SKELETON ═══════════════════ */
+function pjBoot() {
+  console.log('[Projects Module v1.0] booting...');
+  // Nav, views, modals will be injected in Part 2 & 3
+  try {
+    document.addEventListener('click', e => {
+      if (e.target.closest && e.target.closest('.pj-dropdown-menu') === null) {
+        document.querySelectorAll('.pj-dropdown-menu.show').forEach(m => m.classList.remove('show'));
+      }
+    });
+  } catch(e) {}
+  try {
+    const m = document.createElement('div');
+    m.id = '__proj_ready';
+    m.style.cssText = 'position:fixed;bottom:1px;left:120px;font-size:1px;color:transparent;pointer-events:none';
+    m.textContent = 'projects-module-v1-ready';
+    document.body.appendChild(m);
+  } catch(e) {}
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pjBoot);
+else pjBoot();
+
+// Expose internals for Part 2 & 3
+window.__PJ = PJ;
+window.pjFmt = pjFmt; window.pjFmtExact = pjFmtExact; window.pjDate = pjDate;
+window.pjToday = pjToday; window.pjToast = pjToast; window.pjEsc = pjEsc;
+window.pjUid = pjUid; window.pjDays = pjDays;
+window.pjPartyName = pjPartyName; window.pjPartyById = pjPartyById;
+window.TYPE_LABELS = TYPE_LABELS; window.ALLOC_TARGETS = ALLOC_TARGETS;
+window.pjLoadAll = pjLoadAll; window.pjSaveDoc = pjSaveDoc; window.pjDelete = pjDelete;
+window.pjProjectEntries = pjProjectEntries;
+window.pjProjectKPIs = pjProjectKPIs;
+window.pjPortfolioKPIs = pjPortfolioKPIs;
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     PROJECTS MODULE v1.0 — PART 2: NAV · ROUTER · VIEWS
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__projectsModuleV1_part2) return;
+window.__projectsModuleV1_part2 = true;
+
+if (!window.__PJ) { console.error('[Projects P2] Part 1 not loaded'); return; }
+
+// Pull shared references
+const PJ = window.__PJ;
+const {
+  pjFmt, pjFmtExact, pjDate, pjToday, pjToast, pjEsc, pjUid, pjDays,
+  pjPartyName, pjPartyById, TYPE_LABELS, ALLOC_TARGETS,
+  pjLoadAll, pjProjectEntries, pjProjectKPIs, pjPortfolioKPIs
+} = window;
+
+/* ═══════════════════ 1 · SIDEBAR NAV ═══════════════════ */
+function pjBuildNav() {
+  const nav = document.querySelector('.sidebar nav');
+  if (!nav) return;
+  document.querySelectorAll('#pjNavSection').forEach(el => el.remove());
+
+  const section = document.createElement('div');
+  section.className = 'nav-section';
+  section.id = 'pjNavSection';
+  section.innerHTML = `
+    <div class="nav-title">Trade Projects</div>
+    <div class="nav-item" id="pjMainNavItem" onclick="pjShowView('projects',this)">
+      <i class="fas fa-project-diagram"></i><span>Projects</span>
+    </div>
+    <div class="nav-item" id="pjPartiesNavItem" onclick="pjShowView('parties',this)">
+      <i class="fas fa-address-book"></i><span>Parties</span>
+    </div>
+    <div class="nav-item" id="pjLedgerNavItem" onclick="pjShowView('ledger',this)">
+      <i class="fas fa-book-open"></i><span>Ledger</span>
+    </div>
+    <div class="nav-item" id="pjReportNavItem" onclick="pjShowView('proj-report',this)">
+      <i class="fas fa-chart-bar"></i><span>P&amp;L Report</span>
+    </div>
+  `;
+
+  // Insert before "Tools & Admin" section (same spot Finance Manager uses)
+  const sections = nav.querySelectorAll('.nav-section');
+  let inserted = false;
+  sections.forEach(s => {
+    const t = s.querySelector('.nav-title');
+    if (t && t.textContent.trim() === 'Tools & Admin' && !inserted) {
+      nav.insertBefore(section, s);
+      inserted = true;
+    }
+  });
+  if (!inserted) nav.appendChild(section);
+}
+
+/* ═══════════════════ 2 · VIEWS CONTAINER ═══════════════════ */
+function pjBuildViews() {
+  const main = document.querySelector('.main-content');
+  if (!main) return;
+  document.querySelectorAll('#__pj_views_root').forEach(el => el.remove());
+
+  const wrap = document.createElement('div');
+  wrap.id = '__pj_views_root';
+  wrap.innerHTML = `
+    <div id="projectsView" class="view-content">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-project-diagram" style="color:var(--primary);margin-right:8px"></i>Trade Projects</h2>
+          <button class="btn btn-primary btn-sm" onclick="pjOpenProjectModal()">
+            <i class="fas fa-plus"></i> New Project
+          </button>
+        </div>
+        <div id="pjProjectsBody"><div class="pj-loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+    <div id="partiesView" class="view-content">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-address-book" style="color:var(--primary);margin-right:8px"></i>Parties</h2>
+          <button class="btn btn-primary btn-sm" onclick="pjOpenPartyModal()">
+            <i class="fas fa-plus"></i> New Party
+          </button>
+        </div>
+        <div id="pjPartiesBody"><div class="pj-loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+    <div id="ledgerView" class="view-content">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-book-open" style="color:var(--primary);margin-right:8px"></i>Full Ledger</h2>
+          <button class="btn btn-secondary btn-sm" onclick="pjRefreshAll()">
+            <i class="fas fa-sync"></i> Refresh
+          </button>
+        </div>
+        <div id="pjLedgerFilters"></div>
+        <div id="pjLedgerBody"><div class="pj-loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+    <div id="projReportView" class="view-content">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-chart-bar" style="color:var(--primary);margin-right:8px"></i>Profit &amp; Loss Report</h2>
+          <button class="btn btn-secondary btn-sm" onclick="pjExportReportCSV()">
+            <i class="fas fa-file-csv"></i> Export CSV
+          </button>
+        </div>
+        <div id="pjReportBody"><div class="pj-loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+    <div id="projectDetailView" class="view-content"></div>
+  `;
+  main.appendChild(wrap);
+}
+
+/* ═══════════════════ 3 · ROUTER OVERRIDE ═══════════════════ */
+const PJ_ROUTES = ['projects','parties','ledger','proj-report','project-detail'];
+const _origShowView = window.showView;
+
+window.showView = function (viewName, navElement) {
+  if (PJ_ROUTES.indexOf(viewName) === -1) {
+    return _origShowView.apply(this, arguments);
+  }
+
+  // Nav highlighting
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  const navMap = {
+    'projects': 'pjMainNavItem',
+    'project-detail': 'pjMainNavItem',
+    'parties': 'pjPartiesNavItem',
+    'ledger': 'pjLedgerNavItem',
+    'proj-report': 'pjReportNavItem'
+  };
+  const navId = navMap[viewName];
+  const navEl = navElement || (navId ? document.getElementById(navId) : null);
+  if (navEl) navEl.classList.add('active');
+
+  // Show the right view
+  document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+  const viewIdMap = {
+    'projects': 'projectsView',
+    'parties': 'partiesView',
+    'ledger': 'ledgerView',
+    'proj-report': 'projReportView',
+    'project-detail': 'projectDetailView'
+  };
+  const el = document.getElementById(viewIdMap[viewName]);
+  if (el) el.classList.add('active');
+
+  const titles = {
+    'projects': 'Projects',
+    'project-detail': 'Project Details',
+    'parties': 'Parties',
+    'ledger': 'Ledger',
+    'proj-report': 'P&L Report'
+  };
+  document.getElementById('pageTitle').textContent = titles[viewName] || viewName;
+
+  // Close mobile sidebar
+  if (window.innerWidth <= 768) {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebarOverlay');
+    if (sb) sb.classList.remove('active');
+    if (ov) ov.classList.remove('active');
+  }
+
+  // Lazy load then render
+  (async () => {
+    if (!PJ.loaded && !PJ.loading) {
+      const target = document.getElementById(viewIdMap[viewName]);
+      if (target) target.innerHTML = '<div class="card"><div class="pj-loading"><i class="fas fa-circle-notch"></i>Loading data…</div></div>';
+      await pjLoadAll();
+    }
+    if (viewName === 'projects')       pjRenderProjects();
+    else if (viewName === 'parties')   pjRenderParties();
+    else if (viewName === 'ledger')    pjRenderLedger();
+    else if (viewName === 'proj-report') pjRenderReport();
+    else if (viewName === 'project-detail' && PJ.activeProjectId) pjRenderProjectDetail(PJ.activeProjectId);
+  })();
+};
+
+window.pjShowView = function (name, el) {
+  window.showView(name, el);
+};
+
+window.pjRefreshAll = async function () {
+  pjToast('Refreshing…', 'info');
+  await pjLoadAll();
+  if (PJ.activeView === 'projects') pjRenderProjects();
+  else if (PJ.activeView === 'parties') pjRenderParties();
+  else if (PJ.activeView === 'ledger') pjRenderLedger();
+  else if (PJ.activeView === 'proj-report') pjRenderReport();
+  else if (PJ.activeView === 'project-detail' && PJ.activeProjectId) pjRenderProjectDetail(PJ.activeProjectId);
+  pjToast('Refreshed', 'success');
+};
+
+/* ═══════════════════ 4 · PROJECTS DASHBOARD ═══════════════════ */
+window.pjRenderProjects = function () {
+  PJ.activeView = 'projects';
+  const host = document.getElementById('pjProjectsBody');
+  if (!host) return;
+
+  const portfolio = pjPortfolioKPIs();
+
+  const kpiRow = `
+    <div class="pj-widgets">
+      <div class="pj-widget" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Open Projects</div>
+        <div class="pj-widget-value">${portfolio.openCount}</div>
+        <div class="pj-widget-sub" style="color:rgba(255,255,255,.8)">of ${PJ.projects.length} total</div>
+      </div>
+      <div class="pj-widget" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Total Invested</div>
+        <div class="pj-widget-value">${pjFmt(portfolio.totalInvested)}</div>
+        <div class="pj-widget-sub" style="color:rgba(255,255,255,.8)">loans + own capital</div>
+      </div>
+      <div class="pj-widget" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Received</div>
+        <div class="pj-widget-value">${pjFmt(portfolio.totalReceived)}</div>
+        <div class="pj-widget-sub" style="color:rgba(255,255,255,.8)">cleared payments in</div>
+      </div>
+      <div class="pj-widget" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Outstanding</div>
+        <div class="pj-widget-value">${pjFmt(portfolio.totalOutstanding)}</div>
+        <div class="pj-widget-sub" style="color:rgba(255,255,255,.8)">shops still owe you</div>
+      </div>
+      <div class="pj-widget" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Est. Gross Profit</div>
+        <div class="pj-widget-value">${pjFmt(portfolio.totalProfit)}</div>
+        <div class="pj-widget-sub" style="color:rgba(255,255,255,.8)">supplied − cost − expense</div>
+      </div>
+    </div>
+  `;
+
+  if (!PJ.projects.length) {
+    host.innerHTML = kpiRow + `
+      <div class="pj-empty">
+        <i class="fas fa-project-diagram"></i>
+        <h3>No projects yet</h3>
+        <p style="margin-top:8px">Click <strong>New Project</strong> to start tracking your first trade cycle.</p>
+      </div>`;
+    return;
+  }
+
+  const cards = PJ.projects.map(p => {
+    const k = pjProjectKPIs(p.id);
+    const progress = k.supplyGiven > 0 ? Math.min(100, (k.totalReceived / k.supplyGiven) * 100) : 0;
+    const statusClass = p.status === 'closed' ? 'pj-chip-closed' : (p.status === 'loss' ? 'pj-chip-loss' : 'pj-chip-open');
+    const statusLabel = p.status === 'closed' ? 'Closed' : (p.status === 'loss' ? 'Loss' : 'Open');
+    const days = p.startedAt ? pjDays(p.startedAt, pjToday()) : 0;
+    const profitColor = k.profitEstimate > 0 ? 'var(--success)' : (k.profitEstimate < 0 ? 'var(--danger)' : 'var(--gray)');
+    const pendingBadge = k.pendingIn > 0
+      ? `<div style="font-size:11px;color:#b45309;background:#fef3c7;padding:5px 10px;border-radius:6px;margin-bottom:10px;border-left:3px solid #f59e0b">
+           <i class="fas fa-hourglass-half"></i> <strong>${pjFmt(k.pendingIn)}</strong> pending cheque(s)
+         </div>` : '';
+
+    return `
+      <div class="pj-card" onclick="pjOpenProjectDetail('${p.id}')">
+        <div class="pj-card-head">
+          <div style="min-width:0;flex:1">
+            <div class="pj-card-name">${pjEsc(p.name)}</div>
+            ${p.description ? `<div class="pj-card-desc">${pjEsc(p.description)}</div>` : ''}
+          </div>
+          <span class="pj-chip ${statusClass}">${statusLabel}</span>
+        </div>
+        ${pendingBadge}
+        <div class="pj-card-stats">
+          <div class="pj-stat">
+            <div class="pj-stat-label">Invested</div>
+            <div class="pj-stat-value">${pjFmt(k.totalInvested)}</div>
+          </div>
+          <div class="pj-stat">
+            <div class="pj-stat-label">Received</div>
+            <div class="pj-stat-value" style="color:var(--success)">${pjFmt(k.totalReceived)}</div>
+          </div>
+          <div class="pj-stat">
+            <div class="pj-stat-label">Outstanding</div>
+            <div class="pj-stat-value" style="color:${k.outstanding > 0 ? 'var(--warning)' : 'var(--gray)'}">${pjFmt(k.outstanding)}</div>
+          </div>
+          <div class="pj-stat">
+            <div class="pj-stat-label">Profit Est.</div>
+            <div class="pj-stat-value" style="color:${profitColor}">${pjFmt(k.profitEstimate)}</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--gray);margin-bottom:4px">
+          Collected: ${progress.toFixed(1)}% · ${days}d open
+        </div>
+        <div class="pj-progress"><div class="pj-progress-fill" style="width:${progress}%"></div></div>
+      </div>
+    `;
+  }).join('');
+
+  host.innerHTML = kpiRow + `<div class="pj-grid">${cards}</div>`;
+};
+
+/* ═══════════════════ 5 · PROJECT DETAIL ═══════════════════ */
+window.pjOpenProjectDetail = function (projectId) {
+  PJ.activeProjectId = projectId;
+  window.showView('project-detail');
+};
+
+window.pjRenderProjectDetail = function (projectId) {
+  PJ.activeView = 'project-detail';
+  const host = document.getElementById('projectDetailView');
+  const p = PJ.projects.find(x => x.id === projectId);
+  if (!p) {
+    host.innerHTML = '<div class="card"><div class="pj-empty"><i class="fas fa-exclamation-circle"></i><h3>Project not found</h3></div></div>';
+    return;
+  }
+
+  const k = pjProjectKPIs(projectId);
+  const statusClass = p.status === 'closed' ? 'pj-chip-closed' : (p.status === 'loss' ? 'pj-chip-loss' : 'pj-chip-open');
+  const statusLabel = p.status === 'closed' ? 'Closed' : (p.status === 'loss' ? 'Loss' : 'Open');
+  const profitColor = k.profitEstimate > 0 ? 'var(--success)' : (k.profitEstimate < 0 ? 'var(--danger)' : 'var(--gray)');
+
+  const moneyInRows = k.cleared.filter(e => e.direction === 'in');
+  const moneyOutRows = k.cleared.filter(e => e.direction === 'out');
+  const pendingRows = k.pending;
+  const allocEntries = k.cleared.filter(e => e.type === 'payment-in' && Array.isArray(e.allocations) && e.allocations.length);
+
+  host.innerHTML = `
+    <div class="pj-detail-header">
+      <div class="pj-detail-top">
+        <div style="display:flex;gap:14px;align-items:flex-start;flex:1;min-width:0">
+          <button class="pj-icon-btn secondary" onclick="pjShowView('projects', document.getElementById('pjMainNavItem'))" data-tip="Back">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <div class="pj-detail-title">
+            <h2>${pjEsc(p.name)}</h2>
+            ${p.description ? `<div style="font-size:13px;color:var(--gray)">${pjEsc(p.description)}</div>` : ''}
+            <div class="meta">
+              <span><i class="fas fa-calendar-alt"></i> Started <strong>${pjDate(p.startedAt)}</strong></span>
+              ${p.closedAt ? `<span><i class="fas fa-flag-checkered"></i> Closed <strong>${pjDate(p.closedAt)}</strong></span>` : ''}
+              <span><i class="fas fa-list"></i> ${k.entryCount} entries</span>
+              <span class="pj-chip ${statusClass}">${statusLabel}</span>
+            </div>
+          </div>
+        </div>
+        <div class="pj-action-bar">
+          <button class="pj-icon-btn primary" onclick="pjOpenEntryModal('${p.id}','loan-in')" data-tip="Add Loan"><i class="fas fa-hand-holding-usd"></i></button>
+          <button class="pj-icon-btn primary" onclick="pjOpenEntryModal('${p.id}','purchase-out')" data-tip="Record Purchase"><i class="fas fa-shopping-cart"></i></button>
+          <button class="pj-icon-btn primary" onclick="pjOpenEntryModal('${p.id}','supply-given')" data-tip="Goods Given to Shop"><i class="fas fa-truck-loading"></i></button>
+          <button class="pj-icon-btn warning" onclick="pjOpenEntryModal('${p.id}','payment-in')" data-tip="Record Payment Received"><i class="fas fa-money-bill-wave"></i></button>
+          <button class="pj-icon-btn secondary" onclick="pjOpenEntryModal('${p.id}','payment-out')" data-tip="Pay Creditor"><i class="fas fa-file-invoice-dollar"></i></button>
+          <button class="pj-icon-btn gray" onclick="pjOpenEntryModal('${p.id}','expense-out')" data-tip="Add Expense"><i class="fas fa-receipt"></i></button>
+          <button class="pj-icon-btn secondary" onclick="pjOpenProjectModal('${p.id}')" data-tip="Edit Project"><i class="fas fa-edit"></i></button>
+          <button class="pj-icon-btn danger" onclick="pjDeleteProject('${p.id}')" data-tip="Delete Project"><i class="fas fa-trash-alt"></i></button>
+        </div>
+      </div>
+
+      <div class="pj-kpis">
+        <div class="pj-kpi"><div class="lbl">Invested</div><div class="val">${pjFmt(k.totalInvested)}</div><div class="sub">loans ${pjFmt(k.loanIn)} · capital ${pjFmt(k.capitalIn)}</div></div>
+        <div class="pj-kpi"><div class="lbl">Received</div><div class="val" style="color:var(--success)">${pjFmt(k.totalReceived)}</div><div class="sub">${moneyInRows.filter(e=>e.type==='payment-in').length} payments</div></div>
+        <div class="pj-kpi"><div class="lbl">Outstanding</div><div class="val" style="color:${k.outstanding > 0 ? 'var(--warning)' : 'var(--success)'}">${pjFmt(k.outstanding)}</div><div class="sub">shop receivable</div></div>
+        <div class="pj-kpi"><div class="lbl">Gross Profit</div><div class="val" style="color:${profitColor}">${pjFmt(k.profitEstimate)}</div><div class="sub">supplied − cost − expense</div></div>
+        <div class="pj-kpi"><div class="lbl">Personal Taken</div><div class="val" style="color:var(--danger)">${pjFmt(k.personalTaken)}</div><div class="sub">${k.allocPersonal > 0 ? pjFmt(k.allocPersonal) + ' personal + ' : ''}${k.allocFinance > 0 ? pjFmt(k.allocFinance) + ' finance' : ''}${k.allocPersonal === 0 && k.allocFinance === 0 ? '—' : ''}</div></div>
+        <div class="pj-kpi"><div class="lbl">Cash In Hand</div><div class="val">${pjFmt(k.cashInHand)}</div><div class="sub">invested + received − spent</div></div>
+      </div>
+
+      ${k.pendingIn > 0 ? `<div class="pj-info-banner warn" style="margin-top:14px;margin-bottom:0">
+        <i class="fas fa-hourglass-half"></i>
+        <div><strong>${pjFmt(k.pendingIn)}</strong> in pending cheques. They will apply when marked cleared.</div>
+      </div>` : ''}
+    </div>
+
+    <details class="pj-section" open>
+      <summary>
+        <span class="pj-section-title"><i class="fas fa-arrow-down" style="color:var(--success)"></i> Money In</span>
+        <span class="pj-section-badge" style="background:#d1fae5;color:#065f46">${moneyInRows.length}</span>
+        <span class="pj-section-meta"><span>Total: <strong>${pjFmt(k.totalInvested + k.paymentIn)}</strong></span></span>
+      </summary>
+      <div class="pj-section-body">
+        ${moneyInRows.length === 0 ? '<div class="pj-empty"><i class="fas fa-inbox"></i><h3>No inbound entries yet</h3></div>' :
+          moneyInRows.map(e => pjEntryRowHTML(e, p)).join('')}
+      </div>
+    </details>
+
+    <details class="pj-section" open>
+      <summary>
+        <span class="pj-section-title"><i class="fas fa-arrow-up" style="color:var(--danger)"></i> Money Out</span>
+        <span class="pj-section-badge" style="background:#fee2e2;color:#991b1b">${moneyOutRows.length}</span>
+        <span class="pj-section-meta"><span>Total: <strong>${pjFmt(k.totalSpent)}</strong></span></span>
+      </summary>
+      <div class="pj-section-body">
+        ${moneyOutRows.length === 0 ? '<div class="pj-empty"><i class="fas fa-inbox"></i><h3>No outbound entries yet</h3></div>' :
+          moneyOutRows.map(e => pjEntryRowHTML(e, p)).join('')}
+      </div>
+    </details>
+
+    ${pendingRows.length ? `
+    <details class="pj-section" open>
+      <summary>
+        <span class="pj-section-title"><i class="fas fa-hourglass-half" style="color:#f59e0b"></i> Pending</span>
+        <span class="pj-section-badge" style="background:#fef3c7;color:#b45309">${pendingRows.length}</span>
+      </summary>
+      <div class="pj-section-body">
+        ${pendingRows.map(e => pjEntryRowHTML(e, p)).join('')}
+      </div>
+    </details>` : ''}
+
+    <details class="pj-section" ${allocEntries.length ? 'open' : ''}>
+      <summary>
+        <span class="pj-section-title"><i class="fas fa-code-branch" style="color:#8b5cf6"></i> Allocation Log</span>
+        <span class="pj-section-badge" style="background:#e0e7ff;color:#4338ca">${allocEntries.length}</span>
+        <span class="pj-section-meta"><span>Every rupee traced to where it went</span></span>
+      </summary>
+      <div class="pj-section-body">
+        ${allocEntries.length === 0
+          ? '<div class="pj-empty"><i class="fas fa-code-branch"></i><h3>No allocations recorded</h3><p style="margin-top:8px">When a payment comes in, split it to see every rupee here.</p></div>'
+          : allocEntries.map(e => pjAllocLogHTML(e, p)).join('')}
+      </div>
+    </details>
+
+    <details class="pj-section">
+      <summary>
+        <span class="pj-section-title"><i class="fas fa-money-check" style="color:#06b6d4"></i> Linked NeonCheque Cheques</span>
+        <span class="pj-section-meta"><span>Read-only from your cheque tracker</span></span>
+      </summary>
+      <div class="pj-section-body" id="pjLinkedCheques-${p.id}">
+        ${pjLinkedChequesHTML(p.id)}
+      </div>
+    </details>
+  `;
+};
+
+function pjEntryRowHTML(e, p) {
+  const meta = TYPE_LABELS[e.type] || { label: e.type, icon: 'circle', color: '#64748b' };
+  const statusChip = e.status === 'pending' ? '<span class="pj-chip pj-chip-pending">Pending</span>' :
+                     e.status === 'bounced' ? '<span class="pj-chip pj-chip-bounced">Bounced</span>' :
+                     '';
+  const allocSummary = (e.type === 'payment-in' && e.allocations && e.allocations.length)
+    ? `<div style="font-size:11px;color:var(--gray);margin-top:4px"><i class="fas fa-code-branch"></i> ${e.allocations.length} allocation(s) · ${pjFmt(e.allocations.reduce((s,a)=>s+(parseFloat(a.amount)||0),0))} traced</div>`
+    : '';
+  const partyLine = e.partyId ? `<span style="color:var(--gray)">·</span> ${pjEsc(pjPartyName(e.partyId))}` : '';
+
+  return `
+    <div class="pj-entry-row">
+      <div class="pj-entry-icon" style="background:${meta.color}"><i class="fas fa-${meta.icon}"></i></div>
+      <div class="pj-entry-main">
+        <div class="pj-entry-title">${pjEsc(meta.label)} ${partyLine} ${statusChip}</div>
+        <div class="pj-entry-sub">${pjDate(e.date)}${e.notes ? ' · ' + pjEsc(e.notes) : ''}</div>
+        ${allocSummary}
+      </div>
+      <div class="pj-entry-amount" style="color:${meta.dir === 'in' ? 'var(--success)' : 'var(--danger)'}">
+        ${meta.dir === 'in' ? '+' : '−'} ${pjFmt(e.amount)}
+      </div>
+      <div class="pj-entry-actions">
+        <button class="pj-icon-btn secondary" style="width:32px;height:32px" onclick="event.stopPropagation();pjOpenEntryDetail('${e.id}')" data-tip="View">
+          <i class="fas fa-eye" style="font-size:12px"></i>
+        </button>
+        <button class="pj-icon-btn danger" style="width:32px;height:32px" onclick="event.stopPropagation();pjDeleteEntry('${e.id}')" data-tip="Delete">
+          <i class="fas fa-trash" style="font-size:12px"></i>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function pjAllocLogHTML(e, p) {
+  const allocs = e.allocations || [];
+  const total = allocs.reduce((s,a) => s + (parseFloat(a.amount)||0), 0);
+  return `
+    <div style="border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden">
+      <div style="padding:12px 16px;background:linear-gradient(90deg,rgba(16,185,129,.06),transparent);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <i class="fas fa-money-bill-wave" style="color:var(--success);font-size:16px"></i>
+        <strong>${pjFmt(e.amount)}</strong>
+        <span style="color:var(--gray);font-size:12px">on ${pjDate(e.date)}</span>
+        ${e.partyId ? `<span style="color:var(--gray);font-size:12px">from ${pjEsc(pjPartyName(e.partyId))}</span>` : ''}
+        <span style="margin-left:auto;font-size:11px;color:var(--gray)">${allocs.length} allocations · ${pjFmt(total)} traced</span>
+      </div>
+      <div style="padding:10px 16px;background:var(--light)">
+        ${allocs.map(a => {
+          const meta = ALLOC_TARGETS[a.target] || { label: a.target, icon: 'circle' };
+          const warn = a.target === 'personal' || a.target === 'finance-plan';
+          const badgeColor = a.target === 'personal' ? '#fee2e2' : (a.target === 'finance-plan' ? '#fef3c7' : (a.target === 'creditor' ? '#dbeafe' : '#d1fae5'));
+          const badgeText = a.target === 'personal' ? '#991b1b' : (a.target === 'finance-plan' ? '#b45309' : (a.target === 'creditor' ? '#1e40af' : '#065f46'));
+          return `
+            <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;background:white;border-radius:8px;margin-bottom:6px">
+              <span class="pj-chip" style="background:${badgeColor};color:${badgeText}">
+                <i class="fas fa-${meta.icon}"></i> ${pjEsc(a.targetName || meta.label)}
+              </span>
+              <div style="font-size:12px;color:var(--gray)">
+                ${a.target === 'personal' ? '<i class="fas fa-exclamation-triangle" style="color:#ef4444"></i> <strong>Personal use</strong>' : ''}
+                ${a.target === 'finance-plan' ? '<i class="fas fa-car" style="color:#f59e0b"></i> <strong>Vehicle finance</strong>' : ''}
+                ${a.target === 'creditor' ? 'Paid supplier / lender' : ''}
+                ${a.target === 'capital' ? 'Returned to project fund' : ''}
+                ${a.note ? ' · ' + pjEsc(a.note) : ''}
+              </div>
+              <strong style="color:${warn ? 'var(--danger)' : 'var(--primary)'}">${pjFmt(a.amount)}</strong>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function pjLinkedChequesHTML(projectId) {
+  const linked = PJ.cheques.filter(c => c.tradeProjectId === projectId);
+  if (!linked.length) {
+    return '<div class="pj-empty"><i class="fas fa-link"></i><h3>No cheques linked yet</h3><p style="margin-top:8px">Link a cheque by adding <code>tradeProjectId</code> in the cheques collection, or use the entry modal.</p></div>';
+  }
+  return `<div class="table-container"><table class="pj-ledger-tbl">
+    <thead><tr><th>#</th><th>Payee</th><th>Amount</th><th>Bank</th><th>Date</th><th>Status</th></tr></thead>
+    <tbody>${linked.map(c => `
+      <tr>
+        <td>${pjEsc(c.number)}</td>
+        <td>${pjEsc(c.payee)}</td>
+        <td><strong>${pjFmt(c.amount)}</strong></td>
+        <td>${pjEsc(c.bank)}</td>
+        <td>${pjDate(c.date)}</td>
+        <td><span class="status-badge status-${c.status}">${pjEsc(c.status)}</span></td>
+      </tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ═══════════════════ 6 · PARTIES VIEW ═══════════════════ */
+window.pjRenderParties = function () {
+  PJ.activeView = 'parties';
+  const host = document.getElementById('pjPartiesBody');
+  if (!host) return;
+
+  if (!PJ.parties.length) {
+    host.innerHTML = '<div class="pj-empty"><i class="fas fa-address-book"></i><h3>No parties yet</h3><p style="margin-top:8px">Add suppliers, shops, or lenders.</p></div>';
+    return;
+  }
+
+  const rows = PJ.parties.map(p => {
+    // Compute per-party balances from entries
+    let theyOweMe = 0, IOweThem = 0;
+    PJ.entries.forEach(e => {
+      if (e.status && e.status !== 'cleared') return;
+      const amt = parseFloat(e.amount) || 0;
+      if (e.type === 'supply-given' && e.partyId === p.id) theyOweMe += amt;
+      if (e.type === 'payment-in' && e.partyId === p.id) theyOweMe -= amt;
+      if (e.type === 'loan-in' && e.partyId === p.id) IOweThem += amt;
+      if (e.type === 'purchase-out' && e.partyId === p.id) IOweThem += amt;
+      if (e.type === 'payment-out' && e.partyId === p.id) IOweThem -= amt;
+    });
+    const net = theyOweMe - IOweThem;
+    const typeBadges = (p.types || []).map(t => `<span class="pj-chip" style="background:#e0e7ff;color:#4338ca">${pjEsc(t)}</span>`).join(' ');
+
+    return `<tr>
+      <td><strong>${pjEsc(p.name)}</strong>${p.phone ? `<div style="font-size:11px;color:var(--gray)">${pjEsc(p.phone)}</div>` : ''}</td>
+      <td>${typeBadges || '—'}</td>
+      <td style="color:${theyOweMe > 0 ? 'var(--success)' : 'var(--gray)'};font-weight:700">${theyOweMe > 0 ? pjFmt(theyOweMe) : '—'}</td>
+      <td style="color:${IOweThem > 0 ? 'var(--danger)' : 'var(--gray)'};font-weight:700">${IOweThem > 0 ? pjFmt(IOweThem) : '—'}</td>
+      <td style="font-weight:800;color:${net > 0 ? 'var(--success)' : (net < 0 ? 'var(--danger)' : 'var(--gray)')}">${net > 0 ? '+' : ''}${pjFmt(net)}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="pj-icon-btn secondary" style="width:32px;height:32px" onclick="pjOpenPartyModal('${p.id}')" data-tip="Edit">
+            <i class="fas fa-edit" style="font-size:12px"></i>
+          </button>
+          <button class="pj-icon-btn danger" style="width:32px;height:32px" onclick="pjDeleteParty('${p.id}')" data-tip="Delete">
+            <i class="fas fa-trash" style="font-size:12px"></i>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `<div class="table-container"><table class="pj-ledger-tbl">
+    <thead><tr><th>Party</th><th>Roles</th><th>They Owe Me</th><th>I Owe Them</th><th>Net</th><th>Actions</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+};
+
+/* ═══════════════════ 7 · LEDGER VIEW ═══════════════════ */
+window.pjRenderLedger = function () {
+  PJ.activeView = 'ledger';
+  const fhost = document.getElementById('pjLedgerFilters');
+  const bhost = document.getElementById('pjLedgerBody');
+  if (!fhost || !bhost) return;
+
+  // Build filters once
+  if (!fhost.dataset.built) {
+    fhost.dataset.built = '1';
+    fhost.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;padding:14px;background:var(--light);border-radius:10px">
+        <div class="filter-group">
+          <label>Project</label>
+          <select id="pjFilterProject" onchange="pjRenderLedger()">
+            <option value="">All Projects</option>
+            ${PJ.projects.map(p => `<option value="${p.id}">${pjEsc(p.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Party</label>
+          <select id="pjFilterParty" onchange="pjRenderLedger()">
+            <option value="">All Parties</option>
+            ${PJ.parties.map(p => `<option value="${p.id}">${pjEsc(p.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Type</label>
+          <select id="pjFilterType" onchange="pjRenderLedger()">
+            <option value="">All Types</option>
+            ${Object.keys(TYPE_LABELS).map(k => `<option value="${k}">${TYPE_LABELS[k].label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>From</label>
+          <input type="date" id="pjFilterFrom" onchange="pjRenderLedger()">
+        </div>
+        <div class="filter-group">
+          <label>To</label>
+          <input type="date" id="pjFilterTo" onchange="pjRenderLedger()">
+        </div>
+      </div>`;
+  }
+
+  const fProj  = document.getElementById('pjFilterProject').value;
+  const fParty = document.getElementById('pjFilterParty').value;
+  const fType  = document.getElementById('pjFilterType').value;
+  const fFrom  = document.getElementById('pjFilterFrom').value;
+  const fTo    = document.getElementById('pjFilterTo').value;
+
+  let rows = [...PJ.entries].sort((a,b) => new Date(b.date) - new Date(a.date));
+  if (fProj)  rows = rows.filter(r => r.projectId === fProj);
+  if (fParty) rows = rows.filter(r => r.partyId === fParty);
+  if (fType)  rows = rows.filter(r => r.type === fType);
+  if (fFrom)  rows = rows.filter(r => r.date >= fFrom);
+  if (fTo)    rows = rows.filter(r => r.date <= fTo);
+
+  if (!rows.length) {
+    bhost.innerHTML = '<div class="pj-empty"><i class="fas fa-book-open"></i><h3>No entries match filters</h3></div>';
+    return;
+  }
+
+  let inSum = 0, outSum = 0;
+
+  const body = rows.map(e => {
+    const meta = TYPE_LABELS[e.type] || { label: e.type, dir: 'in', icon: 'circle', color: '#64748b' };
+    const proj = PJ.projects.find(x => x.id === e.projectId);
+    const amt = parseFloat(e.amount) || 0;
+    if (meta.dir === 'in') inSum += amt; else outSum += amt;
+    const statusChip = e.status === 'pending' ? '<span class="pj-chip pj-chip-pending">Pending</span>' :
+                       e.status === 'bounced' ? '<span class="pj-chip pj-chip-bounced">Bounced</span>' :
+                       '<span class="pj-chip pj-chip-cleared">Cleared</span>';
+    return `<tr>
+      <td>${pjDate(e.date)}</td>
+      <td>${proj ? `<a href="#" onclick="event.preventDefault();pjOpenProjectDetail('${proj.id}')" style="color:var(--primary);font-weight:600">${pjEsc(proj.name)}</a>` : '—'}</td>
+      <td><span class="pj-chip" style="background:${meta.color}22;color:${meta.color}"><i class="fas fa-${meta.icon}"></i> ${pjEsc(meta.label)}</span></td>
+      <td>${e.partyId ? pjEsc(pjPartyName(e.partyId)) : '—'}</td>
+      <td>${statusChip}</td>
+      <td style="text-align:right;font-weight:800;color:${meta.dir === 'in' ? 'var(--success)' : 'var(--danger)'}">
+        ${meta.dir === 'in' ? '+' : '−'} ${pjFmt(amt)}
+      </td>
+      <td>
+        <button class="pj-icon-btn secondary" style="width:30px;height:30px" onclick="pjOpenEntryDetail('${e.id}')" data-tip="View">
+          <i class="fas fa-eye" style="font-size:11px"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  bhost.innerHTML = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="background:#d1fae5;color:#065f46;padding:10px 14px;border-radius:9px;font-size:12.5px;font-weight:700">
+        <i class="fas fa-arrow-down"></i> Total In: ${pjFmt(inSum)}
+      </div>
+      <div style="background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:9px;font-size:12.5px;font-weight:700">
+        <i class="fas fa-arrow-up"></i> Total Out: ${pjFmt(outSum)}
+      </div>
+      <div style="background:${inSum - outSum >= 0 ? '#dbeafe' : '#fef3c7'};color:${inSum - outSum >= 0 ? '#1e40af' : '#b45309'};padding:10px 14px;border-radius:9px;font-size:12.5px;font-weight:700">
+        Net: ${pjFmt(inSum - outSum)}
+      </div>
+      <div style="background:var(--light);padding:10px 14px;border-radius:9px;font-size:12.5px;font-weight:700">
+        ${rows.length} entries
+      </div>
+    </div>
+    <div class="table-container"><table class="pj-ledger-tbl">
+      <thead><tr><th>Date</th><th>Project</th><th>Type</th><th>Party</th><th>Status</th><th style="text-align:right">Amount</th><th></th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>
+  `;
+};
+
+/* ═══════════════════ 8 · P&L REPORT ═══════════════════ */
+window.pjRenderReport = function () {
+  PJ.activeView = 'proj-report';
+  const host = document.getElementById('pjReportBody');
+  if (!host) return;
+
+  if (!PJ.projects.length) {
+    host.innerHTML = '<div class="pj-empty"><i class="fas fa-chart-bar"></i><h3>No projects to report</h3></div>';
+    return;
+  }
+
+  const rows = PJ.projects.map(p => {
+    const k = pjProjectKPIs(p.id);
+    const status = p.status === 'closed' ? 'Closed' : (p.status === 'loss' ? 'Loss' : 'Open');
+    return `<tr>
+      <td><a href="#" onclick="event.preventDefault();pjOpenProjectDetail('${p.id}')" style="color:var(--primary);font-weight:700">${pjEsc(p.name)}</a></td>
+      <td><span class="pj-chip ${p.status === 'closed' ? 'pj-chip-closed' : (p.status === 'loss' ? 'pj-chip-loss' : 'pj-chip-open')}">${status}</span></td>
+      <td style="text-align:right">${pjFmt(k.totalInvested)}</td>
+      <td style="text-align:right;color:var(--success);font-weight:700">${pjFmt(k.totalReceived)}</td>
+      <td style="text-align:right;color:${k.outstanding > 0 ? 'var(--warning)' : 'var(--gray)'};font-weight:700">${pjFmt(k.outstanding)}</td>
+      <td style="text-align:right;color:var(--danger)">${pjFmt(k.personalTaken)}</td>
+      <td style="text-align:right;font-weight:800;color:${k.profitEstimate > 0 ? 'var(--success)' : (k.profitEstimate < 0 ? 'var(--danger)' : 'var(--gray)')}">
+        ${pjFmt(k.profitEstimate)}
+      </td>
+    </tr>`;
+  }).join('');
+
+  const total = pjPortfolioKPIs();
+
+  host.innerHTML = `
+    <div class="pj-widgets" style="margin-bottom:20px">
+      <div class="pj-widget" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Total Invested</div>
+        <div class="pj-widget-value">${pjFmt(total.totalInvested)}</div>
+      </div>
+      <div class="pj-widget" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Total Received</div>
+        <div class="pj-widget-value">${pjFmt(total.totalReceived)}</div>
+      </div>
+      <div class="pj-widget" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Outstanding</div>
+        <div class="pj-widget-value">${pjFmt(total.totalOutstanding)}</div>
+      </div>
+      <div class="pj-widget" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff">
+        <div class="pj-widget-title" style="color:rgba(255,255,255,.85)">Gross Profit</div>
+        <div class="pj-widget-value">${pjFmt(total.totalProfit)}</div>
+      </div>
+    </div>
+    <div class="table-container"><table class="pj-ledger-tbl">
+      <thead><tr>
+        <th>Project</th><th>Status</th>
+        <th style="text-align:right">Invested</th>
+        <th style="text-align:right">Received</th>
+        <th style="text-align:right">Outstanding</th>
+        <th style="text-align:right">Personal</th>
+        <th style="text-align:right">Profit Est.</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  `;
+};
+
+window.pjExportReportCSV = function () {
+  let csv = 'Project,Status,Invested,Received,Outstanding,Personal Taken,Profit Estimate\n';
+  PJ.projects.forEach(p => {
+    const k = pjProjectKPIs(p.id);
+    csv += `"${p.name}","${p.status}",${k.totalInvested},${k.totalReceived},${k.outstanding},${k.personalTaken},${k.profitEstimate}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pnl_report_${pjToday()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  pjToast('Report exported', 'success');
+};
+
+/* ═══════════════════ 9 · BOOT ═══════════════════ */
+function pjP2Boot() {
+  try { pjBuildNav(); }   catch(e){ console.warn('[PJ-P2] nav failed', e); }
+  try { pjBuildViews(); } catch(e){ console.warn('[PJ-P2] views failed', e); }
+
+  // Preload data once auth is ready
+  let loaded = false;
+  const check = setInterval(async () => {
+    if (typeof currentUser !== 'undefined' && currentUser && !loaded) {
+      loaded = true;
+      clearInterval(check);
+      try { await pjLoadAll(); } catch(e){ console.warn('[PJ-P2] preload failed', e); }
+    }
+  }, 900);
+  setTimeout(() => clearInterval(check), 30000);
+
+  try {
+    const m = document.createElement('div');
+    m.id = '__proj_p2_ready';
+    m.style.cssText = 'position:fixed;bottom:1px;left:180px;font-size:1px;color:transparent;pointer-events:none';
+    m.textContent = 'projects-p2-ready';
+    document.body.appendChild(m);
+    console.log('[Projects Module v1.0-P2] ✅ nav + views installed');
+  } catch(e) {}
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pjP2Boot);
+else pjP2Boot();
+
+// Expose view renderers
+window.pjRenderProjects      = window.pjRenderProjects;
+window.pjRenderParties       = window.pjRenderParties;
+window.pjRenderLedger        = window.pjRenderLedger;
+window.pjRenderReport        = window.pjRenderReport;
+window.pjRenderProjectDetail = window.pjRenderProjectDetail;
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     PROJECTS MODULE v1.0 — PART 3: MODALS · ACTIONS · FINANCE LINK
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__projectsModuleV1_part3) return;
+window.__projectsModuleV1_part3 = true;
+
+if (!window.__PJ) { console.error('[Projects P3] Part 1 not loaded'); return; }
+
+const PJ = window.__PJ;
+const {
+  pjFmt, pjFmtExact, pjDate, pjToday, pjToast, pjEsc, pjUid,
+  pjPartyName, TYPE_LABELS, ALLOC_TARGETS,
+  pjLoadAll, pjSaveDoc, pjDelete, pjProjectEntries, pjProjectKPIs
+} = window;
+
+/* ═══════════════════ 1 · MODALS ROOT ═══════════════════ */
+function pjBuildModals() {
+  document.querySelectorAll('#__pj_modals_root').forEach(el => el.remove());
+  const wrap = document.createElement('div');
+  wrap.id = '__pj_modals_root';
+  wrap.innerHTML = `
+
+    <!-- PROJECT MODAL -->
+    <div class="modal-overlay" id="pjProjectModal">
+      <div class="modal" style="max-width:560px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="pjProjectModalTitle">New Project</h2>
+          <button class="modal-close" onclick="closeModal('pjProjectModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="pjProjectId">
+          <div class="form-group">
+            <label>Project Name *</label>
+            <input type="text" id="pjProjectName" placeholder="e.g. Rice consignment — Jan 2025" required>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="pjProjectDesc" rows="2" placeholder="Optional notes about this trade cycle"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Start Date *</label>
+              <input type="date" id="pjProjectStart" required>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select id="pjProjectStatus">
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+                <option value="loss">Loss</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Expected Profit (Rs.)</label>
+            <input type="number" id="pjProjectExpectedProfit" step="0.01" placeholder="Optional target">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('pjProjectModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="pjSaveProject()"><i class="fas fa-save"></i> Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARTY MODAL -->
+    <div class="modal-overlay" id="pjPartyModal">
+      <div class="modal" style="max-width:560px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="pjPartyModalTitle">New Party</h2>
+          <button class="modal-close" onclick="closeModal('pjPartyModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="pjPartyId">
+          <div class="form-group">
+            <label>Name *</label>
+            <input type="text" id="pjPartyName" placeholder="Person or business name" required>
+          </div>
+          <div class="form-group">
+            <label>Roles * (select all that apply)</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+              ${['supplier','shop','lender','personal','other'].map(role => `
+                <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--light);border-radius:9px;cursor:pointer;font-size:13px;font-weight:600;border:2px solid transparent" class="pj-role-pill">
+                  <input type="checkbox" class="pj-role-cb" value="${role}">
+                  <span style="text-transform:capitalize">${role}</span>
+                </label>`).join('')}
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="text" id="pjPartyPhone">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="pjPartyEmail">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Address</label>
+            <textarea id="pjPartyAddress" rows="2"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="pjPartyNotes" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('pjPartyModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="pjSaveParty()"><i class="fas fa-save"></i> Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENTRY MODAL -->
+    <div class="modal-overlay" id="pjEntryModal">
+      <div class="modal" style="max-width:680px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="pjEntryModalTitle">New Entry</h2>
+          <button class="modal-close" onclick="closeModal('pjEntryModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="pjEntryId">
+          <input type="hidden" id="pjEntryProjectId">
+          <input type="hidden" id="pjEntryType">
+
+          <div class="pj-type-tabs" id="pjEntryTypeTabs">
+            ${Object.keys(TYPE_LABELS).map(k => `
+              <button class="pj-type-tab" data-type="${k}" onclick="pjSelectEntryType('${k}')">
+                <i class="fas fa-${TYPE_LABELS[k].icon}"></i> ${TYPE_LABELS[k].label}
+              </button>`).join('')}
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Amount (Rs.) *</label>
+              <input type="number" id="pjEntryAmount" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label>Date *</label>
+              <input type="date" id="pjEntryDate" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Party * <span style="font-weight:400;color:var(--gray);font-size:12px">(who this is against)</span></label>
+            <select id="pjEntryPartyId" required>
+              <option value="">-- Select --</option>
+            </select>
+            <div style="font-size:11px;color:var(--gray);margin-top:4px" id="pjEntryPartyHint"></div>
+          </div>
+
+          <div class="form-group" id="pjEntryChequeGroup" style="display:none">
+            <label>Link NeonCheque Cheque <span style="font-weight:400;color:var(--gray);font-size:12px">(optional)</span></label>
+            <select id="pjEntryChequeId">
+              <option value="">-- None --</option>
+            </select>
+            <div style="font-size:11px;color:var(--gray);margin-top:4px">
+              If linked, this entry's status will mirror the cheque's status.
+            </div>
+          </div>
+
+          <div class="form-group" id="pjEntryStatusGroup">
+            <label>Status</label>
+            <select id="pjEntryStatus">
+              <option value="cleared">Cleared / Applied</option>
+              <option value="pending">Pending</option>
+              <option value="bounced">Bounced</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="pjEntryAllocGroup" style="display:none">
+            <label>Allocations * <span style="font-weight:400;color:var(--gray);font-size:12px">(split this payment)</span></label>
+            <div id="pjEntryAllocList" style="margin-top:8px"></div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="pjAddAllocRow()" style="margin-top:6px">
+              <i class="fas fa-plus"></i> Add Allocation
+            </button>
+            <div class="pj-alloc-total" id="pjEntryAllocTotal">
+              <span>Unallocated</span><span class="diff warn">Rs. 0.00</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="pjEntryNotes" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('pjEntryModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="pjSaveEntry()"><i class="fas fa-save"></i> Save Entry</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENTRY DETAIL MODAL -->
+    <div class="modal-overlay" id="pjEntryDetailModal">
+      <div class="modal" style="max-width:680px">
+        <div class="modal-header">
+          <h2 class="modal-title">Entry Details</h2>
+          <button class="modal-close" onclick="closeModal('pjEntryDetailModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" id="pjEntryDetailBody"></div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('pjEntryDetailModal')">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HARSH WARNING MODAL (personal/finance use) -->
+    <div class="modal-overlay" id="pjHarshWarnModal">
+      <div class="modal" style="max-width:560px;border-top:6px solid #ef4444">
+        <div class="modal-header" style="background:linear-gradient(135deg,#fee2e2,#fecaca)">
+          <h2 class="modal-title" style="color:#991b1b">
+            <i class="fas fa-exclamation-triangle"></i> Personal / Finance Use Warning
+          </h2>
+        </div>
+        <div class="modal-body">
+          <div class="pj-warn-strike" style="margin-bottom:18px">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>You are about to use project money for personal or vehicle-finance purposes.</strong>
+          </div>
+          <div id="pjHarshWarnSummary" style="background:var(--light);padding:16px;border-radius:10px;margin-bottom:16px;font-size:13px"></div>
+          <div style="background:#fee2e2;padding:12px 14px;border-radius:10px;font-size:12.5px;color:#991b1b;margin-bottom:16px">
+            <i class="fas fa-info-circle"></i>
+            This creates a permanent record. <strong>You will always be able to see which project paid for which personal use.</strong>
+          </div>
+          <div class="form-group">
+            <label>Reason / Note <span style="font-weight:400;color:var(--gray)">(required)</span></label>
+            <textarea id="pjHarshWarnReason" rows="2" placeholder="e.g. Vehicle lease payment — March"></textarea>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+              <input type="checkbox" id="pjHarshWarnConfirm">
+              I understand. Deduct this amount from the project permanently.
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="pjCancelHarshWarn()">Cancel</button>
+          <button class="btn btn-danger" id="pjHarshWarnBtn" onclick="pjConfirmHarshWarn()" disabled
+                  style="background:linear-gradient(135deg,#ef4444,#dc2626)">
+            <i class="fas fa-check"></i> Confirm & Use
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+}
+
+/* ═══════════════════ 2 · PROJECT MODAL ═══════════════════ */
+window.pjOpenProjectModal = function (id) {
+  if (id) {
+    const p = PJ.projects.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('pjProjectModalTitle').textContent = 'Edit Project';
+    document.getElementById('pjProjectId').value = p.id;
+    document.getElementById('pjProjectName').value = p.name || '';
+    document.getElementById('pjProjectDesc').value = p.description || '';
+    document.getElementById('pjProjectStart').value = p.startedAt || pjToday();
+    document.getElementById('pjProjectStatus').value = p.status || 'open';
+    document.getElementById('pjProjectExpectedProfit').value = p.expectedProfit || '';
+  } else {
+    document.getElementById('pjProjectModalTitle').textContent = 'New Project';
+    ['pjProjectId','pjProjectName','pjProjectDesc','pjProjectExpectedProfit'].forEach(k => document.getElementById(k).value = '');
+    document.getElementById('pjProjectStart').value = pjToday();
+    document.getElementById('pjProjectStatus').value = 'open';
+  }
+  openModal('pjProjectModal');
+};
+
+window.pjSaveProject = async function () {
+  const id = document.getElementById('pjProjectId').value;
+  const name = document.getElementById('pjProjectName').value.trim();
+  const description = document.getElementById('pjProjectDesc').value.trim();
+  const startedAt = document.getElementById('pjProjectStart').value;
+  const status = document.getElementById('pjProjectStatus').value;
+  const expectedProfit = parseFloat(document.getElementById('pjProjectExpectedProfit').value) || 0;
+  if (!name || !startedAt) return pjToast('Fill required fields', 'error');
+  try {
+    const payload = { name, description, startedAt, status, expectedProfit };
+    if (status === 'closed' && !id) payload.closedAt = pjToday();
+    if (id) payload.id = id;
+    await pjSaveDoc('projects', payload);
+    closeModal('pjProjectModal');
+    await pjLoadAll();
+    pjToast(id ? 'Project updated' : 'Project created', 'success');
+    if (PJ.activeView === 'project-detail' && PJ.activeProjectId) pjRenderProjectDetail(PJ.activeProjectId);
+    else pjRenderProjects();
+  } catch (e) { console.error(e); pjToast('Error: ' + e.message, 'error'); }
+};
+
+window.pjDeleteProject = async function (id) {
+  const p = PJ.projects.find(x => x.id === id);
+  if (!p) return;
+  const entries = pjProjectEntries(id);
+  if (!confirm(`Delete project "${p.name}"?\n\nThis will also delete ${entries.length} entries.\n\nThis cannot be undone.`)) return;
+  if (entries.length > 0) {
+    if (!confirm(`⚠ FINAL WARNING ⚠\n\nPermanently delete the project AND all ${entries.length} entries?`)) return;
+  }
+  try {
+    // Delete entries first
+    await Promise.all(entries.map(e => db.collection('project_entries').doc(e.id).delete()));
+    await db.collection('projects').doc(id).delete();
+    await pjLoadAll();
+    pjToast('Project deleted', 'success');
+    PJ.activeProjectId = null;
+    window.showView('projects', document.getElementById('pjMainNavItem'));
+  } catch (e) { console.error(e); pjToast('Error: ' + e.message, 'error'); }
+};
+
+/* ═══════════════════ 3 · PARTY MODAL ═══════════════════ */
+window.pjOpenPartyModal = function (id) {
+  if (id) {
+    const p = PJ.parties.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('pjPartyModalTitle').textContent = 'Edit Party';
+    document.getElementById('pjPartyId').value = p.id;
+    document.getElementById('pjPartyName').value = p.name || '';
+    document.getElementById('pjPartyPhone').value = p.phone || '';
+    document.getElementById('pjPartyEmail').value = p.email || '';
+    document.getElementById('pjPartyAddress').value = p.address || '';
+    document.getElementById('pjPartyNotes').value = p.notes || '';
+    document.querySelectorAll('.pj-role-cb').forEach(cb => {
+      cb.checked = (p.types || []).indexOf(cb.value) !== -1;
+    });
+  } else {
+    document.getElementById('pjPartyModalTitle').textContent = 'New Party';
+    ['pjPartyId','pjPartyName','pjPartyPhone','pjPartyEmail','pjPartyAddress','pjPartyNotes'].forEach(k => document.getElementById(k).value = '');
+    document.querySelectorAll('.pj-role-cb').forEach(cb => cb.checked = false);
+  }
+  openModal('pjPartyModal');
+};
+
+window.pjSaveParty = async function () {
+  const id = document.getElementById('pjPartyId').value;
+  const name = document.getElementById('pjPartyName').value.trim();
+  const types = Array.from(document.querySelectorAll('.pj-role-cb:checked')).map(cb => cb.value);
+  const phone = document.getElementById('pjPartyPhone').value.trim();
+  const email = document.getElementById('pjPartyEmail').value.trim();
+  const address = document.getElementById('pjPartyAddress').value.trim();
+  const notes = document.getElementById('pjPartyNotes').value.trim();
+  if (!name) return pjToast('Name is required', 'error');
+  if (!types.length) return pjToast('Select at least one role', 'error');
+  try {
+    const payload = { name, types, phone, email, address, notes };
+    if (id) payload.id = id;
+    await pjSaveDoc('parties', payload);
+    closeModal('pjPartyModal');
+    await pjLoadAll();
+    pjToast(id ? 'Party updated' : 'Party created', 'success');
+    if (PJ.activeView === 'parties') pjRenderParties();
+  } catch (e) { console.error(e); pjToast('Error: ' + e.message, 'error'); }
+};
+
+window.pjDeleteParty = async function (id) {
+  const p = PJ.parties.find(x => x.id === id);
+  if (!p) return;
+  const usedInEntries = PJ.entries.filter(e => e.partyId === id).length;
+  if (usedInEntries > 0) {
+    if (!confirm(`"${p.name}" is used in ${usedInEntries} entries.\n\nDelete anyway? Entries will show "—" for party name.`)) return;
+  } else {
+    if (!confirm(`Delete "${p.name}"?`)) return;
+  }
+  try {
+    await db.collection('parties').doc(id).delete();
+    await pjLoadAll();
+    pjToast('Party deleted', 'success');
+    if (PJ.activeView === 'parties') pjRenderParties();
+  } catch (e) { console.error(e); pjToast('Error: ' + e.message, 'error'); }
+};
+
+/* ═══════════════════ 4 · ENTRY MODAL ═══════════════════ */
+window.pjOpenEntryModal = function (projectId, type) {
+  if (!projectId) return pjToast('No project selected', 'error');
+  document.getElementById('pjEntryId').value = '';
+  document.getElementById('pjEntryProjectId').value = projectId;
+  document.getElementById('pjEntryAmount').value = '';
+  document.getElementById('pjEntryDate').value = pjToday();
+  document.getElementById('pjEntryNotes').value = '';
+  document.getElementById('pjEntryChequeId').value = '';
+  document.getElementById('pjEntryStatus').value = 'cleared';
+  document.getElementById('pjEntryAllocList').innerHTML = '';
+  pjSelectEntryType(type || 'loan-in');
+  openModal('pjEntryModal');
+};
+
+window.pjSelectEntryType = function (type) {
+  document.getElementById('pjEntryType').value = type;
+  document.querySelectorAll('.pj-type-tab').forEach(t => t.classList.toggle('active', t.dataset.type === type));
+
+  const meta = TYPE_LABELS[type];
+  document.getElementById('pjEntryModalTitle').textContent = 'New — ' + meta.label;
+
+  // Party dropdown hint
+  const hintMap = {
+    'loan-in':      'Who lent you the money?',
+    'capital-in':   'Source of capital (or leave blank for own funds)',
+    'purchase-out': 'Who did you buy from? (supplier)',
+    'supply-given': 'Which shop received the goods?',
+    'payment-in':   'Which shop paid you?',
+    'payment-out':  'Which creditor are you paying?',
+    'expense-out':  'Who did you pay? (optional)'
+  };
+  document.getElementById('pjEntryPartyHint').textContent = hintMap[type] || '';
+
+  // Populate parties (filtered by role when applicable)
+  const partySel = document.getElementById('pjEntryPartyId');
+  const roleFilter = {
+    'loan-in':      ['lender','personal'],
+    'purchase-out': ['supplier'],
+    'supply-given': ['shop'],
+    'payment-in':   ['shop'],
+    'payment-out':  ['supplier','lender']
+  };
+  const wantedRoles = roleFilter[type] || null;
+  let parties = PJ.parties;
+  if (wantedRoles) parties = parties.filter(p => (p.types||[]).some(t => wantedRoles.indexOf(t) !== -1));
+
+  partySel.innerHTML = '<option value="">-- Select --</option>' +
+    parties.map(p => `<option value="${p.id}">${pjEsc(p.name)}</option>`).join('');
+
+  // Cheque dropdown for payment-in
+  const chequeGroup = document.getElementById('pjEntryChequeGroup');
+  if (type === 'payment-in') {
+    chequeGroup.style.display = 'block';
+    const chequeSel = document.getElementById('pjEntryChequeId');
+    const unlinked = PJ.cheques.filter(c => !c.tradeProjectId || c.tradeProjectId === document.getElementById('pjEntryProjectId').value);
+    chequeSel.innerHTML = '<option value="">-- None --</option>' +
+      unlinked.map(c => `<option value="${c.id}">#${pjEsc(c.number)} · ${pjEsc(c.payee)} · ${pjFmt(c.amount)} [${pjEsc(c.status)}]</option>`).join('');
+  } else {
+    chequeGroup.style.display = 'none';
+  }
+
+  // Allocations only for payment-in
+  const allocGroup = document.getElementById('pjEntryAllocGroup');
+  if (type === 'payment-in') {
+    allocGroup.style.display = 'block';
+    if (!document.getElementById('pjEntryAllocList').children.length) pjAddAllocRow();
+  } else {
+    allocGroup.style.display = 'none';
+  }
+
+  // Capital-in has no party requirement
+  if (type === 'capital-in' || type === 'expense-out') {
+    document.getElementById('pjEntryPartyId').required = false;
+  } else {
+    document.getElementById('pjEntryPartyId').required = true;
+  }
+
+  setTimeout(() => {
+    const amtInput = document.getElementById('pjEntryAmount');
+    if (amtInput && !amtInput._bound) {
+      amtInput._bound = true;
+      amtInput.addEventListener('input', pjRecalcAllocTotal);
+    }
+  }, 50);
+};
+
+/* ═══════════════════ 5 · ALLOCATION ROWS ═══════════════════ */
+window.pjAddAllocRow = function () {
+  const host = document.getElementById('pjEntryAllocList');
+  const rowId = pjUid('alloc');
+  const row = document.createElement('div');
+  row.className = 'pj-alloc-row';
+  row.dataset.rowId = rowId;
+  row.innerHTML = `
+    <select class="pj-alloc-target" onchange="pjOnAllocTargetChange(this)">
+      <option value="">-- Where? --</option>
+      <option value="creditor">Pay Creditor</option>
+      <option value="finance-plan">Pay Finance Plan</option>
+      <option value="personal">Personal Use</option>
+      <option value="capital">Return to Capital</option>
+    </select>
+    <input type="number" class="pj-alloc-amount" placeholder="Amount" step="0.01" oninput="pjRecalcAllocTotal()">
+    <select class="pj-alloc-targetid" style="display:none"></select>
+    <button type="button" class="pj-icon-btn danger" style="width:36px;height:36px" onclick="pjRemoveAllocRow('${rowId}')" data-tip="Remove">
+      <i class="fas fa-times" style="font-size:12px"></i>
+    </button>
+  `;
+  host.appendChild(row);
+  pjRecalcAllocTotal();
+};
+
+window.pjRemoveAllocRow = function (rowId) {
+  const row = document.querySelector(`.pj-alloc-row[data-row-id="${rowId}"]`);
+  if (row) row.remove();
+  pjRecalcAllocTotal();
+};
+
+window.pjOnAllocTargetChange = function (sel) {
+  const row = sel.closest('.pj-alloc-row');
+  const target = sel.value;
+  const targetIdSel = row.querySelector('.pj-alloc-targetid');
+  const meta = ALLOC_TARGETS[target];
+
+  if (target === 'creditor') {
+    targetIdSel.style.display = 'block';
+    targetIdSel.innerHTML = '<option value="">-- Select creditor --</option>' +
+      PJ.parties.filter(p => (p.types||[]).some(t => ['supplier','lender'].indexOf(t) !== -1))
+        .map(p => `<option value="${p.id}">${pjEsc(p.name)}</option>`).join('');
+  } else if (target === 'finance-plan') {
+    targetIdSel.style.display = 'block';
+    const plans = PJ.financePlans || [];
+    targetIdSel.innerHTML = '<option value="">-- Select finance plan --</option>' +
+      plans.map(p => `<option value="${p.id}">${pjEsc(p.vehicle || p.company || 'Plan')} — capital ${pjFmt(p.capitalCurrent)}</option>`).join('');
+    if (!plans.length) {
+      targetIdSel.innerHTML = '<option value="">No finance plans found</option>';
+    }
+  } else {
+    targetIdSel.style.display = 'none';
+    targetIdSel.innerHTML = '';
+  }
+};
+
+window.pjRecalcAllocTotal = function () {
+  const amtInput = document.getElementById('pjEntryAmount');
+  const totalHost = document.getElementById('pjEntryAllocTotal');
+  if (!amtInput || !totalHost) return;
+  const paymentTotal = parseFloat(amtInput.value) || 0;
+  let allocated = 0;
+  document.querySelectorAll('#pjEntryAllocList .pj-alloc-amount').forEach(inp => {
+    allocated += parseFloat(inp.value) || 0;
+  });
+  const diff = paymentTotal - allocated;
+  let cls = 'ok', text = '';
+  if (Math.abs(diff) < 0.01) text = 'Fully allocated';
+  else if (diff > 0) { cls = 'warn'; text = pjFmtExact(diff) + ' unallocated'; }
+  else { cls = 'err'; text = pjFmtExact(-diff) + ' over-allocated'; }
+
+  totalHost.innerHTML = `<span>Payment total: <strong>${pjFmtExact(paymentTotal)}</strong> · Allocated: <strong>${pjFmtExact(allocated)}</strong></span>
+    <span class="diff ${cls}">${text}</span>`;
+};
+
+/* ═══════════════════ 6 · SAVE ENTRY (with harsh warn check) ═══════════════════ */
+window.pjSaveEntry = async function () {
+  const id            = document.getElementById('pjEntryId').value;
+  const projectId     = document.getElementById('pjEntryProjectId').value;
+  const type          = document.getElementById('pjEntryType').value;
+  const amount        = parseFloat(document.getElementById('pjEntryAmount').value);
+  const date          = document.getElementById('pjEntryDate').value;
+  const partyId       = document.getElementById('pjEntryPartyId').value;
+  const chequeId      = document.getElementById('pjEntryChequeId').value;
+  const status        = document.getElementById('pjEntryStatus').value;
+  const notes         = document.getElementById('pjEntryNotes').value.trim();
+
+  if (!projectId || !type || !amount || amount <= 0 || !date) {
+    return pjToast('Fill all required fields', 'error');
+  }
+  if ((type !== 'capital-in' && type !== 'expense-out') && !partyId) {
+    return pjToast('Please select a party', 'error');
+  }
+
+  const meta = TYPE_LABELS[type];
+
+  // Build allocations
+  let allocations = [];
+  let hasPersonal = false, hasFinance = false;
+
+  if (type === 'payment-in') {
+    const rows = Array.from(document.querySelectorAll('#pjEntryAllocList .pj-alloc-row'));
+    let allocTotal = 0;
+    for (const row of rows) {
+      const target = row.querySelector('.pj-alloc-target').value;
+      const aAmt   = parseFloat(row.querySelector('.pj-alloc-amount').value) || 0;
+      const targetIdSel = row.querySelector('.pj-alloc-targetid');
+      const targetId = targetIdSel && targetIdSel.style.display !== 'none' ? targetIdSel.value : '';
+      if (!target || aAmt <= 0) continue;
+      if (target === 'creditor' && !targetId) return pjToast('Please select a creditor for the creditor allocation', 'error');
+      if (target === 'finance-plan' && !targetId) return pjToast('Please select a finance plan', 'error');
+
+      const targetName = target === 'creditor' ? pjPartyName(targetId)
+                        : target === 'finance-plan' ? (PJ.financePlans.find(x => x.id === targetId)?.vehicle || 'Finance Plan')
+                        : ALLOC_TARGETS[target].label;
+
+      allocations.push({
+        id: pjUid('al'),
+        target, targetId, targetName,
+        amount: aAmt,
+        note: '',
+        financePaymentId: null
+      });
+      allocTotal += aAmt;
+      if (target === 'personal') hasPersonal = true;
+      if (target === 'finance-plan') hasFinance = true;
+    }
+    if (Math.abs(allocTotal - amount) > 0.01) {
+      return pjToast(`Allocations (${pjFmt(allocTotal)}) must equal payment total (${pjFmt(amount)})`, 'error');
+    }
+  }
+
+  // Store pending payload for after-warning confirmation
+  const payload = {
+    projectId, type, direction: meta.dir, amount, date,
+    effectiveDate: date,
+    partyId: partyId || null,
+    partyRole: partyId ? (pjPartyById(partyId)?.types?.[0] || 'other') : null,
+    chequeId: chequeId || null,
+    status,
+    notes,
+    allocations
+  };
+
+  // Harsh warning for personal/finance use
+  if ((hasPersonal || hasFinance) && status !== 'bounced') {
+    window.__pjPendingSave = payload;
+    pjShowHarshWarn(payload, hasPersonal, hasFinance);
+    return;
+  }
+
+  await pjCommitEntry(payload, null);
+};
+
+/* ═══════════════════ 7 · HARSH WARNING FLOW ═══════════════════ */
+window.pjShowHarshWarn = function (payload, hasPersonal, hasFinance) {
+  const personal = (payload.allocations || []).filter(a => a.target === 'personal').reduce((s,a) => s + a.amount, 0);
+  const finance  = (payload.allocations || []).filter(a => a.target === 'finance-plan').reduce((s,a) => s + a.amount, 0);
+  const project = PJ.projects.find(x => x.id === payload.projectId);
+
+  const summary = document.getElementById('pjHarshWarnSummary');
+  summary.innerHTML = `
+    <div style="display:grid;gap:10px">
+      <div><strong>Project:</strong> ${pjEsc(project?.name || '—')}</div>
+      <div><strong>Payment In:</strong> ${pjFmt(payload.amount)}</div>
+      ${personal > 0 ? `<div style="color:#991b1b"><strong>→ Personal use:</strong> ${pjFmt(personal)}</div>` : ''}
+      ${finance > 0 ? `<div style="color:#b45309"><strong>→ Vehicle finance:</strong> ${pjFmt(finance)}</div>` : ''}
+      <div style="padding-top:10px;border-top:1px solid var(--border);font-weight:800;color:#991b1b">
+        Total removed from project: ${pjFmt(personal + finance)}
+      </div>
+    </div>
+  `;
+  document.getElementById('pjHarshWarnReason').value = '';
+  document.getElementById('pjHarshWarnConfirm').checked = false;
+  document.getElementById('pjHarshWarnBtn').disabled = true;
+  openModal('pjHarshWarnModal');
+
+  // Wire the confirm checkbox
+  const cb = document.getElementById('pjHarshWarnConfirm');
+  cb.onchange = () => {
+    document.getElementById('pjHarshWarnBtn').disabled = !cb.checked;
+  };
+};
+
+window.pjCancelHarshWarn = function () {
+  window.__pjPendingSave = null;
+  closeModal('pjHarshWarnModal');
+};
+
+window.pjConfirmHarshWarn = async function () {
+  const reason = document.getElementById('pjHarshWarnReason').value.trim();
+  if (!reason) return pjToast('Please enter a reason', 'error');
+  const payload = window.__pjPendingSave;
+  if (!payload) { closeModal('pjHarshWarnModal'); return; }
+  closeModal('pjHarshWarnModal');
+  await pjCommitEntry(payload, reason);
+  window.__pjPendingSave = null;
+};
+
+/* ═══════════════════ 8 · COMMIT ENTRY + FINANCE WRITE-BACK ═══════════════════ */
+window.pjCommitEntry = async function (payload, harshReason) {
+  try {
+    // 1. Save the entry itself
+    const entryId = await pjSaveDoc('project_entries', payload);
+
+    // 2. If any allocations target finance-plan → write to finance_payments
+    if (Array.isArray(payload.allocations) && payload.allocations.length) {
+      for (const a of payload.allocations) {
+        if (a.target === 'finance-plan' && a.targetId && payload.status !== 'bounced') {
+          try {
+            const plan = PJ.financePlans.find(x => x.id === a.targetId);
+            const fpPayload = {
+              planId: a.targetId,
+              date: payload.date,
+              effectiveDate: payload.effectiveDate,
+              amount: a.amount,
+              method: 'project-transfer',
+              reference: `Project "${PJ.projects.find(p => p.id === payload.projectId)?.name || ''}" — ${a.targetName}`,
+              notes: `Auto-created from project entry ${entryId}. ${harshReason ? 'Reason: ' + harshReason : ''}`,
+              status: 'cleared',
+              breakdown: {}, newPendingCommission: 0, newCapital: 0,
+              sourceEntryId: entryId,
+              sourceProjectId: payload.projectId,
+              sourceType: 'project-allocation'
+            };
+            const fpId = await pjSaveDoc('finance_payments', fpPayload);
+            a.financePaymentId = fpId;
+          } catch (fpErr) {
+            console.warn('Finance payment write failed:', fpErr);
+            pjToast('Warning: finance plan update failed — entry saved anyway', 'error');
+          }
+        }
+      }
+      // Update entry with financePaymentIds
+      await pjSaveDoc('project_entries', { id: entryId, allocations: payload.allocations });
+    }
+
+    // 3. If linked to a NeonCheque cheque, tag that cheque with tradeProjectId
+    if (payload.chequeId) {
+      try {
+        await db.collection('cheques').doc(payload.chequeId).update({
+          tradeProjectId: payload.projectId,
+          tradeEntryId: entryId,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (chqErr) {
+        console.warn('Cheque link failed:', chqErr);
+      }
+    }
+
+    closeModal('pjEntryModal');
+    await pjLoadAll();
+    pjToast('Entry saved', 'success');
+    if (PJ.activeView === 'project-detail' && PJ.activeProjectId) pjRenderProjectDetail(PJ.activeProjectId);
+    else if (PJ.activeView === 'ledger') pjRenderLedger();
+    else if (PJ.activeView === 'projects') pjRenderProjects();
+  } catch (e) {
+    console.error(e);
+    pjToast('Error: ' + e.message, 'error');
+  }
+};
+
+/* ═══════════════════ 9 · ENTRY DETAIL MODAL ═══════════════════ */
+window.pjOpenEntryDetail = function (entryId) {
+  const e = PJ.entries.find(x => x.id === entryId);
+  if (!e) return;
+  const meta = TYPE_LABELS[e.type] || { label: e.type, icon: 'circle', color: '#64748b' };
+  const project = PJ.projects.find(x => x.id === e.projectId);
+  const allocs = e.allocations || [];
+
+  document.getElementById('pjEntryDetailBody').innerHTML = `
+    <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:16px;border-radius:12px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="width:42px;height:42px;border-radius:10px;background:${meta.color};color:white;display:flex;align-items:center;justify-content:center">
+          <i class="fas fa-${meta.icon}"></i>
+        </div>
+        <div>
+          <div style="font-weight:800;font-size:16px">${pjEsc(meta.label)}</div>
+          <div style="font-size:12px;color:var(--gray)">${pjDate(e.date)}</div>
+        </div>
+        <div style="margin-left:auto;font-size:22px;font-weight:800;color:${meta.dir === 'in' ? 'var(--success)' : 'var(--danger)'}">
+          ${meta.dir === 'in' ? '+' : '−'} ${pjFmt(e.amount)}
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;margin-bottom:18px">
+      <div style="background:var(--light);padding:10px 12px;border-radius:8px"><strong style="font-size:10px;color:var(--gray);display:block;text-transform:uppercase">Project</strong>${pjEsc(project?.name || '—')}</div>
+      <div style="background:var(--light);padding:10px 12px;border-radius:8px"><strong style="font-size:10px;color:var(--gray);display:block;text-transform:uppercase">Party</strong>${e.partyId ? pjEsc(pjPartyName(e.partyId)) : '—'}</div>
+      <div style="background:var(--light);padding:10px 12px;border-radius:8px"><strong style="font-size:10px;color:var(--gray);display:block;text-transform:uppercase">Status</strong>${pjEsc(e.status || 'cleared')}</div>
+      <div style="background:var(--light);padding:10px 12px;border-radius:8px"><strong style="font-size:10px;color:var(--gray);display:block;text-transform:uppercase">Recorded By</strong>${pjEsc(e.createdBy || '—')}</div>
+    </div>
+    ${e.notes ? `<div style="background:var(--light);padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:18px"><strong style="font-size:10px;color:var(--gray);display:block;text-transform:uppercase;margin-bottom:4px">Notes</strong>${pjEsc(e.notes)}</div>` : ''}
+
+    ${allocs.length ? `
+      <h4 style="font-size:12px;color:var(--gray);text-transform:uppercase;margin-bottom:10px">Allocation Breakdown (${allocs.length})</h4>
+      ${allocs.map(a => {
+        const am = ALLOC_TARGETS[a.target] || { label: a.target, icon: 'circle' };
+        const warn = a.target === 'personal' || a.target === 'finance-plan';
+        return `
+          <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;background:${warn ? '#fee2e2' : 'var(--light)'};border-radius:9px;margin-bottom:8px;border-left:4px solid ${warn ? '#ef4444' : (a.target === 'creditor' ? '#3b82f6' : '#10b981')}">
+            <div>
+              <div style="font-weight:700;font-size:13px">
+                <i class="fas fa-${am.icon}" style="color:${warn ? '#ef4444' : 'var(--primary)'}"></i>
+                ${pjEsc(a.targetName || am.label)}
+                ${warn ? '<span class="pj-chip" style="background:#991b1b;color:white;margin-left:6px">PERSONAL / FINANCE</span>' : ''}
+              </div>
+              ${a.note ? `<div style="font-size:11px;color:var(--gray);margin-top:3px">${pjEsc(a.note)}</div>` : ''}
+              ${a.financePaymentId ? `<div style="font-size:10px;color:var(--info);margin-top:3px"><i class="fas fa-link"></i> linked to finance payment ${a.financePaymentId.slice(-8)}</div>` : ''}
+            </div>
+            <div style="font-weight:800;font-size:15px;color:${warn ? 'var(--danger)' : 'var(--primary)'}">${pjFmt(a.amount)}</div>
+          </div>
+        `;
+      }).join('')}
+    ` : ''}
+  `;
+  openModal('pjEntryDetailModal');
+};
+
+/* ═══════════════════ 10 · DELETE ENTRY ═══════════════════ */
+window.pjDeleteEntry = async function (entryId) {
+  const e = PJ.entries.find(x => x.id === entryId);
+  if (!e) return;
+  const meta = TYPE_LABELS[e.type] || { label: e.type };
+  let warn = `Delete this ${meta.label} entry of ${pjFmt(e.amount)}?`;
+  if (e.allocations && e.allocations.length) {
+    const linked = e.allocations.filter(a => a.financePaymentId);
+    if (linked.length) {
+      warn += `\n\n⚠ This entry has ${linked.length} linked finance payment(s).\nDeleting it will leave the finance payment orphaned.`;
+    }
+  }
+  if (!confirm(warn)) return;
+  if (!confirm('⚠ FINAL WARNING ⚠\n\nThis cannot be undone. Continue?')) return;
+  try {
+    await db.collection('project_entries').doc(entryId).delete();
+    await pjLoadAll();
+    pjToast('Entry deleted', 'success');
+    if (PJ.activeView === 'project-detail' && PJ.activeProjectId) pjRenderProjectDetail(PJ.activeProjectId);
+    else if (PJ.activeView === 'ledger') pjRenderLedger();
+    else if (PJ.activeView === 'projects') pjRenderProjects();
+  } catch (err) { console.error(err); pjToast('Error: ' + err.message, 'error'); }
+};
+
+/* ═══════════════════ 11 · CLICK OUTSIDE TO CLOSE ═══════════════════ */
+document.addEventListener('click', function(e) {
+  if (e.target.classList && e.target.classList.contains('modal-overlay')) {
+    e.target.classList.remove('active');
+  }
+});
+
+/* ═══════════════════ 12 · BOOT ═══════════════════ */
+function pjP3Boot() {
+  try { pjBuildModals(); } catch(e) { console.warn('[PJ-P3] modals failed', e); }
+  try {
+    const m = document.createElement('div');
+    m.id = '__proj_p3_ready';
+    m.style.cssText = 'position:fixed;bottom:1px;left:240px;font-size:1px;color:transparent;pointer-events:none';
+    m.textContent = 'projects-p3-ready';
+    document.body.appendChild(m);
+    console.log('[Projects Module v1.0-P3] ✅ modals + actions installed');
+    console.log('[Projects Module v1.0] 🎉 FULLY INSTALLED');
+  } catch(e) {}
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pjP3Boot);
+else pjP3Boot();
+
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════
      🔒 HARSH DEVTOOLS BLOCKER — v3
      Appended at end of file. Runs alongside the existing console blocker.
      Detection: 5 layers. Action: DOM wipe + navigate to about:blank.
