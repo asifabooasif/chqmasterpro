@@ -12716,5 +12716,1087 @@ window.NCX_P11 = {
 
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     NEONCHEQUE — PART 12 · BUG FIXES BUNDLE
+     · Bulk Status Change modal (beautiful)
+     · Enter-to-search (no more per-keystroke search)
+     · Bulk discount to LOLC (multi-cheque picker)
+     · Per-cheque LOLC return tracking
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__NCX_PART12) return;
+if (!window.NCX) { console.error('[Part 12] Shell not loaded'); return; }
+window.__NCX_PART12 = true;
+
+var NCX = window.NCX;
+var S = NCX.S;
+var db = NCX.db;
+var $ = NCX.$;
+var fmt = NCX.fmt;
+var fmtExact = NCX.fmtExact;
+var fmtShort = NCX.fmtShort;
+var dateFmt = NCX.dateFmt;
+var esc = NCX.esc;
+var num = NCX.num;
+var today = NCX.today;
+var toast = NCX.toast;
+var openModal = NCX.openModal;
+var closeModal = NCX.closeModal;
+var uid = NCX.uid;
+var daysBetween = NCX.daysBetween;
+
+/* ═══════════════════════════════════════════════════════════════════
+   STYLES
+   ═══════════════════════════════════════════════════════════════════ */
+(function injectStyles() {
+  if (document.getElementById('__ncx_p12_styles')) return;
+  var s = document.createElement('style');
+  s.id = '__ncx_p12_styles';
+  s.textContent = `
+    .p12-search-row { display:flex; gap:6px; align-items:stretch; }
+    .p12-search-row input { flex:1; }
+    .p12-search-btn {
+      padding:0 14px; border:2px solid var(--primary); background:var(--primary); color:white;
+      border-radius:8px; cursor:pointer; font-weight:700; font-size:12.5px; font-family:inherit;
+      display:flex; align-items:center; gap:6px; white-space:nowrap; transition:.2s;
+    }
+    .p12-search-btn:hover { background:var(--primary-dark); border-color:var(--primary-dark); }
+    .p12-clear-btn {
+      padding:0 12px; border:2px solid var(--border); background:white; color:var(--gray);
+      border-radius:8px; cursor:pointer; font-weight:600; font-size:12px; font-family:inherit;
+      display:flex; align-items:center; gap:4px; transition:.2s;
+    }
+    .p12-clear-btn:hover { background:var(--light); color:var(--dark); }
+    .p12-bulk-chq-row {
+      display:grid; grid-template-columns:auto 1fr auto auto auto; gap:12px;
+      align-items:center; padding:11px 14px; border-bottom:1px solid var(--border);
+      cursor:pointer; font-size:13px; transition:.15s;
+    }
+    .p12-bulk-chq-row:hover { background:var(--light); }
+    .p12-bulk-chq-row.selected { background:#dbeafe; }
+    .p12-bulk-chq-row:last-child { border-bottom:none; }
+    .p12-bulk-chq-row input[type=checkbox] { width:16px; height:16px; cursor:pointer; }
+    .p12-status-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
+    .p12-status-btn {
+      padding:14px 12px; border:2px solid var(--border); background:white; border-radius:10px;
+      cursor:pointer; transition:.2s; text-align:left; font-family:inherit;
+    }
+    .p12-status-btn:hover { border-color:var(--primary); transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.08); }
+    .p12-status-btn.selected { border-color:var(--primary); background:#eff6ff; }
+    .p12-status-btn .icon { font-size:16px; margin-bottom:6px; display:block; }
+    .p12-status-btn .name { font-weight:800; font-size:13px; color:var(--dark); text-transform:capitalize; }
+    .p12-status-btn .count { font-size:11px; color:var(--gray); margin-top:3px; }
+    .p12-return-row {
+      display:grid; grid-template-columns:1fr auto auto auto; gap:10px;
+      align-items:center; padding:12px 14px; background:var(--light);
+      border-radius:10px; margin-bottom:8px; border-left:4px solid var(--success);
+      font-size:12.5px; transition:.2s;
+    }
+    .p12-return-row:hover { transform:translateX(4px); box-shadow:0 4px 12px rgba(0,0,0,.06); }
+    .p12-pill { display:inline-block; padding:2px 8px; border-radius:8px; font-size:10.5px; font-weight:700; }
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ═══════════════════════════════════════════════════════════════════
+   FIX 1 · SEARCH BEHAVIOR — Enter to search (no per-keystroke)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Wrap all renderers that have search inputs to add Enter-only behavior */
+var SEARCH_INPUT_IDS = [
+  'chqSearch',          // All Cheques
+  'ihSearch',           // In Hand
+  'retSearch',          // Returned
+  'payeeSearch',        // Payees
+  'issuerSearch',       // Issuers
+  'lgSearch',           // Ledger
+  'partySearch',        // Trade Parties
+  'filterPayeeSearch',  // Payees view (alt)
+  'filterIssuerSearch', // Issuers view (alt)
+  'filterInHandChequeNumber',
+  'filterInHandPayee',
+  'filterReturnedChequeNumber',
+  'filterReturnedPayee'
+];
+
+/* After any render, scan for search inputs and rewrite them to Enter-only */
+function patchSearchInputs() {
+  setTimeout(function () {
+    SEARCH_INPUT_IDS.forEach(function (id) {
+      var input = document.getElementById(id);
+      if (!input) return;
+      if (input.dataset.p12Patched === '1') return;
+      input.dataset.p12Patched = '1';
+
+      // Remove oninput attribute (kills per-keystroke search)
+      var inlineHandler = input.getAttribute('oninput');
+      if (inlineHandler) input.removeAttribute('oninput');
+
+      // Capture current view
+      var currentView = S.activeView;
+
+      // Wrap in a search-row with buttons
+      var parent = input.parentNode;
+      if (parent && !parent.classList.contains('p12-search-row')) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'p12-search-row';
+        parent.replaceChild(wrapper, input);
+        wrapper.appendChild(input);
+
+        // Add Search button
+        var searchBtn = document.createElement('button');
+        searchBtn.type = 'button';
+        searchBtn.className = 'p12-search-btn';
+        searchBtn.innerHTML = '<i class="fas fa-search"></i> Search';
+        searchBtn.onclick = function () {
+          triggerSearch(currentView);
+        };
+
+        // Add Clear button
+        var clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'p12-clear-btn';
+        clearBtn.innerHTML = '<i class="fas fa-times"></i>';
+        clearBtn.title = 'Clear';
+        clearBtn.onclick = function () {
+          input.value = '';
+          triggerSearch(currentView);
+        };
+
+        wrapper.appendChild(searchBtn);
+        wrapper.appendChild(clearBtn);
+      }
+
+      // Enter key triggers search
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          triggerSearch(currentView);
+        }
+      });
+    });
+  }, 100);
+}
+
+function triggerSearch(viewName) {
+  if (!viewName) viewName = S.activeView;
+  try {
+    NCX.showView(viewName);
+  } catch (e) {
+    console.error('[Part 12] Search failed:', e);
+  }
+  // Patch inputs again in case DOM was replaced
+  patchSearchInputs();
+}
+
+/* Hook: after every showView, patch search inputs */
+var _origShowView = NCX.showView;
+NCX.showView = function (name, el) {
+  var r = _origShowView.call(NCX, name, el);
+  patchSearchInputs();
+  return r;
+};
+
+/* Initial patch after load */
+setTimeout(patchSearchInputs, 1500);
+
+/* ═══════════════════════════════════════════════════════════════════
+   FIX 2 · BULK STATUS CHANGE — Beautiful Modal
+   ═══════════════════════════════════════════════════════════════════ */
+function bulkStatusChangeModal() {
+  var ids = Object.keys(window.NCX.S ? (NCX.S.cheques ? {} : {}) : {});
+  // Get selected cheques from Part 2's SELECTED or our own
+  var selectedIds = getSelectedChequeIds();
+  if (!selectedIds.length) return toast('No cheques selected', 'error');
+
+  var selected = S.cheques.filter(function (c) { return selectedIds.indexOf(c.id) !== -1; });
+  if (!selected.length) return toast('No cheques selected', 'error');
+
+  var totalAmount = selected.reduce(function (s, c) { return s + num(c.amount); }, 0);
+
+  var old = $('p12BulkStatusModal'); if (old) old.remove();
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'p12BulkStatusModal';
+  modal.innerHTML = '<div class="modal" style="max-width:820px">' +
+    '<div class="modal-header">' +
+    '<h2 class="modal-title"><i class="fas fa-exchange-alt"></i> Bulk Change Status</h2>' +
+    '<button class="modal-close" onclick="NCX_P12.closeBulkStatusModal()"><i class="fas fa-times"></i></button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+
+    /* Summary hero */
+    '<div style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:12px;padding:18px;color:white;margin-bottom:18px">' +
+    '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px">' +
+    '<div><div style="font-size:11px;opacity:.85;text-transform:uppercase;font-weight:700">Selected Cheques</div>' +
+    '<div style="font-size:28px;font-weight:800;margin-top:4px">' + selected.length + '</div></div>' +
+    '<div><div style="font-size:11px;opacity:.85;text-transform:uppercase;font-weight:700">Total Value</div>' +
+    '<div style="font-size:28px;font-weight:800;margin-top:4px">' + fmt(totalAmount) + '</div></div>' +
+    '</div></div>' +
+
+    /* List of cheques */
+    '<div style="font-size:12px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px"><i class="fas fa-list"></i> Cheques Selected</div>' +
+    '<div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:white;margin-bottom:18px">' +
+    selected.map(function (c) {
+      return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border);font-size:12.5px">' +
+        '<div><strong>#' + esc(c.number) + '</strong> · ' + esc(c.payee) + '</div>' +
+        '<span class="status-badge status-' + esc(c.status) + '">' + esc(c.status) + '</span>' +
+        '<strong>' + fmt(c.amount) + '</strong>' +
+        '</div>';
+    }).join('') +
+    '</div>' +
+
+    /* Status options */
+    '<div style="font-size:12px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px"><i class="fas fa-arrow-right"></i> Change All To</div>' +
+    '<div class="p12-status-grid" id="p12StatusGrid">' +
+    statusButton('draft', 'file', '#64748b') +
+    statusButton('in-hand', 'hand-holding', '#3b82f6') +
+    statusButton('issued', 'paper-plane', '#f59e0b') +
+    statusButton('deposited', 'university', '#4338ca') +
+    statusButton('cleared', 'check-circle', '#10b981') +
+    statusButton('returned', 'undo', '#ef4444') +
+    statusButton('stopped', 'ban', '#991b1b') +
+    '</div>' +
+
+    /* Remarks */
+    '<div class="form-group">' +
+    '<label>Remarks (applied to all)</label>' +
+    '<textarea id="p12BulkStatusRemarks" rows="2" placeholder="Optional notes for all cheques..."></textarea>' +
+    '</div>' +
+
+    '</div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="NCX_P12.closeBulkStatusModal()">Cancel</button>' +
+    '<button class="btn btn-primary" id="p12BulkStatusConfirm" onclick="NCX_P12.commitBulkStatusChange()" disabled>' +
+    '<i class="fas fa-check"></i> Apply to All ' + selected.length + '</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  openModal('p12BulkStatusModal');
+
+  // Wire status button clicks
+  window.__p12SelectedStatus = null;
+  modal.querySelectorAll('.p12-status-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      window.__p12SelectedStatus = this.dataset.status;
+      modal.querySelectorAll('.p12-status-btn').forEach(function (b) { b.classList.remove('selected'); });
+      this.classList.add('selected');
+      var cBtn = $('p12BulkStatusConfirm');
+      if (cBtn) cBtn.disabled = false;
+    });
+  });
+
+  // Store selected IDs for commit
+  window.__p12BulkStatusIds = selectedIds;
+}
+
+function statusButton(status, icon, color) {
+  return '<button type="button" class="p12-status-btn" data-status="' + status + '">' +
+    '<i class="fas fa-' + icon + '" style="color:' + color + '"></i>' +
+    '<div class="name">' + status.replace('-', ' ') + '</div>' +
+    '<div class="count">Move to ' + status + '</div>' +
+    '</button>';
+}
+
+function closeBulkStatusModal() {
+  closeModal('p12BulkStatusModal');
+  setTimeout(function () { var m = $('p12BulkStatusModal'); if (m) m.remove(); }, 250);
+}
+
+function getSelectedChequeIds() {
+  // Try Part 2's SELECTED global first
+  if (window.SELECTED && typeof window.SELECTED === 'object') {
+    return Object.keys(window.SELECTED).filter(function (k) { return window.SELECTED[k]; });
+  }
+  // Fallback: read checked checkboxes
+  var ids = [];
+  document.querySelectorAll('.cheque-checkbox:checked').forEach(function (cb) {
+    var id = cb.dataset.id || cb.getAttribute('data-id');
+    if (id) ids.push(id);
+  });
+  return ids;
+}
+
+function commitBulkStatusChange() {
+  var status = window.__p12SelectedStatus;
+  var ids = window.__p12BulkStatusIds || [];
+  var remarks = ($('p12BulkStatusRemarks') || {}).value || '';
+
+  if (!status) return toast('Select a status', 'error');
+  if (!ids.length) return toast('No cheques', 'error');
+
+  var confirmMsg = 'Change ' + ids.length + ' cheque(s) to "' + status + '"?\n\n' +
+    (remarks ? 'Remarks: ' + remarks + '\n\n' : '') +
+    'This will write to Firestore.';
+  if (!confirm(confirmMsg)) return;
+
+  var btn = $('p12BulkStatusConfirm');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Applying...'; }
+
+  var user = S.user ? S.user.email : 'system';
+  var promises = ids.map(function (id) {
+    var c = S.cheques.filter(function (x) { return x.id === id; })[0];
+    if (!c) return Promise.resolve();
+
+    return db.collection('cheques').doc(id).update({
+      status: status,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      history: firebase.firestore.FieldValue.arrayUnion({
+        action: 'Bulk Status Change',
+        details: 'Status → ' + status + (remarks ? ' | ' + remarks : ''),
+        timestamp: new Date().toISOString(),
+        user: user,
+        previousStatus: c.status
+      })
+    }).then(function () {
+      return db.collection('auditLog').add({
+        action: 'bulk_status_change',
+        chequeNumber: c.number,
+        details: 'Bulk: ' + c.status + ' → ' + status,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        user: user
+      }).catch(function () {});
+    }).catch(function (e) {
+      console.warn('[Part 12] Bulk status failed for ' + id, e);
+    });
+  });
+
+  Promise.all(promises).then(function () {
+    toast('✅ Updated ' + ids.length + ' cheque(s) to ' + status, 'success');
+    // Clear selection
+    if (window.SELECTED) {
+      Object.keys(window.SELECTED).forEach(function (k) { delete window.SELECTED[k]; });
+    }
+    if (window.NC && window.NC.clearSelection) {
+      try { window.NC.clearSelection(); } catch (e) {}
+    }
+    closeBulkStatusModal();
+    return NCX.loadAll();
+  }).then(function () {
+    NCX.showView(S.activeView || 'cheques');
+  }).catch(function (e) {
+    toast('Error: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Apply'; }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FIX 3 · BULK DISCOUNT TO LOLC (multi-cheque selection)
+   ═══════════════════════════════════════════════════════════════════ */
+function openBulkDiscountModal() {
+  if (!S.projects.length) return toast('Create a project first', 'error');
+
+  var old = $('p12BulkDiscountModal'); if (old) old.remove();
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'p12BulkDiscountModal';
+
+  var discounters = S.parties.filter(function (p) {
+    return Array.isArray(p.types) && (p.types.indexOf('discounter') !== -1 || p.types.indexOf('lender') !== -1);
+  });
+  var shops = S.parties.filter(function (p) {
+    return Array.isArray(p.types) && p.types.indexOf('shop') !== -1;
+  });
+
+  modal.innerHTML = '<div class="modal" style="max-width:1000px">' +
+    '<div class="modal-header">' +
+    '<h2 class="modal-title"><i class="fas fa-percentage"></i> Send Multiple Cheques to Discounter</h2>' +
+    '<button class="modal-close" onclick="NCX_P12.closeBulkDiscount()"><i class="fas fa-times"></i></button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+
+    '<div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #f59e0b;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#92400e;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start">' +
+    '<i class="fas fa-info-circle" style="font-size:16px;margin-top:1px"></i>' +
+    '<div>Select <strong>multiple cheques</strong> to hand to LOLC or another discounter in one go. Each cheque will be tracked separately with its own advance, hold, and settlement.</div>' +
+    '</div>' +
+
+    /* Common settings */
+    '<div style="background:var(--light);padding:16px;border-radius:12px;margin-bottom:16px">' +
+    '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px"><i class="fas fa-cog"></i> Common Settings (apply to all)</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
+    '<div class="form-group" style="margin-bottom:0"><label>Project *</label>' +
+    '<select id="p12BdProject"><option value="">-- Select --</option>' +
+    S.projects.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="form-group" style="margin-bottom:0"><label>Discounter *</label>' +
+    '<select id="p12BdProvider"><option value="">-- Select --</option>' +
+    discounters.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="form-group" style="margin-bottom:0"><label>Advance % *</label>' +
+    '<input type="number" id="p12BdPercent" value="80" step="0.1" min="1" max="100"></div>' +
+    '<div class="form-group" style="margin-bottom:0"><label>Submitted Date *</label>' +
+    '<input type="date" id="p12BdDate" value="' + today() + '"></div>' +
+    '<div class="form-group" style="margin-bottom:0"><label>Expected Clearance</label>' +
+    '<input type="date" id="p12BdExpected"></div>' +
+    '<div class="form-group" style="margin-bottom:0"><label>Default Shop (optional)</label>' +
+    '<select id="p12BdShop"><option value="">-- None --</option>' +
+    shops.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') +
+    '</select></div>' +
+    '</div></div>' +
+
+    /* Search */
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">' +
+    '<input type="text" id="p12BdSearch" placeholder="Search number, payee, bank..." style="flex:1;min-width:220px;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit">' +
+    '<select id="p12BdStatus" style="padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit">' +
+    '<option value="in-hand" selected>In-Hand Only</option>' +
+    '<option value="issued">Issued</option>' +
+    '<option value="deposited">Deposited</option>' +
+    '<option value="">All Cheques</option>' +
+    '</select>' +
+    '<button type="button" class="p12-search-btn" onclick="NCX_P12.bdApply()" style="padding:11px 18px">' +
+    '<i class="fas fa-search"></i> Search' +
+    '</button>' +
+    '</div>' +
+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">' +
+    '<label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;font-weight:600">' +
+    '<input type="checkbox" id="p12BdAll" onchange="NCX_P12.bdSelectAll(this.checked)"> Select All Visible</label>' +
+    '<button class="btn btn-secondary btn-sm" onclick="NCX_P12.bdClear()"><i class="fas fa-times"></i> Clear</button>' +
+    '</div>' +
+
+    '<div id="p12BdList" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:white"></div>' +
+
+    /* Summary */
+    '<div style="padding:14px 18px;background:linear-gradient(135deg,#7c2d12,#b45309);color:white;border-radius:11px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">' +
+    '<div style="display:flex;gap:20px">' +
+    '<div style="font-size:12px">Selected<strong style="display:block;font-size:18px;margin-top:2px" id="p12BdCount">0</strong></div>' +
+    '<div style="font-size:12px">Total Value<strong style="display:block;font-size:18px;margin-top:2px" id="p12BdTotal">Rs. 0</strong></div>' +
+    '<div style="font-size:12px">Advance<strong style="display:block;font-size:18px;margin-top:2px;color:#a7f3d0" id="p12BdAdvance">Rs. 0</strong></div>' +
+    '<div style="font-size:12px">Hold<strong style="display:block;font-size:18px;margin-top:2px;color:#fde68a" id="p12BdHold">Rs. 0</strong></div>' +
+    '</div>' +
+    '<button class="btn" style="background:white;color:#7c2d12;font-weight:800;padding:11px 22px" id="p12BdConfirm" onclick="NCX_P12.bdConfirm()" disabled>' +
+    '<i class="fas fa-paper-plane"></i> Send to Discounter</button>' +
+    '</div>' +
+
+    '</div>' +
+    '<div class="modal-footer" style="display:none"></div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  openModal('p12BulkDiscountModal');
+
+  window.__p12BdSelected = {};
+  window.__p12BdList = [];
+
+  // Search wiring
+  var searchInput = $('p12BdSearch');
+  if (searchInput) {
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); bdApply(); }
+    });
+  }
+  $('p12BdStatus').addEventListener('change', bdApply);
+
+  // Update advance/hold when percent changes
+  $('p12BdPercent').addEventListener('input', bdUpdateSummary);
+
+  bdApply();
+}
+
+function closeBulkDiscount() {
+  closeModal('p12BulkDiscountModal');
+  setTimeout(function () { var m = $('p12BulkDiscountModal'); if (m) m.remove(); }, 250);
+  window.__p12BdSelected = {};
+}
+
+function bdApply() {
+  var search = ($('p12BdSearch') || {}).value || '';
+  var status = $('p12BdStatus').value;
+
+  var list = S.cheques.filter(function (c) { return !c.deletedAt; });
+  if (status) list = list.filter(function (c) { return c.status === status; });
+  if (search) {
+    var sl = search.toLowerCase().trim();
+    list = list.filter(function (c) {
+      return ((c.number || '') + ' ' + (c.payee || '') + ' ' + (c.bank || '')).toLowerCase().indexOf(sl) !== -1;
+    });
+  }
+  list.sort(function (a, b) { return String(a.number || '').localeCompare(String(b.number || '')); });
+
+  window.__p12BdList = list;
+
+  var host = $('p12BdList');
+  if (!list.length) {
+    host.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)"><i class="fas fa-inbox" style="font-size:40px;opacity:.3;display:block;margin-bottom:10px"></i>' +
+      '<h3 style="font-size:15px;color:var(--dark);margin-bottom:4px">No cheques match</h3></div>';
+    bdUpdateSummary();
+    return;
+  }
+
+  host.innerHTML = list.map(function (c) {
+    var sel = !!window.__p12BdSelected[c.id];
+    return '<div class="p12-bulk-chq-row ' + (sel ? 'selected' : '') + '" data-id="' + c.id + '" onclick="NCX_P12.bdToggle(\'' + c.id + '\')">' +
+      '<input type="checkbox" ' + (sel ? 'checked' : '') + ' onclick="event.stopPropagation();NCX_P12.bdToggle(\'' + c.id + '\')">' +
+      '<div><div><strong style="color:var(--primary)">#' + esc(c.number) + '</strong> · <strong>' + esc(c.payee) + '</strong></div>' +
+      '<div style="font-size:11px;color:var(--gray);margin-top:2px">' + dateFmt(c.date) + ' · ' + esc(c.bank || '') + '</div></div>' +
+      '<span class="status-badge status-' + esc(c.status) + '">' + esc(c.status) + '</span>' +
+      '<div style="font-size:11px;color:var(--gray)">' + (c.tradeProjectId ? '🔗 linked' : '—') + '</div>' +
+      '<div style="font-weight:800;text-align:right;font-variant-numeric:tabular-nums">' + fmt(c.amount) + '</div>' +
+      '</div>';
+  }).join('');
+
+  bdUpdateSummary();
+}
+
+function bdToggle(id) {
+  if (window.__p12BdSelected[id]) delete window.__p12BdSelected[id];
+  else window.__p12BdSelected[id] = true;
+  var row = document.querySelector('.p12-bulk-chq-row[data-id="' + id + '"]');
+  if (row) {
+    var sel = !!window.__p12BdSelected[id];
+    row.classList.toggle('selected', sel);
+    var cb = row.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = sel;
+  }
+  bdUpdateSummary();
+}
+
+function bdSelectAll(checked) {
+  document.querySelectorAll('#p12BdList .p12-bulk-chq-row').forEach(function (row) {
+    var id = row.dataset.id;
+    if (checked) window.__p12BdSelected[id] = true;
+    else delete window.__p12BdSelected[id];
+    row.classList.toggle('selected', checked);
+    var cb = row.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = checked;
+  });
+  bdUpdateSummary();
+}
+
+function bdClear() {
+  window.__p12BdSelected = {};
+  bdApply();
+}
+
+function bdUpdateSummary() {
+  var ids = Object.keys(window.__p12BdSelected || {});
+  var list = ids.map(function (id) { return S.cheques.filter(function (c) { return c.id === id; })[0]; }).filter(Boolean);
+  var total = list.reduce(function (s, c) { return s + num(c.amount); }, 0);
+  var pct = num(($('p12BdPercent') || {}).value) || 80;
+  var advance = total * (pct / 100);
+  var hold = total - advance;
+
+  var cEl = $('p12BdCount');
+  var tEl = $('p12BdTotal');
+  var aEl = $('p12BdAdvance');
+  var hEl = $('p12BdHold');
+  var bEl = $('p12BdConfirm');
+  if (cEl) cEl.textContent = ids.length;
+  if (tEl) tEl.textContent = fmt(total);
+  if (aEl) aEl.textContent = fmt(advance);
+  if (hEl) hEl.textContent = fmt(hold);
+  if (bEl) bEl.disabled = ids.length === 0;
+}
+
+function bdConfirm() {
+  var ids = Object.keys(window.__p12BdSelected || {});
+  if (!ids.length) return toast('Select at least one cheque', 'error');
+
+  var projectId = $('p12BdProject').value;
+  var providerPartyId = $('p12BdProvider').value;
+  var percent = num($('p12BdPercent').value) || 80;
+  var submittedDate = $('p12BdDate').value;
+  var expectedClearDate = $('p12BdExpected').value || null;
+  var defaultShopId = $('p12BdShop').value || null;
+
+  if (!projectId) return toast('Select a project', 'error');
+  if (!providerPartyId) return toast('Select a discounter', 'error');
+  if (!submittedDate) return toast('Select submitted date', 'error');
+  if (percent <= 0 || percent > 100) return toast('Advance % must be 1-100', 'error');
+
+  var provider = S.parties.filter(function (p) { return p.id === providerPartyId; })[0];
+  var providerName = provider ? provider.name : 'Discounter';
+  var user = S.user ? S.user.email : 'anonymous';
+
+  var totalValue = 0;
+  var confirmMsg = 'Send ' + ids.length + ' cheque(s) to ' + providerName + '?\n\n' +
+    'Advance: ' + percent + '%\n' +
+    'Date: ' + submittedDate + '\n\n' +
+    'Each cheque gets its own record with independent advance, hold, and settlement tracking.\n\n' +
+    'Continue?';
+  if (!confirm(confirmMsg)) return;
+
+  var btn = $('p12BdConfirm');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Sending...'; }
+
+  var tasks = ids.map(function (chequeId) {
+    var c = S.cheques.filter(function (x) { return x.id === chequeId; })[0];
+    if (!c) return Promise.resolve();
+
+    var amt = num(c.amount);
+    totalValue += amt;
+    var advanceAmount = amt * (percent / 100);
+    var holdAmount = amt - advanceAmount;
+
+    // Auto-match shop by payee if no default
+    var shopPartyId = defaultShopId;
+    var shopName = shopPartyId ? ((S.parties.filter(function (p) { return p.id === shopPartyId; })[0] || {}).name || c.payee) : c.payee;
+    if (!shopPartyId) {
+      var matched = S.parties.filter(function (p) {
+        return Array.isArray(p.types) && p.types.indexOf('shop') !== -1 &&
+          ((p.name || '').toLowerCase().indexOf((c.payee || '').toLowerCase()) !== -1 ||
+           (c.payee || '').toLowerCase().indexOf((p.name || '').toLowerCase()) !== -1);
+      })[0];
+      if (matched) {
+        shopPartyId = matched.id;
+        shopName = matched.name;
+      }
+    }
+
+    return db.collection('cheque_discounts').add({
+      chequeId: chequeId,
+      chequeNumber: c.number,
+      chequeAmount: amt,
+      chequeDate: c.date,
+      shopPartyId: shopPartyId,
+      shopName: shopName,
+      projectId: projectId,
+      providerPartyId: providerPartyId,
+      providerName: providerName,
+      submittedDate: submittedDate,
+      expectedClearDate: expectedClearDate,
+      advancePercent: percent,
+      advanceAmount: advanceAmount,
+      holdAmount: holdAmount,
+      status: 'submitted',
+      notes: 'Bulk discounted with ' + ids.length + ' cheque(s)',
+      history: [{
+        action: 'Submitted to Discounter (Bulk)',
+        details: 'Cheque #' + c.number + ' (' + fmt(amt) + ') submitted to ' + providerName + ' as part of a bulk batch. Advance expected: ' + fmt(advanceAmount) + ' (' + percent + '%)',
+        timestamp: new Date().toISOString(),
+        user: user
+      }],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: user
+    });
+  });
+
+  Promise.all(tasks).then(function () {
+    toast('✅ Sent ' + ids.length + ' cheque(s) to ' + providerName + ' · Total ' + fmt(totalValue), 'success');
+    closeBulkDiscount();
+    return NCX.loadAll();
+  }).then(function () {
+    NCX.showView('discounting');
+  }).catch(function (e) {
+    toast('Error: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to Discounter'; }
+  });
+}
+
+/* Inject "Bulk Discount" button into Discounting view */
+var _prevDiscRender = NCX.renderers.discounting;
+NCX.registerRenderer('discounting', function (host) {
+  if (_prevDiscRender) _prevDiscRender(host);
+  var header = host.querySelector('.card-header');
+  if (!header) return;
+  if (header.querySelector('.p12-bulk-disc-btn')) return;
+
+  var btn = document.createElement('button');
+  btn.className = 'btn btn-warning btn-sm p12-bulk-disc-btn';
+  btn.style.marginRight = '8px';
+  btn.innerHTML = '<i class="fas fa-layer-group"></i> Bulk Send to Discounter';
+  btn.onclick = openBulkDiscountModal;
+
+  var firstBtn = header.querySelector('button.btn-primary');
+  if (firstBtn) firstBtn.parentNode.insertBefore(btn, firstBtn);
+  else header.appendChild(btn);
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   FIX 4 · PER-CHEQUE LOLC RETURN TRACKING
+   ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * When settling a batch of discounts from the same provider/date,
+ * allow tracking individual cheque returns.
+ */
+function openBatchSettleModal(providerPartyId, chequeDiscountIds) {
+  var discounts = S.discounts.filter(function (d) {
+    return chequeDiscountIds.indexOf(d.id) !== -1;
+  });
+  if (!discounts.length) return toast('No discounts to settle', 'error');
+
+  var totalHold = discounts.reduce(function (s, d) { return s + num(d.holdAmount); }, 0);
+
+  var old = $('p12BatchSettleModal'); if (old) old.remove();
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'p12BatchSettleModal';
+  modal.innerHTML = '<div class="modal" style="max-width:900px">' +
+    '<div class="modal-header">' +
+    '<h2 class="modal-title"><i class="fas fa-balance-scale"></i> Settle Batch Returns</h2>' +
+    '<button class="modal-close" onclick="NCX_P12.closeBatchSettle()"><i class="fas fa-times"></i></button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+
+    '<div style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:1.5px solid #10b981;border-radius:10px;padding:14px;font-size:12.5px;color:#065f46;margin-bottom:16px">' +
+    '<strong><i class="fas fa-info-circle"></i> Track each cheque\'s return separately</strong><br>' +
+    '<span style="font-size:11.5px">Enter the amount the discounter returned for each cheque. Fee is auto-calculated as Hold − Returned. You can settle any number at once.</span>' +
+    '</div>' +
+
+    /* Account + Date common */
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">' +
+    '<div class="form-group" style="margin-bottom:0"><label>Deposit Into Account *</label>' +
+    '<select id="p12BsAcct"><option value="">-- Select --</option>' +
+    S.accounts.filter(function (a) { return a.status !== 'inactive'; }).map(function (a) {
+      return '<option value="' + a.id + '">' + esc(a.name) + '</option>';
+    }).join('') +
+    '</select></div>' +
+    '<div class="form-group" style="margin-bottom:0"><label>Settlement Date *</label>' +
+    '<input type="date" id="p12BsDate" value="' + today() + '"></div>' +
+    '</div>' +
+
+    /* Per-cheque rows */
+    '<div style="font-size:12px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px"><i class="fas fa-list"></i> Cheques to Settle (' + discounts.length + ')</div>' +
+
+    '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:white;padding:8px">';
+
+  discounts.forEach(function (d) {
+    var hold = num(d.holdAmount);
+    modal.innerHTML += '<div class="p12-return-row" data-discount-id="' + d.id + '">' +
+      '<div style="min-width:0">' +
+      '<div style="font-weight:700;font-size:13px">#' + esc(d.chequeNumber) + ' <span style="color:var(--gray);font-weight:400">· ' + esc(d.shopName || '—') + '</span></div>' +
+      '<div style="font-size:11px;color:var(--gray);margin-top:3px">Hold: <strong>' + fmt(hold) + '</strong> · Cheque: ' + fmt(d.chequeAmount) + '</div>' +
+      '</div>' +
+      '<div style="text-align:right"><div style="font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700">Returned</div>' +
+      '<input type="number" class="p12-return-amt" data-hold="' + hold + '" data-discount-id="' + d.id + '" ' +
+      'value="' + hold.toFixed(2) + '" step="0.01" min="0" max="' + hold + '" ' +
+      'style="width:140px;padding:8px 10px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;text-align:right;font-family:inherit" ' +
+      'oninput="NCX_P12.updateBatchReturn(this)"></div>' +
+      '<div style="text-align:right"><div style="font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700">Fee Kept</div>' +
+      '<div class="p12-fee-display" style="font-size:14px;font-weight:800;color:#b45309;margin-top:6px;font-variant-numeric:tabular-nums">' + fmt(0) + '</div></div>' +
+      '<div style="display:flex;gap:4px">' +
+      '<button class="btn btn-xs btn-secondary" onclick="NCX_P12.setFullReturn(\'' + d.id + '\', ' + hold + ')" title="Return full"><i class="fas fa-check"></i></button>' +
+      '<button class="btn btn-xs btn-secondary" onclick="NCX_P12.setZeroReturn(\'' + d.id + '\')" title="Set zero (bounced)"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '</div>';
+  });
+
+  modal.innerHTML += '</div>' +
+
+    /* Live summary */
+    '<div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:10px;padding:14px;margin-top:16px">' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">' +
+    '<div><div style="font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700">Total Hold</div>' +
+    '<div style="font-size:18px;font-weight:800;margin-top:4px" id="p12BsTotalHold">' + fmt(totalHold) + '</div></div>' +
+    '<div><div style="font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700">Total Returned</div>' +
+    '<div style="font-size:18px;font-weight:800;margin-top:4px;color:var(--success)" id="p12BsTotalReturned">' + fmt(totalHold) + '</div></div>' +
+    '<div><div style="font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700">Total Fees</div>' +
+    '<div style="font-size:18px;font-weight:800;margin-top:4px;color:#b45309" id="p12BsTotalFees">' + fmt(0) + '</div></div>' +
+    '</div></div>' +
+
+    '</div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="NCX_P12.closeBatchSettle()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="NCX_P12.commitBatchSettle()"><i class="fas fa-check-double"></i> Settle All</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  openModal('p12BatchSettleModal');
+}
+
+function closeBatchSettle() {
+  closeModal('p12BatchSettleModal');
+  setTimeout(function () { var m = $('p12BatchSettleModal'); if (m) m.remove(); }, 250);
+}
+
+function updateBatchReturn(input) {
+  var hold = num(input.dataset.hold);
+  var returned = num(input.value);
+  if (returned > hold) {
+    input.value = hold.toFixed(2);
+    returned = hold;
+  }
+  var fee = hold - returned;
+  var row = input.closest('.p12-return-row');
+  var feeDisplay = row.querySelector('.p12-fee-display');
+  if (feeDisplay) feeDisplay.textContent = fmt(fee);
+
+  // Update totals
+  var totalHold = 0, totalReturned = 0;
+  document.querySelectorAll('.p12-return-amt').forEach(function (inp) {
+    var h = num(inp.dataset.hold);
+    var r = num(inp.value);
+    totalHold += h;
+    totalReturned += r;
+  });
+  var totalFees = totalHold - totalReturned;
+
+  var hEl = $('p12BsTotalHold');
+  var rEl = $('p12BsTotalReturned');
+  var fEl = $('p12BsTotalFees');
+  if (hEl) hEl.textContent = fmt(totalHold);
+  if (rEl) rEl.textContent = fmt(totalReturned);
+  if (fEl) fEl.textContent = fmt(totalFees);
+}
+
+function setFullReturn(discountId, hold) {
+  var input = document.querySelector('.p12-return-amt[data-discount-id="' + discountId + '"]');
+  if (input) {
+    input.value = hold.toFixed(2);
+    updateBatchReturn(input);
+  }
+}
+
+function setZeroReturn(discountId) {
+  var input = document.querySelector('.p12-return-amt[data-discount-id="' + discountId + '"]');
+  if (input) {
+    input.value = '0';
+    updateBatchReturn(input);
+  }
+}
+
+function commitBatchSettle() {
+  var accountId = $('p12BsAcct').value;
+  var date = $('p12BsDate').value;
+  if (!accountId) return toast('Select deposit account', 'error');
+  if (!date) return toast('Select settlement date', 'error');
+
+  var rows = document.querySelectorAll('.p12-return-amt');
+  if (!rows.length) return toast('Nothing to settle', 'error');
+
+  var toProcess = [];
+  rows.forEach(function (inp) {
+    var discountId = inp.dataset.discountId;
+    var hold = num(inp.dataset.hold);
+    var returned = num(inp.value);
+    var fee = hold - returned;
+    toProcess.push({ discountId: discountId, returned: returned, fee: fee });
+  });
+
+  var totalReturn = toProcess.reduce(function (s, r) { return s + r.returned; }, 0);
+  var totalFee = toProcess.reduce(function (s, r) { return s + r.fee; }, 0);
+  var settledCount = toProcess.filter(function (r) { return r.returned > 0; }).length;
+  var bouncedCount = toProcess.filter(function (r) { return r.returned === 0; }).length;
+
+  var confirmMsg = 'Settle ' + toProcess.length + ' cheque(s)?\n\n' +
+    '• Fully settled: ' + settledCount + ' (' + fmt(totalReturn) + ' returned, ' + fmt(totalFee) + ' fees)\n' +
+    (bouncedCount > 0 ? '• Bounced (zero return): ' + bouncedCount + '\n' : '') +
+    '\nThis will create entries + update discounts.\n\nContinue?';
+  if (!confirm(confirmMsg)) return;
+
+  var user = S.user ? S.user.email : 'system';
+  var projectId = null;
+
+  var tasks = toProcess.map(function (item) {
+    var discount = S.discounts.filter(function (d) { return d.id === item.discountId; })[0];
+    if (!discount) return Promise.resolve();
+    projectId = discount.projectId;
+
+    if (item.returned === 0 && item.fee > 0) {
+      // Bounce case
+      return db.collection('project_entries').add({
+        projectId: discount.projectId,
+        type: 'discount-recovery-out',
+        direction: 'out',
+        amount: item.fee,
+        date: date,
+        effectiveDate: date,
+        partyId: discount.providerPartyId,
+        partyRole: 'discounter',
+        accountId: accountId,
+        status: 'cleared',
+        notes: 'Recovery for bounced cheque #' + discount.chequeNumber,
+        allocations: [],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: user
+      }).then(function (ref) {
+        return db.collection('cheque_discounts').doc(discount.id).update({
+          status: 'bounced',
+          recoveryDate: date,
+          recoveryAmount: item.fee,
+          recoveryAccountId: accountId,
+          recoveryEntryId: ref.id,
+          history: firebase.firestore.FieldValue.arrayUnion({
+            action: 'Batch Bounced',
+            details: 'Recovered ' + fmt(item.fee) + ' from account',
+            timestamp: new Date().toISOString(),
+            user: user
+          })
+        });
+      });
+    }
+
+    var chain = Promise.resolve();
+    var returnEntryId = null;
+    var feeEntryId = null;
+
+    if (item.returned > 0) {
+      chain = chain.then(function () {
+        return db.collection('project_entries').add({
+          projectId: discount.projectId,
+          type: 'discount-settlement-in',
+          direction: 'in',
+          amount: item.returned,
+          date: date,
+          effectiveDate: date,
+          partyId: discount.providerPartyId,
+          partyRole: 'discounter',
+          accountId: accountId,
+          status: 'cleared',
+          notes: 'Batch settle: hold returned for cheque #' + discount.chequeNumber,
+          allocations: [],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: user
+        });
+      }).then(function (ref) { returnEntryId = ref.id; });
+    }
+
+    if (item.fee > 0) {
+      chain = chain.then(function () {
+        return db.collection('project_entries').add({
+          projectId: discount.projectId,
+          type: 'discount-fee-out',
+          direction: 'out',
+          amount: item.fee,
+          date: date,
+          effectiveDate: date,
+          partyId: discount.providerPartyId,
+          partyRole: 'discounter',
+          accountId: null,
+          status: 'cleared',
+          notes: 'Batch settle: fee kept for cheque #' + discount.chequeNumber,
+          allocations: [],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: user
+        });
+      }).then(function (ref) { feeEntryId = ref.id; });
+    }
+
+    return chain.then(function () {
+      return db.collection('cheque_discounts').doc(discount.id).update({
+        status: 'settled',
+        settlementDate: date,
+        settlementAmount: item.returned,
+        settlementAccountId: accountId,
+        settlementEntryId: returnEntryId,
+        feeAmount: item.fee,
+        feeEntryId: feeEntryId,
+        history: firebase.firestore.FieldValue.arrayUnion({
+          action: 'Settled (Batch)',
+          details: 'Returned ' + fmt(item.returned) + ', fee ' + fmt(item.fee),
+          timestamp: new Date().toISOString(),
+          user: user
+        })
+      });
+    });
+  });
+
+  Promise.all(tasks).then(function () {
+    toast('✅ Settled ' + toProcess.length + ' cheque(s) — ' + fmt(totalReturn) + ' returned, ' + fmt(totalFee) + ' fees', 'success');
+    closeBatchSettle();
+    return NCX.loadAll();
+  }).then(function () {
+    NCX.showView('discounting');
+  }).catch(function (e) {
+    toast('Error: ' + e.message, 'error');
+  });
+}
+
+/**
+ * Helper: from a discounter's detail page, allow selecting multiple discounts
+ * and batch-settling them.
+ */
+function openDiscounterBatchSettle(providerPartyId) {
+  var discounts = S.discounts.filter(function (d) {
+    return d.providerPartyId === providerPartyId && d.status === 'cleared';
+  });
+  if (!discounts.length) return toast('No cleared discounts to settle for this discounter', 'info');
+
+  var ids = discounts.map(function (d) { return d.id; });
+  openBatchSettleModal(providerPartyId, ids);
+}
+
+/* Inject batch settle button into discounter detail view */
+var _prevDiscountersRender = NCX.renderers.discounters;
+NCX.registerRenderer('discounters', function (host) {
+  if (_prevDiscountersRender) _prevDiscountersRender(host);
+
+  // If viewing a specific discounter detail
+  if (!window.NCX_P7 || !window.NCX_P7.activeDiscounterId) return;
+  var partyId = window.NCX_P7.activeDiscounterId;
+
+  var clearedDiscounts = S.discounts.filter(function (d) {
+    return d.providerPartyId === partyId && d.status === 'cleared';
+  });
+
+  if (!clearedDiscounts.length) return;
+
+  // Inject button in card-header
+  var header = host.querySelector('.card-header');
+  if (!header) return;
+  if (header.querySelector('.p12-batch-settle-btn')) return;
+
+  var btn = document.createElement('button');
+  btn.className = 'btn btn-success btn-sm p12-batch-settle-btn';
+  btn.style.marginRight = '8px';
+  btn.innerHTML = '<i class="fas fa-check-double"></i> Settle ' + clearedDiscounts.length + ' Cheque(s) Individually';
+  btn.onclick = function () { openDiscounterBatchSettle(partyId); };
+
+  var firstBtn = header.querySelector('button.btn-secondary');
+  if (firstBtn) firstBtn.parentNode.insertBefore(btn, firstBtn);
+  else header.appendChild(btn);
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   OVERRIDE bulkStatusChange (Part 2's old prompt-based version)
+   ═══════════════════════════════════════════════════════════════════ */
+if (window.NCX && typeof window.NCX.bulkStatusChange === 'function') {
+  window.NCX.bulkStatusChange = bulkStatusChangeModal;
+}
+if (window.NCX_P2) {
+  window.NCX_P2.bulkStatusChange = bulkStatusChangeModal;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EXPOSE API
+   ═══════════════════════════════════════════════════════════════════ */
+window.NCX_P12 = {
+  // Search
+  patchSearchInputs: patchSearchInputs,
+  triggerSearch: triggerSearch,
+
+  // Bulk status
+  bulkStatusChange: bulkStatusChangeModal,
+  closeBulkStatusModal: closeBulkStatusModal,
+  commitBulkStatusChange: commitBulkStatusChange,
+
+  // Bulk discount
+  openBulkDiscountModal: openBulkDiscountModal,
+  closeBulkDiscount: closeBulkDiscount,
+  bdApply: bdApply,
+  bdToggle: bdToggle,
+  bdSelectAll: bdSelectAll,
+  bdClear: bdClear,
+  bdConfirm: bdConfirm,
+
+  // Batch settle
+  openBatchSettleModal: openBatchSettleModal,
+  closeBatchSettle: closeBatchSettle,
+  updateBatchReturn: updateBatchReturn,
+  setFullReturn: setFullReturn,
+  setZeroReturn: setZeroReturn,
+  commitBatchSettle: commitBatchSettle,
+  openDiscounterBatchSettle: openDiscounterBatchSettle
+};
+
+/* Ready marker */
+(function () {
+  var m = document.createElement('div');
+  m.id = '__ncx_part12_ready';
+  m.style.cssText = 'position:fixed;bottom:1px;left:480px;font-size:1px;color:transparent;pointer-events:none';
+  m.textContent = 'ncx-p12-ready';
+  document.body.appendChild(m);
+  console.log('[NeonCheque Part 12] ✅ Bug fixes installed');
+  console.log('  · Bulk status change — modal restored');
+  console.log('  · Search — now Enter-only, no per-keystroke');
+  console.log('  · Bulk discount to LOLC — multi-cheque picker');
+  console.log('  · Per-cheque LOLC return tracking — batch settle');
+})();
+
+})();
+</script>
 </body>
 </html>
