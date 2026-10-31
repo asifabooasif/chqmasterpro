@@ -16028,5 +16028,724 @@ window.NCX_STONE = {
 console.log('[NeonCheque Stone v2] ✅ Advanced sorting and bug fixes applied.');
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     NEONCHEQUE — P13 · BULK DISCOUNT MODAL UPGRADE
+     Adds: Issuing Party filter, Bank filter, Date range, Amount range,
+     per-cheque detail rows with age/linked/discount warnings,
+     live advance/hold preview, and per-cheque audit trail.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+if (window.__NCX_P13_BULK_DISC) return;
+if (!window.NCX) { console.error('[P13] Shell not loaded'); return; }
+window.__NCX_P13_BULK_DISC = true;
+
+var NCX = window.NCX;
+var S = NCX.S;
+var db = NCX.db;
+var $ = NCX.$;
+var fmt = NCX.fmt;
+var esc = NCX.esc;
+var num = NCX.num;
+var today = NCX.today;
+var dateFmt = NCX.dateFmt;
+var daysBetween = NCX.daysBetween;
+var toast = NCX.toast;
+var openModal = NCX.openModal;
+var closeModal = NCX.closeModal;
+
+/* ═══════════════════ INJECT STYLES ═══════════════════ */
+(function injectStyles() {
+  if (document.getElementById('__p13_styles')) return;
+  var s = document.createElement('style');
+  s.id = '__p13_styles';
+  s.textContent = `
+    .p13-picker-row { transition: background .15s; cursor: pointer; }
+    .p13-picker-row.p13-selected { background: #dbeafe; }
+    .p13-picker-row:not(.p13-selected):hover { background: #f8fafc; }
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ═══════════════════ STATE ═══════════════════ */
+var STATE = {
+  selected: {},
+  filters: {
+    search: '',
+    status: 'available',
+    issuingParty: '',
+    bank: '',
+    dateFrom: '',
+    dateTo: '',
+    minAmount: '',
+    maxAmount: ''
+  }
+};
+
+/* ═══════════════════ HELPERS ═══════════════════ */
+function getIssuingParties() {
+  var set = {};
+  (S.cheques || []).forEach(function(c) {
+    if (c.deletedAt) return;
+    var iss = (c.issuedTo || c.issuer || '').trim();
+    if (iss) set[iss] = true;
+  });
+  return Object.keys(set).sort(function(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
+}
+
+function getBanks() {
+  var set = {};
+  (S.cheques || []).forEach(function(c) {
+    if (c.deletedAt) return;
+    if (c.bank && c.bank.trim()) set[c.bank.trim()] = true;
+  });
+  return Object.keys(set).sort(function(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
+}
+
+function getActiveDiscount(chequeId) {
+  if (!Array.isArray(S.discounts)) return null;
+  return S.discounts.filter(function(d) {
+    return d.chequeId === chequeId &&
+      ['submitted', 'advanced', 'cleared'].indexOf(d.status) !== -1;
+  })[0] || null;
+}
+
+function getFilteredCheques() {
+  var list = (S.cheques || []).filter(function(c) { return !c.deletedAt; });
+  var f = STATE.filters;
+
+  if (f.status === 'available') {
+    list = list.filter(function(c) { return c.status === 'in-hand' || c.status === 'draft'; });
+  } else if (f.status) {
+    list = list.filter(function(c) { return c.status === f.status; });
+  }
+
+  if (f.search) {
+    var sl = f.search.toLowerCase();
+    list = list.filter(function(c) {
+      return ((c.number || '') + ' ' + (c.payee || '') + ' ' + (c.bank || '') +
+        ' ' + (c.issuedTo || c.issuer || '') + ' ' + (c.notes || '')).toLowerCase().indexOf(sl) !== -1;
+    });
+  }
+
+  if (f.issuingParty) {
+    list = list.filter(function(c) {
+      return ((c.issuedTo || c.issuer || '').trim()) === f.issuingParty;
+    });
+  }
+
+  if (f.bank) {
+    list = list.filter(function(c) { return c.bank === f.bank; });
+  }
+
+  if (f.dateFrom) list = list.filter(function(c) { return (c.date || '') >= f.dateFrom; });
+  if (f.dateTo) list = list.filter(function(c) { return (c.date || '') <= f.dateTo; });
+  if (f.minAmount) list = list.filter(function(c) { return num(c.amount) >= num(f.minAmount); });
+  if (f.maxAmount) list = list.filter(function(c) { return num(c.amount) <= num(f.maxAmount); });
+
+  list.sort(function(a, b) {
+    return String(a.number || '').localeCompare(String(b.number || ''), undefined, { numeric: true });
+  });
+  return list;
+}
+
+function getSelectedCheques() {
+  var ids = Object.keys(STATE.selected).filter(function(k) { return STATE.selected[k]; });
+  return (S.cheques || []).filter(function(c) { return ids.indexOf(c.id) !== -1; });
+}
+
+function debounce(fn, delay) {
+  var t;
+  return function() {
+    clearTimeout(t);
+    t = setTimeout(fn, delay);
+  };
+}
+
+/* ═══════════════════ OPEN MODAL ═══════════════════ */
+function openBulkDiscountModal() {
+  if (!S.projects || !S.projects.length) return toast('Create a project first', 'error');
+  var discounters = (S.parties || []).filter(function(p) {
+    return Array.isArray(p.types) && (p.types.indexOf('discounter') !== -1 || p.types.indexOf('lender') !== -1);
+  });
+  if (!discounters.length) return toast('Add a discounter party first (e.g. LOLC with role "discounter")', 'error');
+
+  STATE = {
+    selected: {},
+    filters: {
+      search: '',
+      status: 'available',
+      issuingParty: '',
+      bank: '',
+      dateFrom: '',
+      dateTo: '',
+      minAmount: '',
+      maxAmount: ''
+    }
+  };
+
+  ['p12BulkDiscountModal', 'p13BulkDiscountModal'].forEach(function(id) {
+    var el = $(id);
+    if (el) el.remove();
+  });
+
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'p13BulkDiscountModal';
+  modal.innerHTML =
+    '<div class="modal" style="max-width:1200px">' +
+    '<div class="modal-header">' +
+    '<h2 class="modal-title"><i class="fas fa-percentage"></i> Send Multiple Cheques to Discounter</h2>' +
+    '<button class="modal-close" onclick="NCX_P13.closeBulkDiscount()"><i class="fas fa-times"></i></button>' +
+    '</div>' +
+    '<div class="modal-body"><div id="p13BdBody"></div></div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="NCX_P13.closeBulkDiscount()">Cancel</button>' +
+    '<button class="btn btn-primary" id="p13BdCommitBtn" onclick="NCX_P13.commitBulkDiscount()" disabled>' +
+    '<i class="fas fa-paper-plane"></i> Send 0 Cheques' +
+    '</button></div></div>';
+  document.body.appendChild(modal);
+  openModal('p13BulkDiscountModal');
+
+  renderBody();
+}
+
+function closeBulkDiscount() {
+  closeModal('p13BulkDiscountModal');
+  setTimeout(function() {
+    var m = $('p13BulkDiscountModal');
+    if (m) m.remove();
+  }, 250);
+}
+
+/* ═══════════════════ RENDER BODY ═══════════════════ */
+function renderBody() {
+  var host = $('p13BdBody');
+  if (!host) return;
+
+  var discounters = (S.parties || []).filter(function(p) {
+    return Array.isArray(p.types) && (p.types.indexOf('discounter') !== -1 || p.types.indexOf('lender') !== -1);
+  });
+  var issuingParties = getIssuingParties();
+  var banks = getBanks();
+  var shops = (S.parties || []).filter(function(p) {
+    return Array.isArray(p.types) && p.types.indexOf('shop') !== -1;
+  });
+
+  var html = '';
+
+  /* Info banner */
+  html += '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1.5px solid #3b82f6;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#1e40af;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start">' +
+    '<i class="fas fa-info-circle" style="font-size:16px;margin-top:1px;flex-shrink:0"></i>' +
+    '<div>Select <strong>multiple cheques</strong> to send to a discounter. Use the <strong>Issuing Party</strong> filter to narrow down by a specific party. Each cheque gets its own discount record for independent tracking of advance, hold, and settlement.</div>' +
+    '</div>';
+
+  /* Common settings */
+  html += '<div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border:1.5px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">' +
+    '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px">' +
+    '<i class="fas fa-cog" style="color:var(--primary)"></i> Common Settings (applied to all selected)' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Discounter *</label>' +
+    '<select id="p13BdProvider" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<option value="">-- Select --</option>' +
+    discounters.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') +
+    '</select></div>' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Project *</label>' +
+    '<select id="p13BdProject" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    S.projects.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') +
+    '</select></div>' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Advance % *</label>' +
+    '<input type="number" id="p13BdAdvancePct" value="80" step="0.1" min="1" max="100" oninput="NCX_P13.recalcAdvance()" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:700"></div>' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Submitted Date *</label>' +
+    '<input type="date" id="p13BdDate" value="' + today() + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Expected Clearance</label>' +
+    '<input type="date" id="p13BdExpected" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Default Shop (optional)</label>' +
+    '<select id="p13BdShop" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<option value="">-- Auto-detect by Payee --</option>' +
+    shops.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') +
+    '</select></div>' +
+
+    '</div></div>';
+
+  /* Filters */
+  html += '<div style="background:white;border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">' +
+    '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">' +
+    '<span><i class="fas fa-filter" style="color:var(--primary)"></i> Filter Cheques</span>' +
+    '<button type="button" class="btn btn-xs btn-secondary" onclick="NCX_P13.resetFilters()"><i class="fas fa-rotate-left"></i> Reset Filters</button>' +
+    '</div>' +
+
+    /* Row 1: Search + Status */
+    '<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-search"></i> Search</label>' +
+    '<input type="text" id="p13BdSearch" placeholder="Number, payee, bank, issuer..." value="' + esc(STATE.filters.search) + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit" onkeydown="if(event.key===\'Enter\'){event.preventDefault();NCX_P13.applyFilters();}"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-circle"></i> Status</label>' +
+    '<select id="p13BdStatusFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<option value="available"' + (STATE.filters.status === 'available' ? ' selected' : '') + '>Available (In-Hand + Draft)</option>' +
+    '<option value="in-hand"' + (STATE.filters.status === 'in-hand' ? ' selected' : '') + '>In-Hand only</option>' +
+    '<option value="draft"' + (STATE.filters.status === 'draft' ? ' selected' : '') + '>Draft only</option>' +
+    '<option value="issued"' + (STATE.filters.status === 'issued' ? ' selected' : '') + '>Issued only</option>' +
+    '<option value="deposited"' + (STATE.filters.status === 'deposited' ? ' selected' : '') + '>Deposited only</option>' +
+    '<option value=""' + (STATE.filters.status === '' ? ' selected' : '') + '>All statuses</option>' +
+    '</select></div></div>' +
+
+    /* Row 2: Issuing Party + Bank — NEW */
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
+    '<div><label style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-user-tie"></i> Issuing Party <span style="background:#ede9fe;color:#7c3aed;font-size:9px;padding:1px 5px;border-radius:5px;margin-left:4px">NEW</span></label>' +
+    '<select id="p13BdIssuerFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<option value="">All Issuing Parties (' + issuingParties.length + ')</option>' +
+    issuingParties.map(function(iss) {
+      return '<option value="' + esc(iss) + '"' + (STATE.filters.issuingParty === iss ? ' selected' : '') + '>' + esc(iss) + '</option>';
+    }).join('') +
+    '</select></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-university"></i> Bank</label>' +
+    '<select id="p13BdBankFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<option value="">All Banks (' + banks.length + ')</option>' +
+    banks.map(function(b) {
+      return '<option value="' + esc(b) + '"' + (STATE.filters.bank === b ? ' selected' : '') + '>' + esc(b) + '</option>';
+    }).join('') +
+    '</select></div></div>' +
+
+    /* Row 3: Date + Amount ranges */
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Date From</label>' +
+    '<input type="date" id="p13BdDateFrom" value="' + STATE.filters.dateFrom + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Date To</label>' +
+    '<input type="date" id="p13BdDateTo" value="' + STATE.filters.dateTo + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Min Amount</label>' +
+    '<input type="number" id="p13BdMinAmt" value="' + esc(STATE.filters.minAmount) + '" placeholder="0" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Max Amount</label>' +
+    '<input type="number" id="p13BdMaxAmt" value="' + esc(STATE.filters.maxAmount) + '" placeholder="No limit" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '</div>' +
+
+    '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+    '<button type="button" class="btn btn-primary btn-sm" onclick="NCX_P13.applyFilters()"><i class="fas fa-check"></i> Apply Filters</button>' +
+    '<span id="p13BdFilterSummary" style="font-size:11.5px;color:var(--gray);margin-left:auto"></span>' +
+    '</div></div>';
+
+  /* List header */
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">' +
+    '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px">' +
+    '<i class="fas fa-list" style="color:var(--primary)"></i> Select Cheques ' +
+    '<span id="p13BdListCount" style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700">0 cheques</span>' +
+    '</div>' +
+    '<div style="display:flex;gap:6px;align-items:center">' +
+    '<button type="button" class="btn btn-xs btn-secondary" onclick="NCX_P13.clearAll()"><i class="fas fa-times"></i> Clear Selection</button>' +
+    '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer;font-weight:600;background:var(--light);padding:6px 12px;border-radius:8px">' +
+    '<input type="checkbox" id="p13BdSelectAllCb" onchange="NCX_P13.toggleAll(this.checked)"> Select All Visible' +
+    '</label></div></div>';
+
+  /* List body */
+  html += '<div id="p13BdList" style="max-height:380px;overflow-y:auto;border:1.5px solid var(--border);border-radius:10px;background:white"></div>';
+
+  /* Summary footer */
+  html += '<div id="p13BdSummary" style="padding:14px 18px;background:linear-gradient(135deg,#7c2d12,#b45309);color:white;border-radius:11px;margin-top:14px"></div>';
+
+  host.innerHTML = html;
+
+  /* Wire up filter change listeners */
+  setTimeout(function() {
+    ['p13BdStatusFilter', 'p13BdIssuerFilter', 'p13BdBankFilter', 'p13BdDateFrom', 'p13BdDateTo'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.addEventListener('change', applyFilters);
+    });
+    ['p13BdMinAmt', 'p13BdMaxAmt'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.addEventListener('input', debounce(applyFilters, 400));
+    });
+    renderList();
+    updateSummary();
+  }, 30);
+}
+
+/* ═══════════════════ FILTER ACTIONS ═══════════════════ */
+function applyFilters() {
+  STATE.filters.search = ($('p13BdSearch') || {}).value || '';
+  STATE.filters.status = ($('p13BdStatusFilter') || {}).value || '';
+  STATE.filters.issuingParty = ($('p13BdIssuerFilter') || {}).value || '';
+  STATE.filters.bank = ($('p13BdBankFilter') || {}).value || '';
+  STATE.filters.dateFrom = ($('p13BdDateFrom') || {}).value || '';
+  STATE.filters.dateTo = ($('p13BdDateTo') || {}).value || '';
+  STATE.filters.minAmount = ($('p13BdMinAmt') || {}).value || '';
+  STATE.filters.maxAmount = ($('p13BdMaxAmt') || {}).value || '';
+  renderList();
+  updateSummary();
+}
+
+function resetFilters() {
+  STATE.filters = {
+    search: '',
+    status: 'available',
+    issuingParty: '',
+    bank: '',
+    dateFrom: '',
+    dateTo: '',
+    minAmount: '',
+    maxAmount: ''
+  };
+  renderBody();
+}
+
+/* ═══════════════════ RENDER LIST ═══════════════════ */
+function renderList() {
+  var host = $('p13BdList');
+  if (!host) return;
+
+  var list = getFilteredCheques();
+  var pct = num(($('p13BdAdvancePct') || {}).value) || 80;
+
+  var countEl = $('p13BdListCount');
+  if (countEl) countEl.textContent = list.length + ' cheques';
+
+  var summaryEl = $('p13BdFilterSummary');
+  if (summaryEl) {
+    var active = [];
+    if (STATE.filters.issuingParty) active.push('issuer: ' + STATE.filters.issuingParty);
+    if (STATE.filters.bank) active.push('bank: ' + STATE.filters.bank);
+    if (STATE.filters.status) active.push('status: ' + STATE.filters.status);
+    if (STATE.filters.dateFrom || STATE.filters.dateTo) active.push('date range');
+    if (STATE.filters.minAmount || STATE.filters.maxAmount) active.push('amount range');
+    summaryEl.textContent = active.length ? 'Filtering: ' + active.join(' · ') : '';
+  }
+
+  if (!list.length) {
+    host.innerHTML = '<div style="text-align:center;padding:50px 20px;color:var(--gray)">' +
+      '<i class="fas fa-search" style="font-size:44px;opacity:.3;display:block;margin-bottom:12px"></i>' +
+      '<h3 style="font-size:15px;color:var(--dark);margin-bottom:6px">No cheques match your filters</h3>' +
+      '<p style="font-size:12px">Try adjusting or resetting the filters.</p>' +
+      '</div>';
+    return;
+  }
+
+  var allSelected = list.every(function(c) { return STATE.selected[c.id]; });
+
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+    '<thead><tr style="background:var(--light);position:sticky;top:0;z-index:2">' +
+    '<th style="padding:10px 8px;text-align:left;width:34px"><input type="checkbox" style="width:16px;height:16px;cursor:pointer" onchange="NCX_P13.toggleAll(this.checked)" ' + (allSelected ? 'checked' : '') + '></th>' +
+    '<th style="padding:10px 8px;text-align:left">Cheque</th>' +
+    '<th style="padding:10px 8px;text-align:left">Payee / Issuing Party</th>' +
+    '<th style="padding:10px 8px;text-align:left">Date / Age</th>' +
+    '<th style="padding:10px 8px;text-align:left">Status</th>' +
+    '<th style="padding:10px 8px;text-align:right">Amount</th>' +
+    '<th style="padding:10px 8px;text-align:right">Advance @ ' + pct + '%</th>' +
+    '<th style="padding:10px 8px;text-align:right">Hold</th>' +
+    '</tr></thead><tbody>';
+
+  list.forEach(function(c) {
+    var sel = !!STATE.selected[c.id];
+    var advance = num(c.amount) * (pct / 100);
+    var hold = num(c.amount) - advance;
+
+    var age = c.date ? daysBetween(c.date, today()) : 0;
+    var ageColor = age > 90 ? '#7c3aed' : age > 60 ? '#ef4444' : age > 30 ? '#f59e0b' : '#10b981';
+
+    var issuer = (c.issuedTo || c.issuer || '').trim() || '—';
+    var alreadyDiscounted = getActiveDiscount(c.id);
+
+    var warningBadge = alreadyDiscounted
+      ? '<span style="background:#fef3c7;color:#b45309;padding:1px 6px;border-radius:6px;font-size:9.5px;font-weight:700;margin-left:4px;display:inline-block;margin-top:2px"><i class="fas fa-exclamation-triangle"></i> Already discounted</span>'
+      : '';
+    var linkedBadge = c.tradeProjectId
+      ? '<span style="background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:6px;font-size:9.5px;font-weight:700;margin-left:4px;display:inline-block;margin-top:2px">🔗 linked</span>'
+      : '';
+
+    html += '<tr class="p13-picker-row ' + (sel ? 'p13-selected' : '') + '" data-id="' + c.id + '" style="border-bottom:1px solid var(--border)" onclick="NCX_P13.toggleCheque(\'' + c.id + '\')">' +
+      '<td style="padding:10px 8px"><input type="checkbox" ' + (sel ? 'checked' : '') + ' onclick="event.stopPropagation();NCX_P13.toggleCheque(\'' + c.id + '\')" style="width:16px;height:16px;cursor:pointer"></td>' +
+
+      '<td style="padding:10px 8px">' +
+      '<div style="font-weight:800;color:var(--primary);font-size:13px">#' + esc(c.number) + '</div>' +
+      '<div style="font-size:10.5px;color:var(--gray);margin-top:2px">' + esc(c.bank || '—') + '</div>' +
+      '</td>' +
+
+      '<td style="padding:10px 8px">' +
+      '<div style="font-weight:700;font-size:12.5px">' + esc(c.payee || '—') + '</div>' +
+      '<div style="font-size:11px;color:var(--gray);margin-top:2px"><i class="fas fa-user-tie" style="font-size:9px"></i> ' + esc(issuer) + '</div>' +
+      warningBadge + linkedBadge +
+      '</td>' +
+
+      '<td style="padding:10px 8px">' +
+      '<div style="font-weight:600;font-size:12px">' + dateFmt(c.date) + '</div>' +
+      '<div style="font-size:10.5px;color:' + ageColor + ';font-weight:700;margin-top:2px">' + age + ' days old</div>' +
+      '</td>' +
+
+      '<td style="padding:10px 8px"><span class="status-badge status-' + esc(c.status) + '" style="font-size:10px">' + esc(c.status) + '</span></td>' +
+
+      '<td style="padding:10px 8px;text-align:right;font-weight:800;font-size:13px">' + fmt(c.amount) + '</td>' +
+      '<td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--success);font-size:12.5px">' + fmt(advance) + '</td>' +
+      '<td style="padding:10px 8px;text-align:right;font-weight:700;color:#b45309;font-size:12.5px">' + fmt(hold) + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table>';
+  host.innerHTML = html;
+
+  var selAllCb = $('p13BdSelectAllCb');
+  if (selAllCb) selAllCb.checked = allSelected;
+}
+
+/* ═══════════════════ SELECTION ACTIONS ═══════════════════ */
+function toggleCheque(id) {
+  if (STATE.selected[id]) delete STATE.selected[id];
+  else STATE.selected[id] = true;
+  renderList();
+  updateSummary();
+}
+
+function toggleAll(checked) {
+  var list = getFilteredCheques();
+  list.forEach(function(c) {
+    if (checked) STATE.selected[c.id] = true;
+    else delete STATE.selected[c.id];
+  });
+  renderList();
+  updateSummary();
+}
+
+function clearAll() {
+  STATE.selected = {};
+  renderList();
+  updateSummary();
+}
+
+function recalcAdvance() {
+  renderList();
+  updateSummary();
+}
+
+/* ═══════════════════ SUMMARY ═══════════════════ */
+function updateSummary() {
+  var host = $('p13BdSummary');
+  if (!host) return;
+
+  var selected = getSelectedCheques();
+  var total = selected.reduce(function(s, c) { return s + num(c.amount); }, 0);
+  var pct = num(($('p13BdAdvancePct') || {}).value) || 80;
+  var totalAdvance = total * (pct / 100);
+  var totalHold = total - totalAdvance;
+
+  var filtered = getFilteredCheques();
+  var disabled = selected.length === 0;
+
+  host.innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:16px;align-items:center">' +
+    '<div><div style="font-size:10.5px;opacity:.85;text-transform:uppercase;font-weight:700">Selected</div>' +
+    '<div style="font-size:20px;font-weight:800;margin-top:3px">' + selected.length + ' <span style="font-size:13px;opacity:.7">/ ' + filtered.length + '</span></div></div>' +
+
+    '<div><div style="font-size:10.5px;opacity:.85;text-transform:uppercase;font-weight:700">Total Value</div>' +
+    '<div style="font-size:20px;font-weight:800;margin-top:3px">' + fmt(total) + '</div></div>' +
+
+    '<div><div style="font-size:10.5px;opacity:.85;text-transform:uppercase;font-weight:700">Total Advance (' + pct + '%)</div>' +
+    '<div style="font-size:20px;font-weight:800;margin-top:3px;color:#a7f3d0">' + fmt(totalAdvance) + '</div></div>' +
+
+    '<div><div style="font-size:10.5px;opacity:.85;text-transform:uppercase;font-weight:700">Total Hold</div>' +
+    '<div style="font-size:20px;font-weight:800;margin-top:3px;color:#fde68a">' + fmt(totalHold) + '</div></div>' +
+
+    '<button class="btn" style="background:white;color:#7c2d12;font-weight:800;padding:12px 22px;' + (disabled ? 'opacity:.5;cursor:not-allowed;' : '') + '" ' + (disabled ? 'disabled' : '') + ' onclick="NCX_P13.commitBulkDiscount()">' +
+    '<i class="fas fa-paper-plane"></i> Send ' + selected.length + '</button>' +
+    '</div>';
+
+  var mainBtn = $('p13BdCommitBtn');
+  if (mainBtn) {
+    mainBtn.disabled = disabled;
+    mainBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send ' + selected.length + ' Cheques';
+  }
+}
+
+/* ═══════════════════ COMMIT ═══════════════════ */
+function commitBulkDiscount() {
+  var selected = getSelectedCheques();
+  if (!selected.length) return toast('No cheques selected', 'error');
+
+  var providerId = ($('p13BdProvider') || {}).value;
+  var projectId = ($('p13BdProject') || {}).value;
+  var advancePct = num(($('p13BdAdvancePct') || {}).value) || 80;
+  var submittedDate = ($('p13BdDate') || {}).value;
+  var expectedClearDate = ($('p13BdExpected') || {}).value || null;
+  var defaultShopId = ($('p13BdShop') || {}).value || null;
+
+  if (!providerId) return toast('Select a discounter', 'error');
+  if (!projectId) return toast('Select a project', 'error');
+  if (!submittedDate) return toast('Set submitted date', 'error');
+  if (advancePct <= 0 || advancePct > 100) return toast('Advance % must be 1-100', 'error');
+
+  var provider = S.parties.filter(function(p) { return p.id === providerId; })[0];
+  if (!provider) return toast('Discounter not found', 'error');
+
+  var totalValue = selected.reduce(function(s, c) { return s + num(c.amount); }, 0);
+  var totalAdvance = totalValue * (advancePct / 100);
+  var totalHold = totalValue - totalAdvance;
+
+  var msg = 'Send ' + selected.length + ' cheque(s) to "' + provider.name + '"?\n\n' +
+    'Total Value: ' + fmt(totalValue) + '\n' +
+    'Advance (' + advancePct + '%): ' + fmt(totalAdvance) + '\n' +
+    'Hold: ' + fmt(totalHold) + '\n\n' +
+    'Each cheque gets its own discount record for independent tracking.\n\nContinue?';
+  if (!confirm(msg)) return;
+
+  var mainBtn = $('p13BdCommitBtn');
+  if (mainBtn) {
+    mainBtn.disabled = true;
+    mainBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Sending...';
+  }
+
+  var user = S.user ? S.user.email : 'anonymous';
+  var chain = Promise.resolve();
+  var created = 0;
+  var failed = 0;
+
+  selected.forEach(function(c) {
+    chain = chain.then(function() {
+      var amount = num(c.amount);
+      var advanceAmount = amount * (advancePct / 100);
+      var holdAmount = amount - advanceAmount;
+
+      var shopPartyId = defaultShopId;
+      var shopName = '';
+
+      if (shopPartyId) {
+        var shop = S.parties.filter(function(p) { return p.id === shopPartyId; })[0];
+        shopName = shop ? shop.name : (c.payee || '');
+      } else {
+        var matchedShop = (S.parties || []).filter(function(p) {
+          if (!Array.isArray(p.types) || p.types.indexOf('shop') === -1) return false;
+          var pn = (p.name || '').toLowerCase();
+          var py = (c.payee || '').toLowerCase();
+          return pn && py && (pn.indexOf(py) !== -1 || py.indexOf(pn) !== -1);
+        })[0];
+        if (matchedShop) {
+          shopPartyId = matchedShop.id;
+          shopName = matchedShop.name;
+        } else {
+          shopName = c.payee || '';
+        }
+      }
+
+      return db.collection('cheque_discounts').add({
+        chequeId: c.id,
+        chequeNumber: c.number,
+        chequeAmount: amount,
+        chequeDate: c.date,
+        chequeIssuer: c.issuedTo || c.issuer || '',
+        shopPartyId: shopPartyId || null,
+        shopName: shopName,
+        projectId: projectId,
+        providerPartyId: providerId,
+        providerName: provider.name,
+        submittedDate: submittedDate,
+        expectedClearDate: expectedClearDate,
+        advancePercent: advancePct,
+        advanceAmount: advanceAmount,
+        holdAmount: holdAmount,
+        status: 'submitted',
+        notes: 'Bulk submission — ' + selected.length + ' cheques',
+        history: [{
+          action: 'Submitted to Discounter',
+          details: 'Cheque #' + c.number + ' (' + fmt(amount) + ') submitted to ' + provider.name + ' (bulk)',
+          timestamp: new Date().toISOString(),
+          user: user
+        }],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: user
+      }).then(function() {
+        created++;
+      }).catch(function(e) {
+        console.warn('[P13] Bulk discount failed for #' + c.number, e);
+        failed++;
+      });
+    });
+  });
+
+  chain.then(function() {
+    toast('✅ Sent ' + created + ' cheque(s) to ' + provider.name + (failed ? ' · ' + failed + ' failed' : ''),
+      failed ? 'warning' : 'success');
+    closeBulkDiscount();
+    return NCX.loadAll();
+  }).then(function() {
+    NCX.showView('discounting');
+  }).catch(function(e) {
+    toast('Error: ' + e.message, 'error');
+    if (mainBtn) {
+      mainBtn.disabled = false;
+      mainBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+    }
+  });
+}
+
+/* ═══════════════════ EXPOSE API ═══════════════════ */
+window.NCX_P13 = {
+  openBulkDiscountModal: openBulkDiscountModal,
+  closeBulkDiscount: closeBulkDiscount,
+  applyFilters: applyFilters,
+  resetFilters: resetFilters,
+  toggleCheque: toggleCheque,
+  toggleAll: toggleAll,
+  clearAll: clearAll,
+  recalcAdvance: recalcAdvance,
+  commitBulkDiscount: commitBulkDiscount
+};
+
+/* Override Part 12 functions */
+if (window.NCX_P12) {
+  window.NCX_P12.openBulkDiscountModal = openBulkDiscountModal;
+  window.NCX_P12.closeBulkDiscount = closeBulkDiscount;
+  window.NCX_P12.commitBulkDiscount = commitBulkDiscount;
+}
+
+/* Rewrap discounting renderer so the "Bulk Send" button uses the new modal */
+setTimeout(function() {
+  var currentRenderer = NCX.renderers.discounting;
+  if (!currentRenderer || currentRenderer.__p13Wrapped) return;
+
+  var wrapped = function(host) {
+    currentRenderer.call(null, host);
+    setTimeout(function() {
+      /* Remove any old bulk-send button */
+      host.querySelectorAll('.p12-bulk-send-btn').forEach(function(b) { b.remove(); });
+
+      var inHandCount = (S.cheques || []).filter(function(c) {
+        return !c.deletedAt && (c.status === 'in-hand' || c.status === 'draft');
+      }).length;
+      if (inHandCount === 0) return;
+
+      var header = host.querySelector('.card-header');
+      if (!header) return;
+
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-warning btn-sm p12-bulk-send-btn';
+      btn.style.marginRight = '8px';
+      btn.innerHTML = '<i class="fas fa-layer-group"></i> Bulk Send (' + inHandCount + ')';
+      btn.onclick = function() { openBulkDiscountModal(); };
+
+      var firstBtn = header.querySelector('button');
+      if (firstBtn) firstBtn.parentNode.insertBefore(btn, firstBtn);
+      else header.appendChild(btn);
+    }, 150);
+  };
+  wrapped.__p13Wrapped = true;
+  NCX.registerRenderer('discounting', wrapped);
+}, 1500);
+
+/* Also rewire any existing button in the live DOM (safety net) */
+setTimeout(function() {
+  document.querySelectorAll('.p12-bulk-send-btn').forEach(function(btn) {
+    btn.onclick = function() { openBulkDiscountModal(); };
+  });
+}, 2000);
+
+console.log('[NeonCheque P13] ✅ Bulk Discount Modal upgraded');
+console.log('  · Issuing Party filter added');
+console.log('  · Bank + Date range + Amount range filters added');
+console.log('  · Per-cheque details: age, linked status, already-discounted warning');
+console.log('  · Live advance/hold preview per row');
+console.log('  · Saves chequeIssuer on each record');
+</script>
 </body>
 </html>
