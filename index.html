@@ -16029,17 +16029,17 @@ console.log('[NeonCheque Stone v2] ✅ Advanced sorting and bug fixes applied.')
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
-     NEONCHEQUE — P13 · BULK DISCOUNT MODAL UPGRADE
+     NEONCHEQUE — P13 BULLETPROOF · BULK DISCOUNT MODAL UPGRADE
+     Intercepts and destroys the old P12/P7 modals.
      Adds: Issuing Party filter, Bank filter, Date range, Amount range,
-     per-cheque detail rows with age/linked/discount warnings,
-     live advance/hold preview, and per-cheque audit trail.
+     per-cheque details, and live advance/hold preview.
      ═══════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__NCX_P13_BULK_DISC) return;
+if (window.__NCX_P13_BULLETPROOF) return;
 if (!window.NCX) { console.error('[P13] Shell not loaded'); return; }
-window.__NCX_P13_BULK_DISC = true;
+window.__NCX_P13_BULLETPROOF = true;
 
 var NCX = window.NCX;
 var S = NCX.S;
@@ -16055,7 +16055,50 @@ var toast = NCX.toast;
 var openModal = NCX.openModal;
 var closeModal = NCX.closeModal;
 
-/* ═══════════════════ INJECT STYLES ═══════════════════ */
+/* ═══════════════════ NUCLEAR OPTION: KILL OLD MODALS & BUTTONS ═══════════════════ */
+// 1. Intercept clicks on old buttons before they fire
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.p12-bulk-send-btn, .p12-bulk-disc-btn');
+  if (btn) {
+    e.preventDefault();
+    e.stopPropagation();
+    openBulkDiscountModal();
+  }
+}, true);
+
+// 2. Watch for old modals being injected and instantly replace them
+var observer = new MutationObserver(function(mutations) {
+  mutations.forEach(function(m) {
+    if (m.addedNodes.length) {
+      m.addedNodes.forEach(function(node) {
+        if (node.id === 'p12BulkDiscountModal') {
+          node.remove();
+          if (!document.getElementById('p13BulkDiscountModal')) {
+            openBulkDiscountModal();
+          }
+        }
+      });
+    }
+  });
+});
+observer.observe(document.body, { childList: true });
+
+// 3. Continuously strip old onclick handlers from buttons
+setInterval(function() {
+  document.querySelectorAll('.p12-bulk-send-btn, .p12-bulk-disc-btn').forEach(function(btn) {
+    if (!btn.__p13rewritten) {
+      btn.__p13rewritten = true;
+      btn.onclick = null;
+      btn.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openBulkDiscountModal();
+      });
+    }
+  });
+}, 500);
+
+/* ═══════════════════ STYLES ═══════════════════ */
 (function injectStyles() {
   if (document.getElementById('__p13_styles')) return;
   var s = document.createElement('style');
@@ -16185,10 +16228,8 @@ function openBulkDiscountModal() {
     }
   };
 
-  ['p12BulkDiscountModal', 'p13BulkDiscountModal'].forEach(function(id) {
-    var el = $(id);
-    if (el) el.remove();
-  });
+  var existingModal = $('p13BulkDiscountModal');
+  if (existingModal) existingModal.remove();
 
   var modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -16238,7 +16279,7 @@ function renderBody() {
   /* Info banner */
   html += '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1.5px solid #3b82f6;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#1e40af;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start">' +
     '<i class="fas fa-info-circle" style="font-size:16px;margin-top:1px;flex-shrink:0"></i>' +
-    '<div>Select <strong>multiple cheques</strong> to send to a discounter. Use the <strong>Issuing Party</strong> filter to narrow down by a specific party. Each cheque gets its own discount record for independent tracking of advance, hold, and settlement.</div>' +
+    '<div>Select <strong>multiple cheques</strong> to send to a discounter. Use the <strong>Issuing Party</strong> filter to narrow down by a specific party. Each cheque gets its own discount record for independent tracking.</div>' +
     '</div>';
 
   /* Common settings */
@@ -16297,7 +16338,7 @@ function renderBody() {
     '<option value=""' + (STATE.filters.status === '' ? ' selected' : '') + '>All statuses</option>' +
     '</select></div></div>' +
 
-    /* Row 2: Issuing Party + Bank — NEW */
+    /* Row 2: Issuing Party + Bank */
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
     '<div><label style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-user-tie"></i> Issuing Party <span style="background:#ede9fe;color:#7c3aed;font-size:9px;padding:1px 5px;border-radius:5px;margin-left:4px">NEW</span></label>' +
     '<select id="p13BdIssuerFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
@@ -16699,53 +16740,9 @@ if (window.NCX_P12) {
   window.NCX_P12.commitBulkDiscount = commitBulkDiscount;
 }
 
-/* Rewrap discounting renderer so the "Bulk Send" button uses the new modal */
-setTimeout(function() {
-  var currentRenderer = NCX.renderers.discounting;
-  if (!currentRenderer || currentRenderer.__p13Wrapped) return;
-
-  var wrapped = function(host) {
-    currentRenderer.call(null, host);
-    setTimeout(function() {
-      /* Remove any old bulk-send button */
-      host.querySelectorAll('.p12-bulk-send-btn').forEach(function(b) { b.remove(); });
-
-      var inHandCount = (S.cheques || []).filter(function(c) {
-        return !c.deletedAt && (c.status === 'in-hand' || c.status === 'draft');
-      }).length;
-      if (inHandCount === 0) return;
-
-      var header = host.querySelector('.card-header');
-      if (!header) return;
-
-      var btn = document.createElement('button');
-      btn.className = 'btn btn-warning btn-sm p12-bulk-send-btn';
-      btn.style.marginRight = '8px';
-      btn.innerHTML = '<i class="fas fa-layer-group"></i> Bulk Send (' + inHandCount + ')';
-      btn.onclick = function() { openBulkDiscountModal(); };
-
-      var firstBtn = header.querySelector('button');
-      if (firstBtn) firstBtn.parentNode.insertBefore(btn, firstBtn);
-      else header.appendChild(btn);
-    }, 150);
-  };
-  wrapped.__p13Wrapped = true;
-  NCX.registerRenderer('discounting', wrapped);
-}, 1500);
-
-/* Also rewire any existing button in the live DOM (safety net) */
-setTimeout(function() {
-  document.querySelectorAll('.p12-bulk-send-btn').forEach(function(btn) {
-    btn.onclick = function() { openBulkDiscountModal(); };
-  });
-}, 2000);
-
-console.log('[NeonCheque P13] ✅ Bulk Discount Modal upgraded');
-console.log('  · Issuing Party filter added');
-console.log('  · Bank + Date range + Amount range filters added');
-console.log('  · Per-cheque details: age, linked status, already-discounted warning');
-console.log('  · Live advance/hold preview per row');
-console.log('  · Saves chequeIssuer on each record');
+console.log('[NeonCheque P13] ✅ Bulletproof override activated. Old modal is dead.');
+console.log('  · New "Issuing Party" filter added.');
+console.log('  · New Bank, Date, and Amount filters added.');
 </script>
 </body>
 </html>
