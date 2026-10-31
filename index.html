@@ -16029,14 +16029,15 @@ console.log('[NeonCheque Stone v2] ✅ Advanced sorting and bug fixes applied.')
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
-     NEONCHEQUE — P15 FINAL OVERRIDE (THE TERMINATOR)
-     Assassinates the old P12 button and modal every 50ms.
+     NEONCHEQUE — P16 HOSTILE TAKEOVER
+     Hides the old button entirely, injects a guaranteed new button,
+     and destroys the old modal if it ever loads.
      ═══════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__NCX_P15_TERMINATOR) return;
-window.__NCX_P15_TERMINATOR = true;
+if (window.__NCX_P16) return;
+window.__NCX_P16 = true;
 
 var NCX = window.NCX;
 var S = NCX.S;
@@ -16052,43 +16053,50 @@ var toast = NCX.toast;
 var openModal = NCX.openModal;
 var closeModal = NCX.closeModal;
 
-/* ═══════════════════ 1. THE TERMINATOR LOOP ═══════════════════ */
+/* ═══════════════════ 1. HIDE THE OLD BUTTON VIA CSS ═══════════════════ */
+var style = document.createElement('style');
+style.innerHTML = `
+  .p12-bulk-disc-btn, .p12-bulk-send-btn { display: none !important; }
+  .p12-search-btn { display: none !important; }
+`;
+document.head.appendChild(style);
+
+/* ═══════════════════ 2. INJECT NEW BUTTON ═══════════════════ */
 setInterval(function() {
-  // A. Assassinate the old modal if it exists
-  var oldModal = document.getElementById('p12BulkDiscountModal');
-  if (oldModal) {
-    oldModal.remove(); // Destroy it instantly
-    if (!document.getElementById('p15BulkDiscountModal')) {
-      openNewBulkDiscountModal(); // Open the new one
+  if (window.NCX && NCX.S.activeView === 'discounting') {
+    var header = document.querySelector('.card-header');
+    if (header && !document.getElementById('p16BulkBtn')) {
+      var btn = document.createElement('button');
+      btn.id = 'p16BulkBtn';
+      btn.className = 'btn btn-warning btn-sm';
+      btn.style.marginRight = '8px';
+      btn.innerHTML = '<i class="fas fa-layer-group"></i> Bulk Send (NEW)';
+      btn.onclick = function(e) {
+        e.preventDefault();
+        openNewBulkDiscountModal();
+      };
+      var firstBtn = header.querySelector('button');
+      if (firstBtn) firstBtn.parentNode.insertBefore(btn, firstBtn);
+      else header.appendChild(btn);
     }
   }
+}, 500);
 
-  // B. Assassinate the old buttons if they exist
-  var oldBtns = document.querySelectorAll('.p12-bulk-disc-btn, .p12-bulk-send-btn, .p12-bulk-send-btn');
-  oldBtns.forEach(function(btn) {
-    if (btn.dataset.p15Fixed) return;
-    
-    // Create a new button to replace it
-    var newBtn = document.createElement('button');
-    newBtn.className = 'btn btn-warning btn-sm p15-bulk-send-btn';
-    newBtn.style.marginRight = '8px';
-    newBtn.innerHTML = '<i class="fas fa-layer-group"></i> Bulk Send';
-    
-    // Attach the new click event
-    newBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      openNewBulkDiscountModal();
-    });
-    
-    // Replace the old button
-    if (btn.parentNode) {
-      btn.parentNode.replaceChild(newBtn, btn);
+/* ═══════════════════ 3. DESTROY OLD MODAL IF IT OPENS ═══════════════════ */
+setInterval(function() {
+  document.querySelectorAll('.modal-overlay').forEach(function(modal) {
+    var text = modal.textContent || '';
+    // If it's the old modal (doesn't have "Issuing Party"), destroy it
+    if (text.indexOf('Send Multiple Cheques to Discounter') !== -1 && text.indexOf('Issuing Party') === -1) {
+      modal.remove();
+      if (!document.getElementById('p16BulkDiscountModal')) {
+        openNewBulkDiscountModal();
+      }
     }
   });
-}, 50); // Runs 20 times a second to ensure the old stuff never survives
+}, 100);
 
-/* ═══════════════════ 2. STATE & HELPERS ═══════════════════ */
+/* ═══════════════════ 4. NEW MODAL LOGIC ═══════════════════ */
 var STATE = {
   selected: {},
   filters: { search: '', status: 'available', issuingParty: '', bank: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '' }
@@ -16154,7 +16162,6 @@ function debounce(fn, delay) {
   var t; return function() { clearTimeout(t); t = setTimeout(fn, delay); };
 }
 
-/* ═══════════════════ 3. THE NEW MODAL LOGIC ═══════════════════ */
 function openNewBulkDiscountModal() {
   if (!S.projects || !S.projects.length) return toast('Create a project first', 'error');
   var discounters = (S.parties || []).filter(function(p) {
@@ -16164,33 +16171,33 @@ function openNewBulkDiscountModal() {
 
   STATE = { selected: {}, filters: { search: '', status: 'available', issuingParty: '', bank: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '' } };
 
-  var existingModal = $('p15BulkDiscountModal'); if (existingModal) existingModal.remove();
+  var existingModal = $('p16BulkDiscountModal'); if (existingModal) existingModal.remove();
 
   var modal = document.createElement('div');
   modal.className = 'modal-overlay';
-  modal.id = 'p15BulkDiscountModal';
+  modal.id = 'p16BulkDiscountModal';
   modal.innerHTML =
     '<div class="modal" style="max-width:1200px">' +
     '<div class="modal-header"><h2 class="modal-title"><i class="fas fa-percentage"></i> Send Multiple Cheques to Discounter</h2>' +
-    '<button class="modal-close" onclick="NCX_P15.closeBulkDiscount()"><i class="fas fa-times"></i></button></div>' +
-    '<div class="modal-body"><div id="p15BdBody"></div></div>' +
+    '<button class="modal-close" onclick="NCX_P16.closeBulkDiscount()"><i class="fas fa-times"></i></button></div>' +
+    '<div class="modal-body"><div id="p16BdBody"></div></div>' +
     '<div class="modal-footer">' +
-    '<button class="btn btn-secondary" onclick="NCX_P15.closeBulkDiscount()">Cancel</button>' +
-    '<button class="btn btn-primary" id="p15BdCommitBtn" onclick="NCX_P15.commitBulkDiscount()" disabled><i class="fas fa-paper-plane"></i> Send 0 Cheques</button>' +
+    '<button class="btn btn-secondary" onclick="NCX_P16.closeBulkDiscount()">Cancel</button>' +
+    '<button class="btn btn-primary" id="p16BdCommitBtn" onclick="NCX_P16.commitBulkDiscount()" disabled><i class="fas fa-paper-plane"></i> Send 0 Cheques</button>' +
     '</div></div>';
   document.body.appendChild(modal);
-  openModal('p15BulkDiscountModal');
+  openModal('p16BulkDiscountModal');
 
   renderBody();
 }
 
 function closeBulkDiscount() {
-  closeModal('p15BulkDiscountModal');
-  setTimeout(function() { var m = $('p15BulkDiscountModal'); if (m) m.remove(); }, 250);
+  closeModal('p16BulkDiscountModal');
+  setTimeout(function() { var m = $('p16BulkDiscountModal'); if (m) m.remove(); }, 250);
 }
 
 function renderBody() {
-  var host = $('p15BdBody'); if (!host) return;
+  var host = $('p16BdBody'); if (!host) return;
 
   var discounters = (S.parties || []).filter(function(p) { return Array.isArray(p.types) && (p.types.indexOf('discounter') !== -1 || p.types.indexOf('lender') !== -1); });
   var issuingParties = getIssuingParties();
@@ -16210,28 +16217,28 @@ function renderBody() {
     '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="fas fa-cog" style="color:var(--primary)"></i> Common Settings (applied to all selected)</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">' +
     '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Discounter *</label>' +
-    '<select id="p15BdProvider" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"><option value="">-- Select --</option>' + discounters.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
+    '<select id="p16BdProvider" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"><option value="">-- Select --</option>' + discounters.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
     '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Project *</label>' +
-    '<select id="p15BdProject" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' + S.projects.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
+    '<select id="p16BdProject" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' + S.projects.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
     '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Advance % *</label>' +
-    '<input type="number" id="p15BdAdvancePct" value="80" step="0.1" min="1" max="100" oninput="NCX_P15.recalcAdvance()" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:700"></div>' +
+    '<input type="number" id="p16BdAdvancePct" value="80" step="0.1" min="1" max="100" oninput="NCX_P16.recalcAdvance()" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:700"></div>' +
     '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Submitted Date *</label>' +
-    '<input type="date" id="p15BdDate" value="' + today() + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<input type="date" id="p16BdDate" value="' + today() + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
     '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Default Shop (optional)</label>' +
-    '<select id="p15BdShop" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"><option value="">-- Auto-detect by Payee --</option>' + shops.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
+    '<select id="p16BdShop" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"><option value="">-- Auto-detect by Payee --</option>' + shops.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
     '</div></div>';
 
   // Filters
   html += '<div style="background:white;border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">' +
     '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">' +
     '<span><i class="fas fa-filter" style="color:var(--primary)"></i> Filter Cheques</span>' +
-    '<button type="button" class="btn btn-xs btn-secondary" onclick="NCX_P15.resetFilters()"><i class="fas fa-rotate-left"></i> Reset Filters</button></div>' +
+    '<button type="button" class="btn btn-xs btn-secondary" onclick="NCX_P16.resetFilters()"><i class="fas fa-rotate-left"></i> Reset Filters</button></div>' +
 
     '<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">' +
     '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-search"></i> Search</label>' +
-    '<input type="text" id="p15BdSearch" placeholder="Number, payee, bank, issuer..." value="' + esc(STATE.filters.search) + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit" onkeydown="if(event.key===\'Enter\'){event.preventDefault();NCX_P15.applyFilters();}"></div>' +
+    '<input type="text" id="p16BdSearch" placeholder="Number, payee, bank, issuer..." value="' + esc(STATE.filters.search) + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit" onkeydown="if(event.key===\'Enter\'){event.preventDefault();NCX_P16.applyFilters();}"></div>' +
     '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-circle"></i> Status</label>' +
-    '<select id="p15BdStatusFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<select id="p16BdStatusFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
     '<option value="available"' + (STATE.filters.status === 'available' ? ' selected' : '') + '>Available (In-Hand + Draft)</option>' +
     '<option value="in-hand"' + (STATE.filters.status === 'in-hand' ? ' selected' : '') + '>In-Hand only</option>' +
     '<option value="draft"' + (STATE.filters.status === 'draft' ? ' selected' : '') + '>Draft only</option>' +
@@ -16240,44 +16247,44 @@ function renderBody() {
 
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
     '<div><label style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-user-tie"></i> Issuing Party</label>' +
-    '<select id="p15BdIssuerFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<select id="p16BdIssuerFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
     '<option value="">All Issuing Parties (' + issuingParties.length + ')</option>' +
     issuingParties.map(function(iss) { return '<option value="' + esc(iss) + '"' + (STATE.filters.issuingParty === iss ? ' selected' : '') + '>' + esc(iss) + '</option>'; }).join('') +
     '</select></div>' +
     '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-university"></i> Bank</label>' +
-    '<select id="p15BdBankFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
+    '<select id="p16BdBankFilter" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' +
     '<option value="">All Banks (' + banks.length + ')</option>' +
     banks.map(function(b) { return '<option value="' + esc(b) + '"' + (STATE.filters.bank === b ? ' selected' : '') + '>' + esc(b) + '</option>'; }).join('') +
     '</select></div></div>' +
 
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">' +
-    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Date From</label><input type="date" id="p15BdDateFrom" value="' + STATE.filters.dateFrom + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
-    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Date To</label><input type="date" id="p15BdDateTo" value="' + STATE.filters.dateTo + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
-    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Min Amount</label><input type="number" id="p15BdMinAmt" value="' + esc(STATE.filters.minAmount) + '" placeholder="0" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
-    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Max Amount</label><input type="number" id="p15BdMaxAmt" value="' + esc(STATE.filters.maxAmount) + '" placeholder="No limit" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Date From</label><input type="date" id="p16BdDateFrom" value="' + STATE.filters.dateFrom + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Date To</label><input type="date" id="p16BdDateTo" value="' + STATE.filters.dateTo + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Min Amount</label><input type="number" id="p16BdMinAmt" value="' + esc(STATE.filters.minAmount) + '" placeholder="0" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Max Amount</label><input type="number" id="p16BdMaxAmt" value="' + esc(STATE.filters.maxAmount) + '" placeholder="No limit" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
     '</div>' +
 
     '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
-    '<button type="button" class="btn btn-primary btn-sm" onclick="NCX_P15.applyFilters()"><i class="fas fa-check"></i> Apply Filters</button>' +
-    '<span id="p15BdFilterSummary" style="font-size:11.5px;color:var(--gray);margin-left:auto"></span></div></div>';
+    '<button type="button" class="btn btn-primary btn-sm" onclick="NCX_P16.applyFilters()"><i class="fas fa-check"></i> Apply Filters</button>' +
+    '<span id="p16BdFilterSummary" style="font-size:11.5px;color:var(--gray);margin-left:auto"></span></div></div>';
 
   // List header & body
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">' +
-    '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px"><i class="fas fa-list" style="color:var(--primary)"></i> Select Cheques <span id="p15BdListCount" style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700">0 cheques</span></div>' +
+    '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px"><i class="fas fa-list" style="color:var(--primary)"></i> Select Cheques <span id="p16BdListCount" style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700">0 cheques</span></div>' +
     '<div style="display:flex;gap:6px;align-items:center">' +
-    '<button type="button" class="btn btn-xs btn-secondary" onclick="NCX_P15.clearAll()"><i class="fas fa-times"></i> Clear Selection</button>' +
-    '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer;font-weight:600;background:var(--light);padding:6px 12px;border-radius:8px"><input type="checkbox" id="p15BdSelectAllCb" onchange="NCX_P15.toggleAll(this.checked)"> Select All Visible</label></div></div>';
+    '<button type="button" class="btn btn-xs btn-secondary" onclick="NCX_P16.clearAll()"><i class="fas fa-times"></i> Clear Selection</button>' +
+    '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer;font-weight:600;background:var(--light);padding:6px 12px;border-radius:8px"><input type="checkbox" id="p16BdSelectAllCb" onchange="NCX_P16.toggleAll(this.checked)"> Select All Visible</label></div></div>';
 
-  html += '<div id="p15BdList" style="max-height:380px;overflow-y:auto;border:1.5px solid var(--border);border-radius:10px;background:white"></div>';
-  html += '<div id="p15BdSummary" style="padding:14px 18px;background:linear-gradient(135deg,#7c2d12,#b45309);color:white;border-radius:11px;margin-top:14px"></div>';
+  html += '<div id="p16BdList" style="max-height:380px;overflow-y:auto;border:1.5px solid var(--border);border-radius:10px;background:white"></div>';
+  html += '<div id="p16BdSummary" style="padding:14px 18px;background:linear-gradient(135deg,#7c2d12,#b45309);color:white;border-radius:11px;margin-top:14px"></div>';
 
   host.innerHTML = html;
 
   setTimeout(function() {
-    ['p15BdStatusFilter', 'p15BdIssuerFilter', 'p15BdBankFilter', 'p15BdDateFrom', 'p15BdDateTo'].forEach(function(id) {
+    ['p16BdStatusFilter', 'p16BdIssuerFilter', 'p16BdBankFilter', 'p16BdDateFrom', 'p16BdDateTo'].forEach(function(id) {
       var el = $(id); if (el) el.addEventListener('change', applyFilters);
     });
-    ['p15BdMinAmt', 'p15BdMaxAmt'].forEach(function(id) {
+    ['p16BdMinAmt', 'p16BdMaxAmt'].forEach(function(id) {
       var el = $(id); if (el) el.addEventListener('input', debounce(applyFilters, 400));
     });
     renderList(); updateSummary();
@@ -16285,14 +16292,14 @@ function renderBody() {
 }
 
 function applyFilters() {
-  STATE.filters.search = ($('p15BdSearch') || {}).value || '';
-  STATE.filters.status = ($('p15BdStatusFilter') || {}).value || '';
-  STATE.filters.issuingParty = ($('p15BdIssuerFilter') || {}).value || '';
-  STATE.filters.bank = ($('p15BdBankFilter') || {}).value || '';
-  STATE.filters.dateFrom = ($('p15BdDateFrom') || {}).value || '';
-  STATE.filters.dateTo = ($('p15BdDateTo') || {}).value || '';
-  STATE.filters.minAmount = ($('p15BdMinAmt') || {}).value || '';
-  STATE.filters.maxAmount = ($('p15BdMaxAmt') || {}).value || '';
+  STATE.filters.search = ($('p16BdSearch') || {}).value || '';
+  STATE.filters.status = ($('p16BdStatusFilter') || {}).value || '';
+  STATE.filters.issuingParty = ($('p16BdIssuerFilter') || {}).value || '';
+  STATE.filters.bank = ($('p16BdBankFilter') || {}).value || '';
+  STATE.filters.dateFrom = ($('p16BdDateFrom') || {}).value || '';
+  STATE.filters.dateTo = ($('p16BdDateTo') || {}).value || '';
+  STATE.filters.minAmount = ($('p16BdMinAmt') || {}).value || '';
+  STATE.filters.maxAmount = ($('p16BdMaxAmt') || {}).value || '';
   renderList(); updateSummary();
 }
 
@@ -16302,12 +16309,12 @@ function resetFilters() {
 }
 
 function renderList() {
-  var host = $('p15BdList'); if (!host) return;
+  var host = $('p16BdList'); if (!host) return;
   var list = getFilteredCheques();
-  var pct = num(($('p15BdAdvancePct') || {}).value) || 80;
+  var pct = num(($('p16BdAdvancePct') || {}).value) || 80;
 
-  var countEl = $('p15BdListCount'); if (countEl) countEl.textContent = list.length + ' cheques';
-  var summaryEl = $('p15BdFilterSummary');
+  var countEl = $('p16BdListCount'); if (countEl) countEl.textContent = list.length + ' cheques';
+  var summaryEl = $('p16BdFilterSummary');
   if (summaryEl) {
     var active = [];
     if (STATE.filters.issuingParty) active.push('issuer: ' + STATE.filters.issuingParty);
@@ -16327,7 +16334,7 @@ function renderList() {
 
   var html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
     '<thead><tr style="background:var(--light);position:sticky;top:0;z-index:2">' +
-    '<th style="padding:10px 8px;text-align:left;width:34px"><input type="checkbox" style="width:16px;height:16px;cursor:pointer" onchange="NCX_P15.toggleAll(this.checked)" ' + (allSelected ? 'checked' : '') + '></th>' +
+    '<th style="padding:10px 8px;text-align:left;width:34px"><input type="checkbox" style="width:16px;height:16px;cursor:pointer" onchange="NCX_P16.toggleAll(this.checked)" ' + (allSelected ? 'checked' : '') + '></th>' +
     '<th style="padding:10px 8px;text-align:left">Cheque</th>' +
     '<th style="padding:10px 8px;text-align:left">Payee / Issuing Party</th>' +
     '<th style="padding:10px 8px;text-align:left">Date / Age</th>' +
@@ -16349,8 +16356,8 @@ function renderList() {
     var warningBadge = alreadyDiscounted ? '<span style="background:#fef3c7;color:#b45309;padding:1px 6px;border-radius:6px;font-size:9.5px;font-weight:700;margin-left:4px;display:inline-block;margin-top:2px"><i class="fas fa-exclamation-triangle"></i> Already discounted</span>' : '';
     var linkedBadge = c.tradeProjectId ? '<span style="background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:6px;font-size:9.5px;font-weight:700;margin-left:4px;display:inline-block;margin-top:2px">🔗 linked</span>' : '';
 
-    html += '<tr class="p15-picker-row ' + (sel ? 'p15-selected' : '') + '" style="border-bottom:1px solid var(--border); cursor:pointer; ' + (sel ? 'background:#dbeafe;' : '') + '" onclick="NCX_P15.toggleCheque(\'' + c.id + '\')">' +
-      '<td style="padding:10px 8px"><input type="checkbox" ' + (sel ? 'checked' : '') + ' onclick="event.stopPropagation();NCX_P15.toggleCheque(\'' + c.id + '\')" style="width:16px;height:16px;cursor:pointer"></td>' +
+    html += '<tr class="p16-picker-row ' + (sel ? 'p16-selected' : '') + '" style="border-bottom:1px solid var(--border); cursor:pointer; ' + (sel ? 'background:#dbeafe;' : '') + '" onclick="NCX_P16.toggleCheque(\'' + c.id + '\')">' +
+      '<td style="padding:10px 8px"><input type="checkbox" ' + (sel ? 'checked' : '') + ' onclick="event.stopPropagation();NCX_P16.toggleCheque(\'' + c.id + '\')" style="width:16px;height:16px;cursor:pointer"></td>' +
       '<td style="padding:10px 8px"><div style="font-weight:800;color:var(--primary);font-size:13px">#' + esc(c.number) + '</div><div style="font-size:10.5px;color:var(--gray);margin-top:2px">' + esc(c.bank || '—') + '</div></td>' +
       '<td style="padding:10px 8px"><div style="font-weight:700;font-size:12.5px">' + esc(c.payee || '—') + '</div><div style="font-size:11px;color:var(--gray);margin-top:2px"><i class="fas fa-user-tie" style="font-size:9px"></i> ' + esc(issuer) + '</div>' + warningBadge + linkedBadge + '</td>' +
       '<td style="padding:10px 8px"><div style="font-weight:600;font-size:12px">' + dateFmt(c.date) + '</div><div style="font-size:10.5px;color:' + ageColor + ';font-weight:700;margin-top:2px">' + age + ' days old</div></td>' +
@@ -16364,7 +16371,7 @@ function renderList() {
   html += '</tbody></table>';
   host.innerHTML = html;
 
-  var selAllCb = $('p15BdSelectAllCb'); if (selAllCb) selAllCb.checked = allSelected;
+  var selAllCb = $('p16BdSelectAllCb'); if (selAllCb) selAllCb.checked = allSelected;
 }
 
 function toggleCheque(id) {
@@ -16382,10 +16389,10 @@ function clearAll() { STATE.selected = {}; renderList(); updateSummary(); }
 function recalcAdvance() { renderList(); updateSummary(); }
 
 function updateSummary() {
-  var host = $('p15BdSummary'); if (!host) return;
+  var host = $('p16BdSummary'); if (!host) return;
   var selected = getSelectedCheques();
   var total = selected.reduce(function(s, c) { return s + num(c.amount); }, 0);
-  var pct = num(($('p15BdAdvancePct') || {}).value) || 80;
+  var pct = num(($('p16BdAdvancePct') || {}).value) || 80;
   var totalAdvance = total * (pct / 100);
   var totalHold = total - totalAdvance;
   var filtered = getFilteredCheques();
@@ -16396,9 +16403,9 @@ function updateSummary() {
     '<div><div style="font-size:10.5px;opacity:.85;text-transform:uppercase;font-weight:700">Total Value</div><div style="font-size:20px;font-weight:800;margin-top:3px">' + fmt(total) + '</div></div>' +
     '<div><div style="font-size:10.5px;opacity:.85;text-transform:uppercase;font-weight:700">Total Advance (' + pct + '%)</div><div style="font-size:20px;font-weight:800;margin-top:3px;color:#a7f3d0">' + fmt(totalAdvance) + '</div></div>' +
     '<div><div style="font-size:10.5px;opacity:.85;text-transform:uppercase;font-weight:700">Total Hold</div><div style="font-size:20px;font-weight:800;margin-top:3px;color:#fde68a">' + fmt(totalHold) + '</div></div>' +
-    '<button class="btn" style="background:white;color:#7c2d12;font-weight:800;padding:12px 22px;' + (disabled ? 'opacity:.5;cursor:not-allowed;' : '') + '" ' + (disabled ? 'disabled' : '') + ' onclick="NCX_P15.commitBulkDiscount()"><i class="fas fa-paper-plane"></i> Send ' + selected.length + '</button></div>';
+    '<button class="btn" style="background:white;color:#7c2d12;font-weight:800;padding:12px 22px;' + (disabled ? 'opacity:.5;cursor:not-allowed;' : '') + '" ' + (disabled ? 'disabled' : '') + ' onclick="NCX_P16.commitBulkDiscount()"><i class="fas fa-paper-plane"></i> Send ' + selected.length + '</button></div>';
 
-  var mainBtn = $('p15BdCommitBtn');
+  var mainBtn = $('p16BdCommitBtn');
   if (mainBtn) { mainBtn.disabled = disabled; mainBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send ' + selected.length + ' Cheques'; }
 }
 
@@ -16406,11 +16413,11 @@ function commitBulkDiscount() {
   var selected = getSelectedCheques();
   if (!selected.length) return toast('No cheques selected', 'error');
 
-  var providerId = ($('p15BdProvider') || {}).value;
-  var projectId = ($('p15BdProject') || {}).value;
-  var advancePct = num(($('p15BdAdvancePct') || {}).value) || 80;
-  var submittedDate = ($('p15BdDate') || {}).value;
-  var defaultShopId = ($('p15BdShop') || {}).value || null;
+  var providerId = ($('p16BdProvider') || {}).value;
+  var projectId = ($('p16BdProject') || {}).value;
+  var advancePct = num(($('p16BdAdvancePct') || {}).value) || 80;
+  var submittedDate = ($('p16BdDate') || {}).value;
+  var defaultShopId = ($('p16BdShop') || {}).value || null;
 
   if (!providerId) return toast('Select a discounter', 'error');
   if (!projectId) return toast('Select a project', 'error');
@@ -16422,7 +16429,7 @@ function commitBulkDiscount() {
   var totalValue = selected.reduce(function(s, c) { return s + num(c.amount); }, 0);
   if (!confirm('Send ' + selected.length + ' cheque(s) to "' + provider.name + '"?\n\nTotal Value: ' + fmt(totalValue) + '\n\nContinue?')) return;
 
-  var mainBtn = $('p15BdCommitBtn');
+  var mainBtn = $('p16BdCommitBtn');
   if (mainBtn) { mainBtn.disabled = true; mainBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Sending...'; }
 
   var user = S.user ? S.user.email : 'anonymous';
@@ -16470,8 +16477,8 @@ function commitBulkDiscount() {
   });
 }
 
-/* ═══════════════════ 4. EXPOSE API ═══════════════════ */
-window.NCX_P15 = {
+/* ═══════════════════ 5. EXPOSE API ═══════════════════ */
+window.NCX_P16 = {
   openBulkDiscountModal: openNewBulkDiscountModal,
   closeBulkDiscount: closeBulkDiscount,
   applyFilters: applyFilters,
@@ -16483,7 +16490,7 @@ window.NCX_P15 = {
   commitBulkDiscount: commitBulkDiscount
 };
 
-console.log('[NeonCheque P15] ✅ TERMINATOR ACTIVE. Old modal and buttons are dead.');
+console.log('[NeonCheque P16] ✅ HOSTILE TAKEOVER COMPLETE. Old button hidden via CSS, new button injected, old modal intercepted.');
 </script>
 </body>
 </html>
