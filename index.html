@@ -16029,15 +16029,15 @@ console.log('[NeonCheque Stone v2] ✅ Advanced sorting and bug fixes applied.')
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
-     NEONCHEQUE — P13 BULLETPROOF · BULK DISCOUNT MODAL UPGRADE
-     Completely destroys old P12 buttons and injects the new UI.
+     NEONCHEQUE — P13 ULTIMATE OVERRIDE (NUCLEAR OPTION)
+     Completely obliterates the old Part 12 modal and button.
      ═══════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__NCX_P13_BULLETPROOF) return;
+if (window.__NCX_P13_NUCLEAR) return;
 if (!window.NCX) { console.error('[P13] Shell not loaded'); return; }
-window.__NCX_P13_BULLETPROOF = true;
+window.__NCX_P13_NUCLEAR = true;
 
 var NCX = window.NCX;
 var S = NCX.S;
@@ -16053,67 +16053,53 @@ var toast = NCX.toast;
 var openModal = NCX.openModal;
 var closeModal = NCX.closeModal;
 
-/* ═══════════════════ 1. AGGRESSIVE DOM OVERRIDE ═══════════════════ */
-// Intercept ANY click on the old P12 buttons globally
+/* ═══════════════════ 1. THE NUCLEAR INTERCEPTORS ═══════════════════ */
+
+// A. Destroy the old modal instantly if it loads
+var observer = new MutationObserver(function(mutations) {
+  mutations.forEach(function(m) {
+    if (m.addedNodes.length) {
+      m.addedNodes.forEach(function(node) {
+        if (node.nodeType === 1) { // Element
+          var oldModal = node.id === 'p12BulkDiscountModal' ? node : node.querySelector('#p12BulkDiscountModal');
+          if (oldModal) {
+            oldModal.remove(); // Obliterate it
+            if (!document.getElementById('p13BulkDiscountModal')) {
+              openNewBulkDiscountModal(); // Open the good one
+            }
+          }
+        }
+      });
+    }
+  });
+});
+observer.observe(document.body, { childList: true, subtree: true });
+
+// B. Intercept any click on the old button before it can trigger
 document.addEventListener('click', function(e) {
-  var btn = e.target.closest('.p12-bulk-disc-btn, .p12-bulk-send-btn');
+  var btn = e.target.closest('.p12-bulk-send-btn, .p12-bulk-disc-btn');
   if (btn) {
     e.preventDefault();
     e.stopImmediatePropagation();
-    openBulkDiscountModal();
+    openNewBulkDiscountModal();
   }
-}, true); // Use capture phase to intercept before P12 gets it
+}, true);
 
-// Kill old modals if they somehow appear
+// C. Continuously sweep the page and replace the old button
 setInterval(function() {
-  var oldModal = document.getElementById('p12BulkDiscountModal');
-  if (oldModal) {
-    oldModal.remove();
-    if (!document.getElementById('p13BulkDiscountModal')) {
-      openBulkDiscountModal();
-    }
-  }
-}, 200);
-
-// Re-wrap the discounting view renderer to inject our new button
-var patchDiscountingView = function() {
-  var origRender = NCX.renderers.discounting;
-  if (!origRender || origRender.__p13patched) return;
-  
-  var newRender = function(host) {
-    origRender.call(null, host);
-    setTimeout(function() {
-      // Destroy old buttons
-      host.querySelectorAll('.p12-bulk-disc-btn, .p12-bulk-send-btn').forEach(function(b) { b.remove(); });
-      
-      var header = host.querySelector('.card-header');
-      if (!header) return;
-      
-      var inHandCount = (S.cheques || []).filter(function(c) {
-        return !c.deletedAt && (c.status === 'in-hand' || c.status === 'draft');
-      }).length;
-      if (inHandCount === 0) return;
-
-      // Inject new button
-      var btn = document.createElement('button');
-      btn.className = 'btn btn-warning btn-sm p13-bulk-send-btn';
-      btn.style.marginRight = '8px';
-      btn.innerHTML = '<i class="fas fa-layer-group"></i> Bulk Send (' + inHandCount + ')';
-      btn.onclick = function(e) {
-        e.preventDefault();
-        openBulkDiscountModal();
+  document.querySelectorAll('.p12-bulk-send-btn, .p12-bulk-disc-btn').forEach(function(btn) {
+    if (!btn.dataset.p13Replaced) {
+      btn.dataset.p13Replaced = 'true';
+      var newBtn = btn.cloneNode(true);
+      newBtn.className = 'btn btn-warning btn-sm p13-bulk-send-btn';
+      newBtn.onclick = function(ev) {
+        ev.preventDefault();
+        openNewBulkDiscountModal();
       };
-      
-      var firstBtn = header.querySelector('button');
-      if (firstBtn) firstBtn.parentNode.insertBefore(btn, firstBtn);
-      else header.appendChild(btn);
-    }, 100);
-  };
-  newRender.__p13patched = true;
-  NCX.registerRenderer('discounting', newRender);
-};
-
-setTimeout(patchDiscountingView, 1000);
+      btn.parentNode.replaceChild(newBtn, btn);
+    }
+  });
+}, 500);
 
 /* ═══════════════════ 2. STATE & HELPERS ═══════════════════ */
 var STATE = {
@@ -16181,8 +16167,8 @@ function debounce(fn, delay) {
   var t; return function() { clearTimeout(t); t = setTimeout(fn, delay); };
 }
 
-/* ═══════════════════ 3. NEW MODAL LOGIC ═══════════════════ */
-function openBulkDiscountModal() {
+/* ═══════════════════ 3. THE NEW MODAL LOGIC ═══════════════════ */
+function openNewBulkDiscountModal() {
   if (!S.projects || !S.projects.length) return toast('Create a project first', 'error');
   var discounters = (S.parties || []).filter(function(p) {
     return Array.isArray(p.types) && (p.types.indexOf('discounter') !== -1 || p.types.indexOf('lender') !== -1);
@@ -16499,7 +16485,7 @@ function commitBulkDiscount() {
 
 /* ═══════════════════ 4. EXPOSE API ═══════════════════ */
 window.NCX_P13 = {
-  openBulkDiscountModal: openBulkDiscountModal,
+  openBulkDiscountModal: openNewBulkDiscountModal,
   closeBulkDiscount: closeBulkDiscount,
   applyFilters: applyFilters,
   resetFilters: resetFilters,
@@ -16511,11 +16497,11 @@ window.NCX_P13 = {
 };
 
 if (window.NCX_P12) {
-  window.NCX_P12.openBulkDiscountModal = openBulkDiscountModal;
+  window.NCX_P12.openBulkDiscountModal = openNewBulkDiscountModal;
   window.NCX_P12.closeBulkDiscount = closeBulkDiscount;
 }
 
-console.log('[NeonCheque P13] ✅ ULTIMATE OVERRIDE ACTIVE. Old modal destroyed.');
+console.log('[NeonCheque P13] ✅ NUCLEAR OVERRIDE COMPLETE. Old modal destroyed.');
 </script>
 </body>
 </html>
