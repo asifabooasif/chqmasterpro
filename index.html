@@ -16493,15 +16493,15 @@ window.NCX_P16 = {
 console.log('[NeonCheque P16] ✅ HOSTILE TAKEOVER COMPLETE. Old button hidden via CSS, new button injected, old modal intercepted.');
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════
-     NEONCHEQUE — P22 FINAL FIXES
-     1. Adds Discounter Charges to the Settlement Modal
-     2. Tracks Pending Cheques in Project "Received" totals
+     NEONCHEQUE — P21 ULTIMATE CLEAN OVERRIDE
+     · Auto-syncs pending cheques as project payments (and reverses on return)
+     · Clean Bulk Discount modal with Issuing Party filter, Receiving Account, and Fees
      ═══════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
 'use strict';
-if (window.__NCX_P22) return;
-window.__NCX_P22 = true;
+if (window.__NCX_P21) return;
+window.__NCX_P21 = true;
 
 var NCX = window.NCX;
 var S = NCX.S;
@@ -16513,143 +16513,385 @@ var num = NCX.num;
 var today = NCX.today;
 var toast = NCX.toast;
 var openModal = NCX.openModal;
-var closeModal = NCX.closeModal;
 
 /* ═══════════════════════════════════════════════════════════════════
-   FIX 1: ADD CHARGES TO SETTLEMENT MODAL
+   PART 1: AUTO-SYNC CHEQUES AS PROJECT PAYMENTS
+   This runs in the background every time data loads.
+   It automatically creates a "Pending" payment for any linked project.
+   If the cheque bounces, it reverses it to "Bounced".
    ═══════════════════════════════════════════════════════════════════ */
-var _origStartAction = window.NCX_P7 && window.NCX_P7.startAction;
-if (window.NCX_P7) {
-  window.NCX_P7.startAction = function(actionKey) {
-    if (actionKey !== 'settle') {
-      return _origStartAction.apply(this, arguments);
-    }
-    
-    // We only override the 'settle' action to add the Fee field
-    var d = S.discounts.filter(function (x) { return x.id === window.NCX_P7.activeDiscountId; })[0];
-    if (!d) return;
-    
-    var old = document.getElementById('ncxDiscActionModal'); if (old) old.remove();
-    var accounts = S.accounts.filter(function (a) { return a.status !== 'inactive'; });
-    var acctOpts = accounts.map(function (a) { return '<option value="' + a.id + '">' + esc(a.name) + '</option>'; }).join('');
-    var held = num(d.holdAmount);
-
-    var modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.id = 'ncxDiscActionModal';
-    modal.dataset.action = 'settle';
-    modal.dataset.discId = d.id;
-    
-    modal.innerHTML = '<div class="modal" style="max-width:560px">' +
-      '<div class="modal-header"><h2 class="modal-title">Settle Provider Hold</h2>' +
-      '<button class="modal-close" onclick="NCX_P7.closeActionModal()"><i class="fas fa-times"></i></button></div>' +
-      '<div class="modal-body">' +
-      '<div style="background:linear-gradient(135deg,#fef3c7,#fed7aa);border:1.5px solid #f59e0b;border-radius:10px;padding:14px;font-size:12.5px;color:#92400e;margin-bottom:16px;display:flex;gap:10px">' +
-      '<i class="fas fa-balance-scale" style="font-size:16px;margin-top:1px"></i><div>Provider returns hold of <strong>' + fmt(held) + '</strong>. Enter the amount returned + their service charge (fee).</div></div>' +
-      
-      '<div class="form-row">' +
-      '<div class="form-group"><label>Amount Returned (Rs.) *</label><input type="number" id="dActReturn" step="0.01" value="' + held + '" oninput="NCX_P7.settleRecalc(' + held + ')"></div>' +
-      '<div class="form-group"><label>Discounter Charge / Fee (Rs.) *</label><input type="number" id="dActFee" step="0.01" value="0" oninput="NCX_P7.settleRecalc(' + held + ')" style="border-color:var(--danger);background:#fef2f2"></div>' +
-      '</div>' +
-      
-      '<div id="dSettleCheck" style="background:var(--light);padding:12px;border-radius:9px;margin-bottom:16px;font-size:12.5px"></div>' +
-      
-      '<div class="form-row">' +
-      '<div class="form-group"><label>Deposit Returned Into *</label><select id="dActAcct"><option value="">-- Select --</option>' + acctOpts + '</select></div>' +
-      '<div class="form-group"><label>Date *</label><input type="date" id="dActDate" value="' + today() + '"></div>' +
-      '</div>' +
-      '<div class="form-group"><label>Notes</label><input type="text" id="dActNotes" placeholder="e.g. LOLC service charge deduction"></div>' +
-      '</div>' +
-      '<div class="modal-footer"><button class="btn btn-secondary" onclick="NCX_P7.closeActionModal()">Cancel</button>' +
-      '<button class="btn btn-primary" onclick="NCX_P7.commitAction()"><i class="fas fa-check"></i> Confirm Settlement</button></div>' +
-      '</div>';
-      
-    document.body.appendChild(modal);
-    openModal('ncxDiscActionModal');
-    setTimeout(function () { NCX_P7.settleRecalc(held); }, 50);
-  };
-}
-
-
-/* ═══════════════════════════════════════════════════════════════════
-   FIX 2: TRACK PENDING CHEQUES IN PROJECT KPIS
-   ═══════════════════════════════════════════════════════════════════ */
-// We observe the Project Detail view and update the "Received" KPI 
-// to include Pending cheques if they exist.
-var observer = new MutationObserver(function(mutations) {
-  mutations.forEach(function(m) {
-    if (m.addedNodes.length) {
-      var host = document.getElementById('projectDetailView');
-      if (host && host.classList.contains('active')) {
-        setTimeout(patchProjectKPIs, 100);
-      }
-    }
+var _origLoadAll = NCX.loadAll;
+NCX.loadAll = function () {
+  return _origLoadAll.apply(this, arguments).then(function () {
+    syncProjectPayments();
   });
-});
-observer.observe(document.body, { childList: true, subtree: true });
-
-function patchProjectKPIs() {
-  var host = document.getElementById('projectDetailView');
-  if (!host) return;
-  
-  // Find the project ID
-  var activeProjectId = window.NCX_P5 && window.NCX_P5.activeProjectId;
-  if (!activeProjectId) return;
-
-  // Calculate pending amounts for this project
-  var pendingIn = 0;
-  S.entries.forEach(function(e) {
-    if (e.projectId === activeProjectId && e.type === 'payment-in' && e.status === 'pending') {
-      pendingIn += num(e.amount);
-    }
-  });
-
-  if (pendingIn === 0) return; // Nothing to patch
-
-  // Find the "Received" KPI widget
-  var widgets = host.querySelectorAll('.widget');
-  for (var i = 0; i < widgets.length; i++) {
-    var w = widgets[i];
-    if (w.textContent.includes('RECEIVED')) {
-      var valEl = w.querySelector('.widget-value');
-      if (valEl) {
-        var currentText = valEl.textContent.replace('Rs. ', '').replace(/,/g, '');
-        var currentVal = num(currentText);
-        
-        // Prevent double-patching
-        if (w.dataset.patched === 'true') return;
-        
-        var newVal = currentVal + pendingIn;
-        valEl.textContent = fmt(newVal);
-        
-        // Add a small badge showing how much is pending
-        var subEl = w.querySelector('.widget-sub');
-        if (subEl && !subEl.innerHTML.includes('pending')) {
-          subEl.innerHTML = subEl.innerHTML + ' <span style="background:rgba(255,255,255,.3);padding:2px 6px;border-radius:6px;font-size:9px;margin-left:4px">+' + fmt(pendingIn) + ' pending</span>';
-        }
-        
-        w.dataset.patched = 'true';
-        break;
-      }
-    }
-  }
-}
-
-// Reset the patch flag when leaving the project view
-var _origShowView = NCX.showView;
-NCX.showView = function(name, el) {
-  if (name !== 'project-detail' && name !== 'projects') {
-    var host = document.getElementById('projectDetailView');
-    if (host) {
-      host.querySelectorAll('.widget[data-patched]').forEach(function(w) {
-        delete w.dataset.patched;
-      });
-    }
-  }
-  return _origShowView.call(NCX, name, el);
 };
 
-console.log('[NeonCheque P22] ✅ Loaded. Discounter charges active in settlement, Pending cheques included in KPIs.');
+function syncProjectPayments() {
+  if (!S.cheques || !S.entries) return Promise.resolve();
+
+  var promises = [];
+  
+  S.cheques.forEach(function (chq) {
+    if (!chq.tradeProjectId || chq.deletedAt) return;
+    
+    // Find if there is already an entry for this cheque
+    var existingEntry = S.entries.find(function (e) { 
+      return e.chequeId === chq.id && e.projectId === chq.tradeProjectId; 
+    });
+    
+    var targetStatus = 'pending';
+    if (chq.status === 'cleared') targetStatus = 'cleared';
+    else if (chq.status === 'returned') targetStatus = 'bounced';
+
+    if (existingEntry) {
+      // Update status if it changed (e.g., Pending -> Cleared, or Pending -> Bounced)
+      if (existingEntry.status !== targetStatus) {
+        promises.push(
+          db.collection('project_entries').doc(existingEntry.id).update({
+            status: targetStatus,
+            lastSyncAt: firebase.firestore.FieldValue.serverTimestamp(),
+            history: firebase.firestore.FieldValue.arrayUnion({
+              action: 'Auto-Reversal / Sync',
+              details: 'Cheque marked as ' + chq.status + ' → Payment set to ' + targetStatus,
+              timestamp: new Date().toISOString(),
+              user: S.user ? S.user.email : 'system'
+            })
+          })
+        );
+      }
+    } else {
+      // Create a new payment entry (Pending or Cleared)
+      promises.push(
+        db.collection('project_entries').add({
+          projectId: chq.tradeProjectId,
+          type: 'payment-in',
+          direction: 'in',
+          amount: num(chq.amount),
+          date: chq.date || today(),
+          effectiveDate: chq.date || today(),
+          chequeId: chq.id,
+          partyId: null,
+          partyRole: 'shop',
+          accountId: null,
+          status: targetStatus,
+          notes: 'Auto-linked from cheque #' + chq.number,
+          allocations: [],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: S.user ? S.user.email : 'system'
+        })
+      );
+    }
+  });
+
+  if (promises.length > 0) {
+    console.log('[P21] Syncing ' + promises.length + ' project payments...');
+    return Promise.all(promises).then(function() {
+      // Update memory silently
+      return _origLoadAll.apply(NCX);
+    }).catch(function(e) {
+      console.warn('[P21] Sync error:', e);
+    });
+  }
+  return Promise.resolve();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PART 2: DISCOUNTING MODAL (Issuing Party + Fees + Receiving Account)
+   ═══════════════════════════════════════════════════════════════════ */
+
+// 1. Hide the old Part 12 button
+var style = document.createElement('style');
+style.innerHTML = `.p12-bulk-send-btn, .p12-bulk-disc-btn { display: none !important; }`;
+document.head.appendChild(style);
+
+// 2. Inject the new button into the Discounting view
+setInterval(function() {
+  if (S.activeView === 'discounting') {
+    var header = document.querySelector('#discountingView .card-header');
+    if (header && !document.getElementById('p21BulkBtn')) {
+      var btn = document.createElement('button');
+      btn.id = 'p21BulkBtn';
+      btn.className = 'btn btn-warning btn-sm';
+      btn.innerHTML = '<i class="fas fa-layer-group"></i> Bulk Send to Discounter';
+      btn.onclick = openP21Modal;
+      var first = header.querySelector('button');
+      if (first) first.parentNode.insertBefore(btn, first);
+      else header.appendChild(btn);
+    }
+  }
+}, 500);
+
+var STATE = { selected: {}, filters: { search: '', status: 'available', issuingParty: '' } };
+
+function openP21Modal() {
+  if (!S.projects || !S.projects.length) return toast('Create a project first', 'error');
+  var discounters = (S.parties || []).filter(function(p) { return Array.isArray(p.types) && (p.types.includes('discounter') || p.types.includes('lender')); });
+  if (!discounters.length) return toast('Add a discounter (e.g. LOLC) first', 'error');
+
+  var accounts = (S.accounts || []).filter(function(a) { return a.status !== 'inactive'; });
+  if (!accounts.length) return toast('Create a bank/cash account first', 'error');
+
+  STATE = { selected: {}, filters: { search: '', status: 'available', issuingParty: '' } };
+
+  var old = document.getElementById('p21BulkModal'); if (old) old.remove();
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'p21BulkModal';
+  modal.innerHTML =
+    '<div class="modal" style="max-width:1200px">' +
+    '<div class="modal-header"><h2 class="modal-title"><i class="fas fa-percentage"></i> Send Multiple Cheques to Discounter</h2>' +
+    '<button class="modal-close" onclick="document.getElementById(\'p21BulkModal\').remove()"><i class="fas fa-times"></i></button></div>' +
+    '<div class="modal-body"><div id="p21Body"></div></div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="document.getElementById(\'p21BulkModal\').remove()">Cancel</button>' +
+    '<button class="btn btn-primary" id="p21CommitBtn" onclick="commitP21()" disabled><i class="fas fa-paper-plane"></i> Send 0 Cheques</button>' +
+    '</div></div>';
+  document.body.appendChild(modal);
+  openModal('p21BulkModal');
+
+  renderP21Body();
+}
+
+function getIssuingParties() {
+  var set = {};
+  (S.cheques || []).forEach(function(c) {
+    if (c.deletedAt) return;
+    var iss = (c.issuedTo || c.issuer || '').trim();
+    if (iss) set[iss] = true;
+  });
+  return Object.keys(set).sort();
+}
+
+function getFilteredCheques() {
+  var list = (S.cheques || []).filter(function(c) { return !c.deletedAt; });
+  var f = STATE.filters;
+
+  if (f.status === 'available') list = list.filter(function(c) { return ['in-hand', 'draft', 'issued'].includes(c.status); });
+  else if (f.status) list = list.filter(function(c) { return c.status === f.status; });
+
+  if (f.search) {
+    var sl = f.search.toLowerCase();
+    list = list.filter(function(c) {
+      return ((c.number || '') + ' ' + (c.payee || '') + ' ' + (c.bank || '') + ' ' + (c.issuedTo || c.issuer || '')).toLowerCase().includes(sl);
+    });
+  }
+  if (f.issuingParty) {
+    list = list.filter(function(c) { return ((c.issuedTo || c.issuer || '').trim()) === f.issuingParty; });
+  }
+  return list.sort(function(a, b) { return String(a.number).localeCompare(String(b.number), undefined, {numeric: true}); });
+}
+
+function getSelectedCheques() {
+  var ids = Object.keys(STATE.selected).filter(function(k) { return STATE.selected[k]; });
+  return (S.cheques || []).filter(function(c) { return ids.includes(c.id); });
+}
+
+function renderP21Body() {
+  var host = document.getElementById('p21Body'); if (!host) return;
+  var discounters = (S.parties || []).filter(function(p) { return Array.isArray(p.types) && (p.types.includes('discounter') || p.types.includes('lender')); });
+  var issuingParties = getIssuingParties();
+  var accounts = (S.accounts || []).filter(function(a) { return a.status !== 'inactive'; });
+
+  var html = '';
+
+  // Settings
+  html += '<div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border:1.5px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">' +
+    '<div style="font-size:11px;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px"><i class="fas fa-cog" style="color:var(--primary)"></i> Common Settings</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
+    
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Discounter *</label>' +
+    '<select id="p21Provider" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit"><option value="">-- Select --</option>' + discounters.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
+    
+    '<div><label style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;display:block;margin-bottom:4px"><i class="fas fa-wallet"></i> Receiving Account *</label>' +
+    '<select id="p21Account" style="width:100%;padding:9px 11px;border:2px solid #7c3aed;border-radius:8px;font-size:13px;font-family:inherit;background:#f8f5ff">' +
+    accounts.map(function(a) { return '<option value="' + a.id + '">' + esc(a.name) + '</option>'; }).join('') +
+    '</select></div>' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Project *</label>' +
+    '<select id="p21Project" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit">' + S.projects.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
+    
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Advance % *</label>' +
+    '<input type="number" id="p21AdvancePct" value="80" step="0.1" oninput="recalcP21()" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:700"></div>' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--danger);text-transform:uppercase;display:block;margin-bottom:4px">Service Fee %</label>' +
+    '<input type="number" id="p21FeePct" value="0" step="0.1" oninput="recalcP21()" style="width:100%;padding:9px 11px;border:2px solid var(--danger);border-radius:8px;font-size:13px;font-weight:700;background:#fef2f2"></div>' +
+    '</div></div>';
+
+  // Filters
+  html += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:14px">' +
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Search</label>' +
+    '<input type="text" id="p21Search" placeholder="Number, payee, bank..." value="' + esc(STATE.filters.search) + '" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px"></div>' +
+    
+    '<div><label style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;display:block;margin-bottom:4px">Issuing Party</label>' +
+    '<select id="p21Issuer" style="width:100%;padding:9px 11px;border:2px solid #7c3aed;border-radius:8px;font-size:13px;background:#f8f5ff">' +
+    '<option value="">All Issuers</option>' +
+    issuingParties.map(function(iss) { return '<option value="' + esc(iss) + '">' + esc(iss) + '</option>'; }).join('') +
+    '</select></div>' +
+
+    '<div><label style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;display:block;margin-bottom:4px">Status</label>' +
+    '<select id="p21Status" style="width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:8px;font-size:13px">' +
+    '<option value="available">Available (In-Hand + Issued + Draft)</option>' +
+    '<option value="issued">Issued only</option>' +
+    '<option value="in-hand">In-Hand only</option>' +
+    '<option value="draft">Draft only</option>' +
+    '</select></div></div>' +
+    '<div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">' +
+    '<button class="btn btn-sm btn-primary" onclick="applyP21Filters()"><i class="fas fa-filter"></i> Filter List</button>' +
+    '<label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;font-weight:600"><input type="checkbox" id="p21SelectAll" onchange="toggleAllP21(this.checked)"> Select All Visible</label>' +
+    '</div>';
+
+  html += '<div id="p21List" style="max-height:380px;overflow-y:auto;border:1.5px solid var(--border);border-radius:10px;background:white"></div>';
+  html += '<div id="p21Summary" style="padding:14px 18px;background:linear-gradient(135deg,#7c2d12,#b45309);color:white;border-radius:11px;margin-top:14px"></div>';
+
+  host.innerHTML = html;
+  renderP21List(); updateP21Summary();
+}
+
+window.applyP21Filters = function() {
+  STATE.filters.search = document.getElementById('p21Search').value || '';
+  STATE.filters.issuingParty = document.getElementById('p21Issuer').value || '';
+  STATE.filters.status = document.getElementById('p21Status').value || '';
+  renderP21List(); updateP21Summary();
+};
+
+window.toggleP21 = function(id) {
+  if (STATE.selected[id]) delete STATE.selected[id]; else STATE.selected[id] = true;
+  renderP21List(); updateP21Summary();
+};
+
+window.toggleAllP21 = function(checked) {
+  var list = getFilteredCheques();
+  list.forEach(function(c) { if (checked) STATE.selected[c.id] = true; else delete STATE.selected[c.id]; });
+  renderP21List(); updateP21Summary();
+};
+
+window.recalcP21 = function() { renderP21List(); updateP21Summary(); };
+
+function renderP21List() {
+  var host = document.getElementById('p21List'); if (!host) return;
+  var list = getFilteredCheques();
+  var pct = num(document.getElementById('p21AdvancePct').value) || 80;
+  var feePct = num(document.getElementById('p21FeePct').value) || 0;
+
+  if (!list.length) {
+    host.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">No cheques match</div>';
+    return;
+  }
+
+  var allSelected = list.every(function(c) { return STATE.selected[c.id]; });
+  if (document.getElementById('p21SelectAll')) document.getElementById('p21SelectAll').checked = allSelected;
+
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+    '<thead><tr style="background:var(--light);position:sticky;top:0;z-index:2">' +
+    '<th style="padding:10px 8px;text-align:left;width:34px"><input type="checkbox" ' + (allSelected ? 'checked' : '') + ' onchange="toggleAllP21(this.checked)"></th>' +
+    '<th style="padding:10px 8px;text-align:left">Cheque</th>' +
+    '<th style="padding:10px 8px;text-align:left">Payee / Issuing Party</th>' +
+    '<th style="padding:10px 8px;text-align:right">Amount</th>' +
+    '<th style="padding:10px 8px;text-align:right">Net Advance</th>' +
+    '</tr></thead><tbody>';
+
+  list.forEach(function(c) {
+    var sel = !!STATE.selected[c.id];
+    var amount = num(c.amount);
+    var grossAdv = amount * (pct / 100);
+    var fee = grossAdv * (feePct / 100);
+    var netAdv = grossAdv - fee;
+    var issuer = (c.issuedTo || c.issuer || '').trim() || '—';
+
+    html += '<tr style="border-bottom:1px solid var(--border); cursor:pointer; ' + (sel ? 'background:#dbeafe;' : '') + '" onclick="toggleP21(\'' + c.id + '\')">' +
+      '<td style="padding:10px 8px"><input type="checkbox" ' + (sel ? 'checked' : '') + ' onclick="event.stopPropagation();toggleP21(\'' + c.id + '\')"></td>' +
+      '<td style="padding:10px 8px"><strong style="color:var(--primary)">#' + esc(c.number) + '</strong><div style="font-size:10px;color:var(--gray)">' + esc(c.bank) + '</div></td>' +
+      '<td style="padding:10px 8px"><strong>' + esc(c.payee) + '</strong><div style="font-size:11px;color:#7c3aed"><i class="fas fa-user-tie"></i> ' + esc(issuer) + '</div></td>' +
+      '<td style="padding:10px 8px;text-align:right;font-weight:700">' + fmt(c.amount) + '</td>' +
+      '<td style="padding:10px 8px;text-align:right;font-weight:800;color:var(--success)">' + fmt(netAdv) + (fee > 0 ? '<div style="font-size:9px;color:var(--danger)">- ' + fmt(fee) + ' fee</div>' : '') + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table>';
+  host.innerHTML = html;
+}
+
+function updateP21Summary() {
+  var host = document.getElementById('p21Summary'); if (!host) return;
+  var sel = getSelectedCheques();
+  var total = sel.reduce(function(s, c) { return s + num(c.amount); }, 0);
+  var pct = num(document.getElementById('p21AdvancePct').value) || 80;
+  var feePct = num(document.getElementById('p21FeePct').value) || 0;
+  
+  var grossAdv = total * (pct / 100);
+  var totalFee = grossAdv * (feePct / 100);
+  var netAdv = grossAdv - totalFee;
+
+  host.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center">' +
+    '<div><div style="font-size:11px;opacity:.8">Selected / Value</div><div style="font-size:16px;font-weight:800">' + sel.length + ' / ' + fmt(total) + '</div></div>' +
+    '<div><div style="font-size:11px;opacity:.8">Discounter Fee</div><div style="font-size:16px;font-weight:800;color:#fca5a5">' + fmt(totalFee) + '</div></div>' +
+    '<div><div style="font-size:11px;opacity:.8">Net Deposit</div><div style="font-size:20px;font-weight:800;color:#a7f3d0">' + fmt(netAdv) + '</div></div>' +
+    '<button class="btn" style="background:white;color:#7c2d12;font-weight:800" ' + (sel.length === 0 ? 'disabled' : '') + ' onclick="commitP21()">Send ' + sel.length + '</button></div>';
+    
+  if (document.getElementById('p21CommitBtn')) document.getElementById('p21CommitBtn').disabled = sel.length === 0;
+}
+
+window.commitP21 = function() {
+  var sel = getSelectedCheques();
+  if (!sel.length) return;
+
+  var providerId = document.getElementById('p21Provider').value;
+  var accountId = document.getElementById('p21Account').value;
+  var projectId = document.getElementById('p21Project').value;
+  var advancePct = num(document.getElementById('p21AdvancePct').value);
+  var feePct = num(document.getElementById('p21FeePct').value);
+
+  if (!providerId || !accountId || !projectId) return toast('Fill all settings', 'error');
+
+  var provider = S.parties.find(function(p) { return p.id === providerId; });
+  var btn = document.getElementById('p21CommitBtn');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spin fa-circle-notch"></i> Processing...';
+
+  var user = S.user ? S.user.email : 'anonymous';
+  var chain = Promise.resolve();
+
+  sel.forEach(function(c) {
+    chain = chain.then(function() {
+      var amount = num(c.amount);
+      var grossAdv = amount * (advancePct / 100);
+      var fee = grossAdv * (feePct / 100);
+      var netAdv = grossAdv - fee;
+      var hold = amount - grossAdv;
+
+      return db.collection('cheque_discounts').add({
+        chequeId: c.id, chequeNumber: c.number, chequeAmount: amount, chequeDate: c.date,
+        chequeIssuer: c.issuedTo || c.issuer || '', shopName: c.payee,
+        projectId: projectId, providerPartyId: providerId, providerName: provider.name,
+        submittedDate: today(), advancePercent: advancePct, feePercent: feePct, feeAmount: fee,
+        advanceAmount: netAdv, holdAmount: hold, status: 'submitted',
+        notes: 'Bulk submission. Net: ' + fmt(netAdv),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: user
+      }).then(function() {
+        return db.collection('project_entries').add({
+          projectId: projectId, type: 'discount-advance-in', direction: 'in',
+          amount: netAdv, date: today(), effectiveDate: today(),
+          partyId: providerId, partyRole: 'discounter', accountId: accountId, status: 'cleared',
+          notes: 'Net advance for cheque #' + c.number, allocations: [],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: user
+        });
+      });
+    });
+  });
+
+  chain.then(function() {
+    toast('✅ Sent cheques and recorded net deposit', 'success');
+    document.getElementById('p21BulkModal').remove();
+    return NCX.loadAll();
+  }).then(function() {
+    NCX.showView('discounting');
+  }).catch(function(e) {
+    toast('Error: ' + e.message, 'error');
+    btn.disabled = false; btn.innerHTML = 'Send';
+  });
+};
+
+console.log('[NeonCheque P21] ✅ Clean Override Loaded. Pending payments and discounter fees are active.');
 })();
 </script>
 </body>
